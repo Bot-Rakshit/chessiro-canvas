@@ -1,8 +1,8 @@
-import { memo, useCallback, useEffect, useRef, useState, useMemo } from 'react';
-import type { Pieces, Piece, Square, Orientation, PieceSet, PieceRenderer, AnimationCurrent } from '../types';
+import { memo, useCallback, useEffect, useRef, useMemo } from 'react';
+import type { Piece, Square, Orientation, PieceSet, PieceRenderer } from '../types';
 import { readFen, INITIAL_FEN } from '../utils/fen';
 import { square2pos, pos2translate } from '../utils/coords';
-import { computeAnimPlan, createAnimationController } from '../animation/anim';
+import { computeAnimPlan } from '../animation/anim';
 import { CachedPieceImg, preloadPieceSet } from '../hooks/usePieceCache';
 
 interface PiecesLayerProps {
@@ -17,61 +17,9 @@ interface PiecesLayerProps {
   draggingSquare?: string | null;
 }
 
-interface PieceState {
-  square: Square;
-  piece: Piece;
-  x: number;
-  y: number;
-  animating: boolean;
-  dragging: boolean;   // origin piece while being dragged (shows ghost)
-  capturing: boolean;  // piece fading out (captured during animation)
-}
-
-function buildPieceStates(
-  pieces: Pieces,
-  asWhite: boolean,
-  boardWidth: number,
-  boardHeight: number,
-  anim: AnimationCurrent | null,
-  draggingSquare: string | null | undefined,
-): PieceState[] {
-  const states: PieceState[] = [];
-  const sqW = boardWidth / 8;
-  const sqH = boardHeight / 8;
-
-  for (const [square, piece] of pieces) {
-    const isDragging = draggingSquare === square;
-
-    const pos = square2pos(square);
-    let [x, y] = pos2translate(pos, asWhite, boardWidth, boardHeight);
-    let animating = false;
-
-    if (anim) {
-      const vec = anim.plan.anims.get(square);
-      if (vec) {
-        x += vec.currentX * sqW;
-        y -= vec.currentY * sqH;
-        animating = true;
-      }
-    }
-
-    states.push({
-      square, piece, x, y, animating,
-      dragging: isDragging,
-      capturing: false,
-    });
-  }
-
-  // Add fading pieces (captured during animation)
-  if (anim) {
-    for (const [square, piece] of anim.plan.fadings) {
-      const pos = square2pos(square);
-      const [x, y] = pos2translate(pos, asWhite, boardWidth, boardHeight);
-      states.push({ square, piece, x, y, animating: false, dragging: false, capturing: true });
-    }
-  }
-
-  return states;
+// Cubic easing
+function easing(t: number): number {
+  return t < 0.5 ? 4 * t * t * t : (t - 1) * (2 * t - 2) * (2 * t - 2) + 1;
 }
 
 export const PiecesLayer = memo(function PiecesLayer({
@@ -87,56 +35,163 @@ export const PiecesLayer = memo(function PiecesLayer({
 }: PiecesLayerProps) {
   const asWhite = orientation === 'white';
   const piecePath = pieceSet?.path || '/pieces/cases';
-
   const pieces = useMemo(() => readFen(position || INITIAL_FEN), [position]);
 
-  // Track previous position FEN string to detect actual changes and compute anim plan
   const prevPositionRef = useRef<string>(position || INITIAL_FEN);
-  const [animCurrent, setAnimCurrent] = useState<AnimationCurrent | null>(null);
   const skipNextAnimRef = useRef(false);
   const prevDraggingRef = useRef<string | null | undefined>(draggingSquare);
+  const rafIdRef = useRef<number | null>(null);
+  // Map of square -> DOM element ref for direct transform updates
+  const pieceElsRef = useRef<Map<string, HTMLDivElement>>(new Map());
+  // Track fading elements
+  const fadingElsRef = useRef<Map<string, HTMLDivElement>>(new Map());
 
+  // Detect drag end to skip animation
   if (prevDraggingRef.current && !draggingSquare) {
     skipNextAnimRef.current = true;
   }
   prevDraggingRef.current = draggingSquare;
 
-  const animController = useRef(
-    createAnimationController(
-      (current) => setAnimCurrent({ ...current }),
-      () => setAnimCurrent(null),
-    ),
-  );
-
   useEffect(() => {
     preloadPieceSet(piecePath);
   }, [piecePath]);
 
+  // Run animation via direct DOM manipulation - no React state updates during animation
   useEffect(() => {
     const currentPos = position || INITIAL_FEN;
     const prevPos = prevPositionRef.current;
     prevPositionRef.current = currentPos;
 
-    if (!showAnimations || animationDurationMs < 50) return;
-    if (prevPos === currentPos) return;
+    // Cancel any running animation
+    if (rafIdRef.current !== null) {
+      cancelAnimationFrame(rafIdRef.current);
+      rafIdRef.current = null;
+    }
 
+    // Clean up old fading elements
+    for (const el of fadingElsRef.current.values()) {
+      el.remove();
+    }
+    fadingElsRef.current.clear();
+
+    if (prevPos === currentPos) return;
+    if (!showAnimations || animationDurationMs < 50) return;
     if (skipNextAnimRef.current) {
       skipNextAnimRef.current = false;
       return;
     }
 
-    // Parse the PREVIOUS position from the stored FEN, not from a ref that may be stale
     const prevPieces = readFen(prevPos);
     const plan = computeAnimPlan(prevPieces, pieces);
-    if (plan.anims.size > 0 || plan.fadings.size > 0) {
-      animController.current.start(plan, animationDurationMs);
-    }
-  }, [position, pieces, showAnimations, animationDurationMs]);
+    if (plan.anims.size === 0 && plan.fadings.size === 0) return;
 
-  const pieceStates = useMemo(
-    () => buildPieceStates(pieces, asWhite, boardWidth, boardHeight, animCurrent, draggingSquare),
-    [pieces, asWhite, boardWidth, boardHeight, animCurrent, draggingSquare],
-  );
+    const sqW = boardWidth / 8;
+    const sqH = boardHeight / 8;
+    const startTime = performance.now();
+    const frequency = 1 / animationDurationMs;
+
+    // Set initial offsets on DOM elements immediately
+    for (const [sq, vec] of plan.anims) {
+      const el = pieceElsRef.current.get(sq);
+      if (!el) continue;
+      const basePos = square2pos(sq);
+      const [baseX, baseY] = pos2translate(basePos, asWhite, boardWidth, boardHeight);
+      const offsetX = (vec.fromPos[0] - vec.toPos[0]) * sqW;
+      const offsetY = -(vec.fromPos[1] - vec.toPos[1]) * sqH;
+      el.style.transform = `translate(${baseX + offsetX}px, ${baseY + offsetY}px)`;
+      el.style.zIndex = '8';
+      el.style.willChange = 'transform';
+    }
+
+    function step(now: number) {
+      const elapsed = now - startTime;
+      const rest = 1 - elapsed * frequency;
+
+      if (rest <= 0) {
+        // Animation complete - reset to final positions
+        for (const [sq] of plan.anims) {
+          const el = pieceElsRef.current.get(sq);
+          if (!el) continue;
+          const basePos = square2pos(sq);
+          const [baseX, baseY] = pos2translate(basePos, asWhite, boardWidth, boardHeight);
+          el.style.transform = `translate(${baseX}px, ${baseY}px)`;
+          el.style.zIndex = '2';
+          el.style.willChange = '';
+        }
+        // Remove fading elements
+        for (const el of fadingElsRef.current.values()) {
+          el.remove();
+        }
+        fadingElsRef.current.clear();
+        rafIdRef.current = null;
+        return;
+      }
+
+      const ease = easing(rest);
+
+      for (const [sq, vec] of plan.anims) {
+        const el = pieceElsRef.current.get(sq);
+        if (!el) continue;
+        const basePos = square2pos(sq);
+        const [baseX, baseY] = pos2translate(basePos, asWhite, boardWidth, boardHeight);
+        const offsetX = (vec.fromPos[0] - vec.toPos[0]) * ease * sqW;
+        const offsetY = -(vec.fromPos[1] - vec.toPos[1]) * ease * sqH;
+        el.style.transform = `translate(${baseX + offsetX}px, ${baseY + offsetY}px)`;
+      }
+
+      rafIdRef.current = requestAnimationFrame(step);
+    }
+
+    rafIdRef.current = requestAnimationFrame(step);
+
+    return () => {
+      if (rafIdRef.current !== null) {
+        cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = null;
+      }
+    };
+  }, [position, pieces, showAnimations, animationDurationMs, asWhite, boardWidth, boardHeight]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (rafIdRef.current !== null) {
+        cancelAnimationFrame(rafIdRef.current);
+      }
+    };
+  }, []);
+
+  // Build static piece states (no animation offsets - those are applied via DOM)
+  const pieceStates = useMemo(() => {
+    const states: Array<{
+      square: Square;
+      piece: Piece;
+      x: number;
+      y: number;
+      dragging: boolean;
+    }> = [];
+
+    for (const [square, piece] of pieces) {
+      const pos = square2pos(square);
+      const [x, y] = pos2translate(pos, asWhite, boardWidth, boardHeight);
+      states.push({
+        square,
+        piece,
+        x,
+        y,
+        dragging: draggingSquare === square,
+      });
+    }
+    return states;
+  }, [pieces, asWhite, boardWidth, boardHeight, draggingSquare]);
+
+  const setRef = useCallback((square: string) => (el: HTMLDivElement | null) => {
+    if (el) {
+      pieceElsRef.current.set(square, el);
+    } else {
+      pieceElsRef.current.delete(square);
+    }
+  }, []);
 
   const renderPiece = useCallback(
     (piece: Piece): React.ReactNode => {
@@ -152,41 +207,23 @@ export const PiecesLayer = memo(function PiecesLayer({
 
   return (
     <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
-      {pieceStates.map((ps) => {
-        let opacity = 1;
-        let zIndex = 2;
-
-        if (ps.dragging) {
-          // Ghost piece at origin: semi-transparent, like chessground/lichess
-          opacity = 0.5;
-          zIndex = 1;
-        } else if (ps.capturing) {
-          // Captured piece fading out
-          opacity = 0;
-          zIndex = 1;
-        } else if (ps.animating) {
-          zIndex = 8;
-        }
-
-        return (
-          <div
-            key={`${ps.capturing ? 'cap-' : ''}${ps.square}-${ps.piece.color}${ps.piece.role}`}
-            style={{
-              position: 'absolute',
-              width: `${boardWidth / 8}px`,
-              height: `${boardHeight / 8}px`,
-              transform: `translate(${ps.x}px, ${ps.y}px)`,
-              willChange: ps.animating ? 'transform' : undefined,
-              opacity,
-              zIndex,
-              pointerEvents: 'none',
-              transition: ps.capturing ? 'opacity 200ms ease' : undefined,
-            }}
-          >
-            {renderPiece(ps.piece)}
-          </div>
-        );
-      })}
+      {pieceStates.map((ps) => (
+        <div
+          key={`${ps.square}-${ps.piece.color}${ps.piece.role}`}
+          ref={setRef(ps.square)}
+          style={{
+            position: 'absolute',
+            width: `${boardWidth / 8}px`,
+            height: `${boardHeight / 8}px`,
+            transform: `translate(${ps.x}px, ${ps.y}px)`,
+            opacity: ps.dragging ? 0.5 : 1,
+            zIndex: ps.dragging ? 1 : 2,
+            pointerEvents: 'none',
+          }}
+        >
+          {renderPiece(ps.piece)}
+        </div>
+      ))}
     </div>
   );
 });

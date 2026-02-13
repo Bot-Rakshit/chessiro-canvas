@@ -4,11 +4,20 @@ import { computeDests, applyMove } from './chess-logic';
 
 const STARTING_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 
-// Mid-game position for testing highlights/arrows
-const MIDGAME_FEN = 'r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4';
-
-// Promotion test
-const PROMO_FEN = '8/P7/8/8/8/8/p7/8 w - - 0 1';
+// A sample game: Italian Game opening (pre-computed FENs and moves)
+const SAMPLE_GAME: { fen: string; lastMove: { from: string; to: string } | null }[] = [
+  { fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', lastMove: null },
+  { fen: 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1', lastMove: { from: 'e2', to: 'e4' } },
+  { fen: 'rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq e6 0 2', lastMove: { from: 'e7', to: 'e5' } },
+  { fen: 'rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2', lastMove: { from: 'g1', to: 'f3' } },
+  { fen: 'r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3', lastMove: { from: 'b8', to: 'c6' } },
+  { fen: 'r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3', lastMove: { from: 'f1', to: 'c4' } },
+  { fen: 'r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4', lastMove: { from: 'g8', to: 'f6' } },
+  { fen: 'r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/3P1N2/PPP2PPP/RNBQK2R b KQkq - 0 4', lastMove: { from: 'd2', to: 'd3' } },
+  { fen: 'r1bqk2r/pppp1ppp/2n2n2/2b1p3/2B1P3/3P1N2/PPP2PPP/RNBQK2R w KQkq - 1 5', lastMove: { from: 'f8', to: 'c5' } },
+  { fen: 'r1bqk2r/pppp1ppp/2n2n2/2b1p3/2B1P3/2NP1N2/PPP2PPP/R1BQK2R b KQkq - 2 5', lastMove: { from: 'b1', to: 'c3' } },
+  { fen: 'r1bq1rk1/pppp1ppp/2n2n2/2b1p3/2B1P3/2NP1N2/PPP2PPP/R1BQK2R w KQ - 3 6', lastMove: { from: 'e8', to: 'g8' } },
+];
 
 const THEMES: BoardTheme[] = [
   { id: 'chessiro', name: 'Chessiro', darkSquare: '#785E45', lightSquare: '#DFC29A', margin: '#66503B', lastMoveHighlight: '#DFAA4E', selectedPiece: '#B57340' },
@@ -17,153 +26,117 @@ const THEMES: BoardTheme[] = [
   { id: 'green', name: 'Forest', darkSquare: '#769656', lightSquare: '#eeeed2', margin: '#5f7a44', lastMoveHighlight: '#bbcc44', selectedPiece: '#567d2e' },
 ];
 
-const POSITIONS: { name: string; fen: string }[] = [
-  { name: 'Starting', fen: STARTING_FEN },
-  { name: 'Italian Game', fen: MIDGAME_FEN },
-  { name: 'Promotion Test', fen: PROMO_FEN },
-  { name: 'Ruy Lopez', fen: 'r1bqkbnr/pppp1ppp/2n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3' },
-  { name: 'Sicilian Dragon', fen: 'r1bqkb1r/pp2pp1p/2np1np1/8/3NP3/2N5/PPP2PPP/R1BQKB1R w KQkq - 0 6' },
-  { name: 'Endgame', fen: '8/5pk1/6p1/8/3K4/8/6PP/8 w - - 0 40' },
-];
-
 export function App() {
-  const [fen, setFen] = useState(STARTING_FEN);
+  // === Game replay state ===
+  const [plyIndex, setPlyIndex] = useState(0);
+  const currentGame = SAMPLE_GAME[plyIndex];
+
+  // === Interactive play state ===
+  const [playFen, setPlayFen] = useState(STARTING_FEN);
+  const [playLastMove, setPlayLastMove] = useState<{ from: string; to: string } | null>(null);
+
+  const [mode, setMode] = useState<'replay' | 'play'>('replay');
   const [orientation, setOrientation] = useState<'white' | 'black'>('white');
   const [themeIdx, setThemeIdx] = useState(0);
   const [showMargin, setShowMargin] = useState(true);
   const [showNotation, setShowNotation] = useState(true);
   const [showAnimations, setShowAnimations] = useState(true);
   const [animDuration, setAnimDuration] = useState(200);
-  const [interactive, setInteractive] = useState(true);
-  const [allowDrag, setAllowDrag] = useState(true);
-  const [allowArrows, setAllowArrows] = useState(true);
-  const [lastMove, setLastMove] = useState<{ from: string; to: string } | null>(null);
-  const [moveHistory, setMoveHistory] = useState<string[]>([]);
   const [arrows, setArrows] = useState<Arrow[]>([]);
-  const [overlays, setOverlays] = useState<TextOverlay[]>([]);
-  const [showBadge, setShowBadge] = useState(false);
 
   const theme = THEMES[themeIdx];
-  const dests = useMemo(() => computeDests(fen), [fen]);
 
-  const handleMove = useCallback((from: string, to: string, promotion?: string): boolean => {
-    const newFen = applyMove(fen, from, to, promotion);
-    if (newFen === fen) return false;
-    setFen(newFen);
-    setLastMove({ from, to });
-    setMoveHistory(prev => [...prev, `${from}${to}${promotion || ''}`]);
+  // Replay navigation
+  const goNext = useCallback(() => {
+    setPlyIndex(i => Math.min(i + 1, SAMPLE_GAME.length - 1));
+  }, []);
+  const goPrev = useCallback(() => {
+    setPlyIndex(i => Math.max(i - 1, 0));
+  }, []);
+  const goFirst = useCallback(() => { setPlyIndex(0); }, []);
+  const goLast = useCallback(() => { setPlyIndex(SAMPLE_GAME.length - 1); }, []);
 
-    // Show a disappearing overlay on captures
-    const pieces = new Map<string, boolean>();
-    const placement = fen.split(' ')[0];
-    let rank = 7, file = 0;
-    for (const ch of placement) {
-      if (ch === '/') { rank--; file = 0; continue; }
-      if (ch >= '1' && ch <= '8') { file += parseInt(ch); continue; }
-      const sq = String.fromCharCode(97 + file) + (rank + 1);
-      pieces.set(sq, true);
-      file++;
-    }
-    if (pieces.has(to)) {
-      const id = `capture-${Date.now()}`;
-      setOverlays(prev => [...prev, {
-        id,
-        text: 'Captured!',
-        square: to,
-        duration: 1200,
-        style: { animation: 'fadeUp 1.2s ease forwards' },
-      }]);
-      setTimeout(() => setOverlays(prev => prev.filter(o => o.id !== id)), 1500);
-    }
-
+  // Interactive play
+  const playDests = useMemo(() => computeDests(playFen), [playFen]);
+  const handlePlayMove = useCallback((from: string, to: string, promotion?: string): boolean => {
+    const newFen = applyMove(playFen, from, to, promotion);
+    if (newFen === playFen) return false;
+    setPlayFen(newFen);
+    setPlayLastMove({ from, to });
     return true;
-  }, [fen]);
+  }, [playFen]);
 
   const handleFlip = useCallback(() => {
     setOrientation(o => o === 'white' ? 'black' : 'white');
   }, []);
 
-  const handleReset = useCallback(() => {
-    setFen(STARTING_FEN);
-    setLastMove(null);
-    setMoveHistory([]);
-    setArrows([]);
-    setOverlays([]);
-  }, []);
-
-  const handleSetPosition = useCallback((newFen: string) => {
-    setFen(newFen);
-    setLastMove(null);
-    setMoveHistory([]);
-    setArrows([]);
-  }, []);
-
-  const addDemoArrows = useCallback(() => {
-    setArrows([
-      { startSquare: 'e2', endSquare: 'e4', color: 'rgba(231, 149, 35, 0.85)' },
-      { startSquare: 'd2', endSquare: 'd4', color: 'rgba(74, 222, 128, 0.85)' },
-      { startSquare: 'g1', endSquare: 'f3', color: 'rgba(239, 68, 68, 0.85)' },
-    ]);
-  }, []);
-
-  const badge = showBadge && lastMove ? {
-    square: lastMove.to as any,
-    icon: 'data:image/svg+xml,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><circle cx="20" cy="20" r="18" fill="#85C4AF" stroke="white" stroke-width="2"/><text x="20" y="26" text-anchor="middle" fill="white" font-size="18" font-weight="bold">✓</text></svg>`),
-    label: 'Best Move',
-  } : null;
+  // Current board props based on mode
+  const boardPosition = mode === 'replay' ? currentGame.fen : playFen;
+  const boardLastMove = mode === 'replay' ? currentGame.lastMove : playLastMove;
+  const boardDests = mode === 'replay' ? undefined : playDests;
+  const boardInteractive = mode === 'play';
 
   return (
-    <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', justifyContent: 'center' }}>
-      <style>{`
-        @keyframes fadeUp {
-          0% { opacity: 1; transform: translateX(-50%) translateY(0); }
-          100% { opacity: 0; transform: translateX(-50%) translateY(-20px); }
-        }
-      `}</style>
-
+    <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', justifyContent: 'center', padding: 20 }}>
       {/* Board */}
       <div style={{ width: 'min(500px, 90vw)', flexShrink: 0 }}>
         <ChessiroCanvas
-          position={fen}
+          position={boardPosition}
           orientation={orientation}
           theme={theme}
           pieceSet={{ id: 'cases', name: 'Cases', path: '/pieces/cases' }}
-          interactive={interactive}
-          allowDragging={allowDrag}
-          allowDrawingArrows={allowArrows}
+          interactive={boardInteractive}
+          allowDragging={mode === 'play'}
+          allowDrawingArrows={true}
           showMargin={showMargin}
           showNotation={showNotation}
           showAnimations={showAnimations}
           animationDurationMs={animDuration}
-          dests={dests}
-          lastMove={lastMove}
+          dests={boardDests}
+          lastMove={boardLastMove}
           arrows={arrows}
           onArrowsChange={setArrows}
-          onMove={handleMove}
+          onMove={mode === 'play' ? handlePlayMove : undefined}
           onFlipBoard={handleFlip}
-          moveQualityBadge={badge}
-          overlays={overlays}
+          onPrevious={mode === 'replay' ? goPrev : undefined}
+          onNext={mode === 'replay' ? goNext : undefined}
+          onFirst={mode === 'replay' ? goFirst : undefined}
+          onLast={mode === 'replay' ? goLast : undefined}
         />
 
-        {/* Status bar */}
-        <div style={{ marginTop: 8, fontSize: 12, color: '#888', fontFamily: 'monospace', wordBreak: 'break-all' }}>
-          {fen}
+        {/* Replay controls */}
+        {mode === 'replay' && (
+          <div style={{ display: 'flex', gap: 8, marginTop: 12, justifyContent: 'center' }}>
+            <NavBtn onClick={goFirst} disabled={plyIndex === 0}>|&lt;</NavBtn>
+            <NavBtn onClick={goPrev} disabled={plyIndex === 0}>&lt;</NavBtn>
+            <span style={{ padding: '8px 16px', color: '#ccc', fontSize: 14, fontFamily: 'monospace' }}>
+              {plyIndex} / {SAMPLE_GAME.length - 1}
+            </span>
+            <NavBtn onClick={goNext} disabled={plyIndex === SAMPLE_GAME.length - 1}>&gt;</NavBtn>
+            <NavBtn onClick={goLast} disabled={plyIndex === SAMPLE_GAME.length - 1}>&gt;|</NavBtn>
+          </div>
+        )}
+
+        {/* FEN display */}
+        <div style={{ marginTop: 8, fontSize: 11, color: '#666', fontFamily: 'monospace', wordBreak: 'break-all' }}>
+          {boardPosition}
         </div>
-        {moveHistory.length > 0 && (
-          <div style={{ marginTop: 4, fontSize: 12, color: '#aaa' }}>
-            Moves: {moveHistory.join(' ')}
+        {mode === 'replay' && currentGame.lastMove && (
+          <div style={{ marginTop: 2, fontSize: 11, color: '#888' }}>
+            Last move: {currentGame.lastMove.from} → {currentGame.lastMove.to}
           </div>
         )}
       </div>
 
       {/* Controls */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 240 }}>
-        <Section title="Positions">
-          {POSITIONS.map(p => (
-            <Btn key={p.fen} onClick={() => handleSetPosition(p.fen)} active={fen === p.fen}>
-              {p.name}
-            </Btn>
-          ))}
+        <Section title="Mode">
+          <Btn onClick={() => { setMode('replay'); setPlyIndex(0); }} active={mode === 'replay'}>
+            Game Replay (arrow keys)
+          </Btn>
+          <Btn onClick={() => { setMode('play'); setPlayFen(STARTING_FEN); setPlayLastMove(null); }} active={mode === 'play'}>
+            Interactive Play
+          </Btn>
         </Section>
 
         <Section title="Themes">
@@ -180,21 +153,13 @@ export function App() {
 
         <Section title="Board">
           <Btn onClick={handleFlip}>Flip Board (F)</Btn>
-          <Btn onClick={handleReset}>Reset</Btn>
           <Toggle label="Margin" value={showMargin} onChange={setShowMargin} />
           <Toggle label="Notation" value={showNotation} onChange={setShowNotation} />
           <Toggle label="Animations" value={showAnimations} onChange={setShowAnimations} />
-          <Toggle label="Interactive" value={interactive} onChange={setInteractive} />
-          <Toggle label="Drag & Drop" value={allowDrag} onChange={setAllowDrag} />
-          <Toggle label="Draw Arrows" value={allowArrows} onChange={setAllowArrows} />
-          <Toggle label="Move Badge" value={showBadge} onChange={setShowBadge} />
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
             <span style={{ color: '#999' }}>Speed</span>
             <input
-              type="range"
-              min={50}
-              max={500}
-              step={50}
+              type="range" min={50} max={500} step={50}
               value={animDuration}
               onChange={e => setAnimDuration(Number(e.target.value))}
               style={{ flex: 1 }}
@@ -203,31 +168,38 @@ export function App() {
           </div>
         </Section>
 
-        <Section title="Arrows">
-          <Btn onClick={addDemoArrows}>Add Demo Arrows</Btn>
-          <Btn onClick={() => setArrows([])}>Clear Arrows</Btn>
-          <div style={{ fontSize: 12, color: '#777' }}>
-            Right-click drag to draw arrows.
-            Right-click a square to mark it.
-          </div>
-        </Section>
-
-        <Section title="Features">
-          <div style={{ fontSize: 12, color: '#999', lineHeight: 1.6 }}>
-            <b>Click-to-move:</b> Click piece, then click destination<br />
-            <b>Drag-and-drop:</b> Drag piece to destination<br />
-            <b>Arrows:</b> Right-click drag between squares<br />
-            <b>Marks:</b> Right-click a square<br />
-            <b>Keyboard:</b> F=flip, Esc=deselect<br />
-            <b>Legal moves:</b> Dots on valid squares<br />
-            <b>Captures:</b> Ring on occupied squares<br />
-            <b>Promotion:</b> Use the Promotion Test position<br />
-            <b>Overlays:</b> Capture shows disappearing text<br />
-            <b>Badge:</b> Enable "Move Badge" toggle
-          </div>
-        </Section>
+        {mode === 'replay' && (
+          <Section title="Replay Info">
+            <div style={{ fontSize: 12, color: '#999', lineHeight: 1.6 }}>
+              <b>Italian Game</b> (10 moves)<br />
+              Use <b>arrow keys</b> or buttons to navigate.<br />
+              Watch the animation direction carefully.
+            </div>
+          </Section>
+        )}
       </div>
     </div>
+  );
+}
+
+function NavBtn({ children, onClick, disabled }: { children: React.ReactNode; onClick: () => void; disabled?: boolean }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      style={{
+        padding: '8px 16px',
+        border: '1px solid rgba(255,255,255,0.15)',
+        borderRadius: 6,
+        background: disabled ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.08)',
+        color: disabled ? '#444' : '#ccc',
+        cursor: disabled ? 'default' : 'pointer',
+        fontSize: 16,
+        fontWeight: 700,
+      }}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -271,23 +243,15 @@ function Toggle({ label, value, onChange }: { label: string; value: boolean; onC
       <div
         onClick={() => onChange(!value)}
         style={{
-          width: 36,
-          height: 20,
-          borderRadius: 10,
+          width: 36, height: 20, borderRadius: 10,
           background: value ? '#785E45' : 'rgba(255,255,255,0.1)',
-          position: 'relative',
-          transition: 'background 150ms',
-          flexShrink: 0,
+          position: 'relative', transition: 'background 150ms', flexShrink: 0,
         }}
       >
         <div style={{
-          width: 16,
-          height: 16,
-          borderRadius: 8,
+          width: 16, height: 16, borderRadius: 8,
           background: value ? '#DFC29A' : '#666',
-          position: 'absolute',
-          top: 2,
-          left: value ? 18 : 2,
+          position: 'absolute', top: 2, left: value ? 18 : 2,
           transition: 'left 150ms',
         }} />
       </div>
