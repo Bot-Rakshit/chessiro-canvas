@@ -1,5 +1,7 @@
 # chessiro-canvas
 
+> **WIP** -- This library is under active development. The animation system has known issues in React Strict Mode (Next.js dev). Use at your own risk until a stable 1.0 release.
+
 A lightweight, high-performance React chessboard component. Zero runtime dependencies. Inspired by [chessground](https://github.com/lichess-org/chessground).
 
 **~10 KB** min+gzip. No @dnd-kit, no heavy abstractions -- just React, pointer events, and SVG.
