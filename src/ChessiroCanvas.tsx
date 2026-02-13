@@ -162,6 +162,8 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
     const isDragging = !!interaction.drag;
     const cursor = !interactive ? 'default' : isDragging ? 'grabbing' : 'grab';
 
+    const marginPx = showMargin ? marginThickness : 0;
+
     return (
       <div
         className={className}
@@ -171,21 +173,39 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
         }}
         tabIndex={-1}
       >
+        {/* Margin frame */}
+        {marginPx > 0 && (
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              background: theme.margin || theme.darkSquare,
+              borderRadius: 4,
+              pointerEvents: 'none',
+            }}
+          />
+        )}
         <div
-          ref={boardRef}
           style={{
             position: 'relative',
-            width: '100%',
-            paddingBottom: '100%',
-            overflow: 'visible',
-            cursor,
-            userSelect: 'none',
-            WebkitUserSelect: 'none',
-            touchAction: blockTouchScroll ? 'none' : undefined,
+            padding: marginPx,
           }}
-          onMouseDown={interaction.handlePointerDown as any}
-          onTouchStart={interaction.handlePointerDown as any}
         >
+          <div
+            ref={boardRef}
+            style={{
+              position: 'relative',
+              width: '100%',
+              paddingBottom: '100%',
+              overflow: 'visible',
+              cursor,
+              userSelect: 'none',
+              WebkitUserSelect: 'none',
+              touchAction: blockTouchScroll ? 'none' : undefined,
+            }}
+            onMouseDown={interaction.handlePointerDown as any}
+            onTouchStart={interaction.handlePointerDown as any}
+          >
           {hasValidSize && (
             <div style={{ position: 'absolute', inset: 0 }}>
               <Squares
@@ -258,6 +278,7 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
               )}
             </div>
           )}
+        </div>
         </div>
 
         {interaction.drag && (
