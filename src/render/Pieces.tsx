@@ -1,5 +1,5 @@
-import { memo, useCallback, useEffect, useRef, useMemo } from 'react';
-import type { Piece, Square, Orientation, PieceSet, PieceRenderer } from '../types';
+import { memo, useCallback, useLayoutEffect, useEffect, useRef, useMemo } from 'react';
+import type { Piece, Square, Orientation, PieceSet, PieceRenderer, AnimationPlan } from '../types';
 import { readFen, INITIAL_FEN } from '../utils/fen';
 import { square2pos, pos2translate } from '../utils/coords';
 import { computeAnimPlan } from '../animation/anim';
@@ -17,7 +17,6 @@ interface PiecesLayerProps {
   draggingSquare?: string | null;
 }
 
-// Cubic easing
 function easing(t: number): number {
   return t < 0.5 ? 4 * t * t * t : (t - 1) * (2 * t - 2) * (2 * t - 2) + 1;
 }
@@ -41,12 +40,15 @@ export const PiecesLayer = memo(function PiecesLayer({
   const skipNextAnimRef = useRef(false);
   const prevDraggingRef = useRef<string | null | undefined>(draggingSquare);
   const rafIdRef = useRef<number | null>(null);
-  // Map of square -> DOM element ref for direct transform updates
   const pieceElsRef = useRef<Map<string, HTMLDivElement>>(new Map());
-  // Track fading elements
-  const fadingElsRef = useRef<Map<string, HTMLDivElement>>(new Map());
 
-  // Detect drag end to skip animation
+  // The current animation state, mutated by rAF loop and read by layoutEffect
+  const animRef = useRef<{
+    plan: AnimationPlan;
+    startTime: number;
+    frequency: number;
+  } | null>(null);
+
   if (prevDraggingRef.current && !draggingSquare) {
     skipNextAnimRef.current = true;
   }
@@ -56,101 +58,122 @@ export const PiecesLayer = memo(function PiecesLayer({
     preloadPieceSet(piecePath);
   }, [piecePath]);
 
-  // Run animation via direct DOM manipulation - no React state updates during animation
-  useEffect(() => {
+  // This is the core render function, inspired by chessground's render().
+  // It walks all piece elements and applies the correct transform,
+  // incorporating any active animation offset.
+  // Called from useLayoutEffect (on position change) AND from rAF (during animation).
+  const applyTransforms = useCallback(() => {
+    const sqW = boardWidth / 8;
+    const sqH = boardHeight / 8;
+    const anim = animRef.current;
+
+    let ease = 0;
+    if (anim) {
+      const elapsed = performance.now() - anim.startTime;
+      const rest = 1 - elapsed * anim.frequency;
+      if (rest <= 0) {
+        // Animation finished
+        animRef.current = null;
+      } else {
+        ease = easing(rest);
+      }
+    }
+
+    const currentAnim = animRef.current;
+
+    for (const [sq, el] of pieceElsRef.current) {
+      const basePos = square2pos(sq as Square);
+      const [baseX, baseY] = pos2translate(basePos, asWhite, boardWidth, boardHeight);
+
+      let x = baseX;
+      let y = baseY;
+
+      if (currentAnim) {
+        const vec = currentAnim.plan.anims.get(sq as Square);
+        if (vec) {
+          x += (vec.fromPos[0] - vec.toPos[0]) * ease * sqW;
+          y -= (vec.fromPos[1] - vec.toPos[1]) * ease * sqH;
+          el.style.zIndex = '8';
+          el.style.willChange = 'transform';
+        } else {
+          el.style.zIndex = '2';
+          el.style.willChange = '';
+        }
+      } else {
+        el.style.zIndex = '2';
+        el.style.willChange = '';
+      }
+
+      // Clamp to board bounds
+      x = Math.max(0, Math.min(boardWidth - sqW, x));
+      y = Math.max(0, Math.min(boardHeight - sqH, y));
+
+      el.style.transform = `translate(${x}px, ${y}px)`;
+    }
+
+    return !!animRef.current;
+  }, [asWhite, boardWidth, boardHeight]);
+
+  // rAF animation loop - just calls applyTransforms repeatedly
+  const animLoop = useCallback((_now: number) => {
+    const stillAnimating = applyTransforms();
+    if (stillAnimating) {
+      rafIdRef.current = requestAnimationFrame(animLoop);
+    } else {
+      rafIdRef.current = null;
+    }
+  }, [applyTransforms]);
+
+  // useLayoutEffect runs synchronously BEFORE browser paint.
+  // This is critical: React has updated the DOM (possibly adding/removing piece elements),
+  // and we immediately apply correct transforms before the user sees anything.
+  useLayoutEffect(() => {
     const currentPos = position || INITIAL_FEN;
     const prevPos = prevPositionRef.current;
     prevPositionRef.current = currentPos;
 
-    // Cancel any running animation
+    // Cancel any running rAF loop
     if (rafIdRef.current !== null) {
       cancelAnimationFrame(rafIdRef.current);
       rafIdRef.current = null;
     }
 
-    // Clean up old fading elements
-    for (const el of fadingElsRef.current.values()) {
-      el.remove();
-    }
-    fadingElsRef.current.clear();
+    // Clear previous animation
+    animRef.current = null;
 
-    if (prevPos === currentPos) return;
-    if (!showAnimations || animationDurationMs < 50) return;
-    if (skipNextAnimRef.current) {
-      skipNextAnimRef.current = false;
-      return;
-    }
-
-    const prevPieces = readFen(prevPos);
-    const plan = computeAnimPlan(prevPieces, pieces);
-    if (plan.anims.size === 0 && plan.fadings.size === 0) return;
-
-    const sqW = boardWidth / 8;
-    const sqH = boardHeight / 8;
-    const startTime = performance.now();
-    const frequency = 1 / animationDurationMs;
-
-    // Set initial offsets on DOM elements immediately
-    for (const [sq, vec] of plan.anims) {
-      const el = pieceElsRef.current.get(sq);
-      if (!el) continue;
-      const basePos = square2pos(sq);
-      const [baseX, baseY] = pos2translate(basePos, asWhite, boardWidth, boardHeight);
-      const offsetX = (vec.fromPos[0] - vec.toPos[0]) * sqW;
-      const offsetY = -(vec.fromPos[1] - vec.toPos[1]) * sqH;
-      el.style.transform = `translate(${baseX + offsetX}px, ${baseY + offsetY}px)`;
-      el.style.zIndex = '8';
-      el.style.willChange = 'transform';
-    }
-
-    function step(now: number) {
-      const elapsed = now - startTime;
-      const rest = 1 - elapsed * frequency;
-
-      if (rest <= 0) {
-        // Animation complete - reset to final positions
-        for (const [sq] of plan.anims) {
-          const el = pieceElsRef.current.get(sq);
-          if (!el) continue;
-          const basePos = square2pos(sq);
-          const [baseX, baseY] = pos2translate(basePos, asWhite, boardWidth, boardHeight);
-          el.style.transform = `translate(${baseX}px, ${baseY}px)`;
-          el.style.zIndex = '2';
-          el.style.willChange = '';
+    // Compute new animation if position changed
+    if (prevPos !== currentPos && showAnimations && animationDurationMs >= 50) {
+      if (skipNextAnimRef.current) {
+        skipNextAnimRef.current = false;
+      } else {
+        const prevPieces = readFen(prevPos);
+        const plan = computeAnimPlan(prevPieces, pieces);
+        if (plan.anims.size > 0) {
+          animRef.current = {
+            plan,
+            startTime: performance.now(),
+            frequency: 1 / animationDurationMs,
+          };
         }
-        // Remove fading elements
-        for (const el of fadingElsRef.current.values()) {
-          el.remove();
-        }
-        fadingElsRef.current.clear();
-        rafIdRef.current = null;
-        return;
       }
-
-      const ease = easing(rest);
-
-      for (const [sq, vec] of plan.anims) {
-        const el = pieceElsRef.current.get(sq);
-        if (!el) continue;
-        const basePos = square2pos(sq);
-        const [baseX, baseY] = pos2translate(basePos, asWhite, boardWidth, boardHeight);
-        const offsetX = (vec.fromPos[0] - vec.toPos[0]) * ease * sqW;
-        const offsetY = -(vec.fromPos[1] - vec.toPos[1]) * ease * sqH;
-        el.style.transform = `translate(${baseX + offsetX}px, ${baseY + offsetY}px)`;
-      }
-
-      rafIdRef.current = requestAnimationFrame(step);
     }
 
-    rafIdRef.current = requestAnimationFrame(step);
+    // Apply transforms immediately (before paint!)
+    // This either sets final positions or the animation start positions
+    applyTransforms();
 
-    return () => {
-      if (rafIdRef.current !== null) {
-        cancelAnimationFrame(rafIdRef.current);
-        rafIdRef.current = null;
-      }
-    };
-  }, [position, pieces, showAnimations, animationDurationMs, asWhite, boardWidth, boardHeight]);
+    // If there's an animation, start the rAF loop
+    if (animRef.current) {
+      rafIdRef.current = requestAnimationFrame(animLoop);
+    }
+  }, [position, pieces, showAnimations, animationDurationMs, applyTransforms, animLoop]);
+
+  // Also re-apply on orientation/size changes (no animation needed)
+  useLayoutEffect(() => {
+    if (!animRef.current) {
+      applyTransforms();
+    }
+  }, [asWhite, boardWidth, boardHeight, applyTransforms]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -161,29 +184,22 @@ export const PiecesLayer = memo(function PiecesLayer({
     };
   }, []);
 
-  // Build static piece states (no animation offsets - those are applied via DOM)
   const pieceStates = useMemo(() => {
     const states: Array<{
       square: Square;
       piece: Piece;
-      x: number;
-      y: number;
       dragging: boolean;
     }> = [];
 
     for (const [square, piece] of pieces) {
-      const pos = square2pos(square);
-      const [x, y] = pos2translate(pos, asWhite, boardWidth, boardHeight);
       states.push({
         square,
         piece,
-        x,
-        y,
         dragging: draggingSquare === square,
       });
     }
     return states;
-  }, [pieces, asWhite, boardWidth, boardHeight, draggingSquare]);
+  }, [pieces, draggingSquare]);
 
   const setRef = useCallback((square: string) => (el: HTMLDivElement | null) => {
     if (el) {
@@ -205,17 +221,22 @@ export const PiecesLayer = memo(function PiecesLayer({
     [piecePath, customPieces],
   );
 
+  const sqW = boardWidth / 8;
+  const sqH = boardHeight / 8;
+
   return (
-    <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
+    <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', overflow: 'hidden' }}>
       {pieceStates.map((ps) => (
         <div
           key={`${ps.square}-${ps.piece.color}${ps.piece.role}`}
           ref={setRef(ps.square)}
           style={{
             position: 'absolute',
-            width: `${boardWidth / 8}px`,
-            height: `${boardHeight / 8}px`,
-            transform: `translate(${ps.x}px, ${ps.y}px)`,
+            width: `${sqW}px`,
+            height: `${sqH}px`,
+            // Don't set transform here - useLayoutEffect handles it
+            // This avoids fighting between React and animation
+            transform: 'translate(0px, 0px)',
             opacity: ps.dragging ? 0.5 : 1,
             zIndex: ps.dragging ? 1 : 2,
             pointerEvents: 'none',
