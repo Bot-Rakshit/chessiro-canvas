@@ -90,13 +90,12 @@ export const PiecesLayer = memo(function PiecesLayer({
 
   const pieces = useMemo(() => readFen(position || INITIAL_FEN), [position]);
 
-  const prevPiecesRef = useRef<Pieces>(pieces);
+  // Track previous position FEN string to detect actual changes and compute anim plan
+  const prevPositionRef = useRef<string>(position || INITIAL_FEN);
   const [animCurrent, setAnimCurrent] = useState<AnimationCurrent | null>(null);
-  // When a drag just completed, skip the next animation (piece was already at dest)
   const skipNextAnimRef = useRef(false);
   const prevDraggingRef = useRef<string | null | undefined>(draggingSquare);
 
-  // Detect drag end: draggingSquare went from a value to null/undefined
   if (prevDraggingRef.current && !draggingSquare) {
     skipNextAnimRef.current = true;
   }
@@ -114,23 +113,25 @@ export const PiecesLayer = memo(function PiecesLayer({
   }, [piecePath]);
 
   useEffect(() => {
-    const prev = prevPiecesRef.current;
-    prevPiecesRef.current = pieces;
+    const currentPos = position || INITIAL_FEN;
+    const prevPos = prevPositionRef.current;
+    prevPositionRef.current = currentPos;
 
     if (!showAnimations || animationDurationMs < 50) return;
-    if (prev === pieces) return;
+    if (prevPos === currentPos) return;
 
-    // Skip animation if this position change was caused by a drag-drop
     if (skipNextAnimRef.current) {
       skipNextAnimRef.current = false;
       return;
     }
 
-    const plan = computeAnimPlan(prev, pieces);
+    // Parse the PREVIOUS position from the stored FEN, not from a ref that may be stale
+    const prevPieces = readFen(prevPos);
+    const plan = computeAnimPlan(prevPieces, pieces);
     if (plan.anims.size > 0 || plan.fadings.size > 0) {
       animController.current.start(plan, animationDurationMs);
     }
-  }, [pieces, showAnimations, animationDurationMs]);
+  }, [position, pieces, showAnimations, animationDurationMs]);
 
   const pieceStates = useMemo(
     () => buildPieceStates(pieces, asWhite, boardWidth, boardHeight, animCurrent, draggingSquare),

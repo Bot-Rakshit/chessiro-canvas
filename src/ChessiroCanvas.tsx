@@ -157,7 +157,6 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
     const boardWidth = bounds?.width ?? 0;
     const boardHeight = bounds?.height ?? 0;
     const squareSize = boardWidth / 8;
-    const marginSize = showMargin && showNotation ? marginThickness : 0;
 
     // Cursor: grab when hovering pieces, grabbing while dragging
     const isDragging = !!interaction.drag;
@@ -168,7 +167,6 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
         className={className}
         style={{
           position: 'relative',
-          padding: marginSize,
           ...style,
         }}
         tabIndex={-1}
