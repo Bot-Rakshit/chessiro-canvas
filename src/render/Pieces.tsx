@@ -36,32 +36,63 @@ export const PiecesLayer = memo(function PiecesLayer({
   const piecePath = pieceSet?.path || '/pieces/cases';
   const pieces = useMemo(() => readFen(position || INITIAL_FEN), [position]);
 
-  const prevPositionRef = useRef<string>(position || INITIAL_FEN);
   const skipNextAnimRef = useRef(false);
   const prevDraggingRef = useRef<string | null | undefined>(draggingSquare);
   const rafIdRef = useRef<number | null>(null);
   const pieceElsRef = useRef<Map<string, HTMLDivElement>>(new Map());
 
-  // The current animation state, mutated by rAF loop and read by layoutEffect
   const animRef = useRef<{
     plan: AnimationPlan;
     startTime: number;
     frequency: number;
   } | null>(null);
 
+  // Track previous position in render phase (not inside effects) so it survives
+  // React Strict Mode double-invocations and callback-dep re-runs.
+  // positionHistory stores [previousPosition, lastSeenPosition]
+  const positionHistory = useRef<{ prev: string; last: string }>({
+    prev: position || INITIAL_FEN,
+    last: position || INITIAL_FEN,
+  });
+
+  const currentPos = position || INITIAL_FEN;
+  let pendingAnimPlan: AnimationPlan | null = null;
+
+  if (currentPos !== positionHistory.current.last) {
+    // Position actually changed - compute animation plan during render
+    const prevPos = positionHistory.current.last;
+    positionHistory.current = { prev: prevPos, last: currentPos };
+
+    if (prevDraggingRef.current && !draggingSquare) {
+      // Drag just ended, skip this animation
+      skipNextAnimRef.current = true;
+    }
+
+    if (skipNextAnimRef.current) {
+      skipNextAnimRef.current = false;
+    } else if (showAnimations && animationDurationMs >= 50) {
+      const prevPieces = readFen(prevPos);
+      pendingAnimPlan = computeAnimPlan(prevPieces, pieces);
+      if (pendingAnimPlan.anims.size === 0) {
+        pendingAnimPlan = null;
+      }
+    }
+  }
+
+  // Handle drag end detection for non-position-change renders
   if (prevDraggingRef.current && !draggingSquare) {
     skipNextAnimRef.current = true;
   }
   prevDraggingRef.current = draggingSquare;
 
+  // Store pending plan in a ref so the layoutEffect can consume it
+  const pendingPlanRef = useRef<AnimationPlan | null>(null);
+  pendingPlanRef.current = pendingAnimPlan;
+
   useEffect(() => {
     preloadPieceSet(piecePath);
   }, [piecePath]);
 
-  // This is the core render function, inspired by chessground's render().
-  // It walks all piece elements and applies the correct transform,
-  // incorporating any active animation offset.
-  // Called from useLayoutEffect (on position change) AND from rAF (during animation).
   const applyTransforms = useCallback(() => {
     const sqW = boardWidth / 8;
     const sqH = boardHeight / 8;
@@ -72,7 +103,6 @@ export const PiecesLayer = memo(function PiecesLayer({
       const elapsed = performance.now() - anim.startTime;
       const rest = 1 - elapsed * anim.frequency;
       if (rest <= 0) {
-        // Animation finished
         animRef.current = null;
       } else {
         ease = easing(rest);
@@ -104,7 +134,6 @@ export const PiecesLayer = memo(function PiecesLayer({
         el.style.willChange = '';
       }
 
-      // Clamp to board bounds
       x = Math.max(0, Math.min(boardWidth - sqW, x));
       y = Math.max(0, Math.min(boardHeight - sqH, y));
 
@@ -114,8 +143,7 @@ export const PiecesLayer = memo(function PiecesLayer({
     return !!animRef.current;
   }, [asWhite, boardWidth, boardHeight]);
 
-  // rAF animation loop - just calls applyTransforms repeatedly
-  const animLoop = useCallback((_now: number) => {
+  const animLoop = useCallback(() => {
     const stillAnimating = applyTransforms();
     if (stillAnimating) {
       rafIdRef.current = requestAnimationFrame(animLoop);
@@ -124,58 +152,37 @@ export const PiecesLayer = memo(function PiecesLayer({
     }
   }, [applyTransforms]);
 
-  // useLayoutEffect runs synchronously BEFORE browser paint.
-  // This is critical: React has updated the DOM (possibly adding/removing piece elements),
-  // and we immediately apply correct transforms before the user sees anything.
+  // Runs synchronously before paint. Consumes the pending animation plan
+  // computed during render and applies transforms.
   useLayoutEffect(() => {
-    const currentPos = position || INITIAL_FEN;
-    const prevPos = prevPositionRef.current;
-    prevPositionRef.current = currentPos;
-
     // Cancel any running rAF loop
     if (rafIdRef.current !== null) {
       cancelAnimationFrame(rafIdRef.current);
       rafIdRef.current = null;
     }
 
-    // Clear previous animation
-    animRef.current = null;
+    // Consume pending animation plan (computed in render phase)
+    const plan = pendingPlanRef.current;
+    pendingPlanRef.current = null;
 
-    // Compute new animation if position changed
-    if (prevPos !== currentPos && showAnimations && animationDurationMs >= 50) {
-      if (skipNextAnimRef.current) {
-        skipNextAnimRef.current = false;
-      } else {
-        const prevPieces = readFen(prevPos);
-        const plan = computeAnimPlan(prevPieces, pieces);
-        if (plan.anims.size > 0) {
-          animRef.current = {
-            plan,
-            startTime: performance.now(),
-            frequency: 1 / animationDurationMs,
-          };
-        }
-      }
+    if (plan) {
+      animRef.current = {
+        plan,
+        startTime: performance.now(),
+        frequency: 1 / animationDurationMs,
+      };
+    } else if (!animRef.current) {
+      // No pending plan and no running animation - just snap
+      animRef.current = null;
     }
 
-    // Apply transforms immediately (before paint!)
-    // This either sets final positions or the animation start positions
     applyTransforms();
 
-    // If there's an animation, start the rAF loop
     if (animRef.current) {
       rafIdRef.current = requestAnimationFrame(animLoop);
     }
-  }, [position, pieces, showAnimations, animationDurationMs, applyTransforms, animLoop]);
+  });
 
-  // Also re-apply on orientation/size changes (no animation needed)
-  useLayoutEffect(() => {
-    if (!animRef.current) {
-      applyTransforms();
-    }
-  }, [asWhite, boardWidth, boardHeight, applyTransforms]);
-
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (rafIdRef.current !== null) {
@@ -234,8 +241,6 @@ export const PiecesLayer = memo(function PiecesLayer({
             position: 'absolute',
             width: `${sqW}px`,
             height: `${sqH}px`,
-            // Don't set transform here - useLayoutEffect handles it
-            // This avoids fighting between React and animation
             transform: 'translate(0px, 0px)',
             opacity: ps.dragging ? 0.5 : 1,
             zIndex: ps.dragging ? 1 : 2,
