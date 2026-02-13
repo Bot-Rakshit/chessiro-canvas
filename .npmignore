@@ -1,0 +1,7 @@
+demo/
+.gitignore
+tsconfig.json
+tsup.config.ts
+node_modules/
+*.tsbuildinfo
+.DS_Store

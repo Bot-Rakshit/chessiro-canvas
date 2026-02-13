@@ -1,0 +1,54 @@
+import { memo } from 'react';
+import type { Piece, PieceSet, PieceRenderer } from '../types';
+import { CachedPieceImg } from '../hooks/usePieceCache';
+
+interface DragGhostProps {
+  piece: Piece;
+  x: number;
+  y: number;
+  squareSize: number;
+  pieceSet?: PieceSet;
+  customPieces?: PieceRenderer;
+}
+
+export const DragGhost = memo(function DragGhost({
+  piece,
+  x,
+  y,
+  squareSize,
+  pieceSet,
+  customPieces,
+}: DragGhostProps) {
+  const piecePath = pieceSet?.path || '/pieces/cases';
+  const key = `${piece.color}${piece.role.toUpperCase()}`;
+
+  let content: React.ReactNode;
+  if (customPieces?.[key]) {
+    content = customPieces[key]();
+  } else {
+    const src = `${piecePath}/${key.toLowerCase()}.svg`;
+    content = <CachedPieceImg src={src} alt={key} />;
+  }
+
+  // Offset so piece is centered under the cursor
+  const offset = squareSize / 2;
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        width: squareSize,
+        height: squareSize,
+        left: 0,
+        top: 0,
+        transform: `translate(${x - offset}px, ${y - offset}px)`,
+        pointerEvents: 'none',
+        zIndex: 100,
+        willChange: 'transform',
+        cursor: 'grabbing',
+      }}
+    >
+      {content}
+    </div>
+  );
+});
