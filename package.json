@@ -21,7 +21,9 @@
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "benchmark": "npm run build && node scripts/benchmark.mjs",
+    "benchmark:quick": "npm run build && BENCH_ROUNDS=3 BENCH_WARMUP_ROUNDS=1 BENCH_UPDATES=120 node scripts/benchmark.mjs"
   },
   "peerDependencies": {
     "react": ">=18.0.0",
@@ -30,7 +32,9 @@
   "devDependencies": {
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "jsdom": "^28.1.0",
     "react": "^19.0.0",
+    "react-chessboard": "^5.10.0",
     "react-dom": "^19.0.0",
     "tsup": "^8.0.0",
     "typescript": "^5.0.0"

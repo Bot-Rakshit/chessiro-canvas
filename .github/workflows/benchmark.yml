@@ -1,0 +1,66 @@
+name: Benchmark
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run benchmark
+        run: npm run benchmark
+
+      - name: Publish benchmark summary
+        run: |
+          node -e '
+          const fs = require("node:fs");
+          const data = JSON.parse(fs.readFileSync("benchmarks/latest.json", "utf8"));
+          const c = data.results.chessiroCanvas.summary;
+          const r = data.results.reactChessboard.summary;
+          const d = data.results.comparison;
+          const bundle = data.bundle;
+          const lines = [
+            "## Benchmark Summary",
+            "",
+            `Generated at: ${data.generatedAt}`,
+            "",
+            "| Metric | chessiro-canvas | react-chessboard | Delta |",
+            "| --- | ---: | ---: | ---: |",
+            `| Mount wall time (mean) | ${c.mountWallMs.mean.toFixed(2)} ms | ${r.mountWallMs.mean.toFixed(2)} ms | ${d.mountWallFasterPct.toFixed(1)}% faster |`,
+            `| Update wall time (mean, ${data.config.updatesPerRound} renders) | ${c.updatesWallMs.mean.toFixed(2)} ms | ${r.updatesWallMs.mean.toFixed(2)} ms | ${d.updatesWallFasterPct.toFixed(1)}% faster |`,
+            `| Update wall per render (mean) | ${c.updateWallPerUpdateMs.mean.toFixed(2)} ms | ${r.updateWallPerUpdateMs.mean.toFixed(2)} ms | ${d.updateWallPerRenderFasterPct.toFixed(1)}% faster |`,
+            `| React Profiler update duration (mean) | ${c.updateActualAvgMs.mean.toFixed(2)} ms | ${r.updateActualAvgMs.mean.toFixed(2)} ms | ${d.profilerUpdateFasterPct.toFixed(1)}% faster |`,
+            `| Bundle ESM gzip | ${(bundle.chessiroCanvas.gzipBytes / 1024).toFixed(2)} KB | ${(bundle.reactChessboard.gzipBytes / 1024).toFixed(2)} KB | ${bundle.gzipReductionPct.toFixed(1)}% smaller |`,
+            ""
+          ];
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join("\n"));
+          '
+
+      - name: Upload benchmark artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-latest
+          path: benchmarks/latest.json

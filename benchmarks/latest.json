@@ -1,0 +1,265 @@
+{
+  "generatedAt": "2026-02-23T15:29:50.995Z",
+  "environment": {
+    "node": "v25.6.1",
+    "platform": "darwin",
+    "arch": "arm64",
+    "cpuModel": "Apple M4",
+    "cpuCount": 10,
+    "memoryGB": 16
+  },
+  "config": {
+    "rounds": 8,
+    "warmupRounds": 2,
+    "updatesPerRound": 300,
+    "boardSizePx": 640,
+    "positionsTested": 4
+  },
+  "bundle": {
+    "chessiroCanvas": {
+      "bytes": 66707,
+      "gzipBytes": 15138
+    },
+    "reactChessboard": {
+      "bytes": 182451,
+      "gzipBytes": 38277
+    },
+    "gzipReductionPct": 60.451446038090765
+  },
+  "results": {
+    "chessiroCanvas": {
+      "rounds": [
+        {
+          "mountWallMs": 6.258874999999534,
+          "updatesWallMs": 663.4351669999996,
+          "updateWallPerUpdateMs": 2.2114505566666653,
+          "mountActualMs": 0.3544609999999011,
+          "updateActualAvgMs": 0.6037845507488028,
+          "updateActualP95Ms": 1.9710870000008072,
+          "profilerCommitCount": 602
+        },
+        {
+          "mountWallMs": 9.984875000000102,
+          "updatesWallMs": 677.6313749999999,
+          "updateWallPerUpdateMs": 2.2587712499999997,
+          "mountActualMs": 0.8767100000022765,
+          "updateActualAvgMs": 0.5484026006658258,
+          "updateActualP95Ms": 1.138924999993833,
+          "profilerCommitCount": 602
+        },
+        {
+          "mountWallMs": 5.875374999999622,
+          "updatesWallMs": 711.3580409999995,
+          "updateWallPerUpdateMs": 2.3711934699999984,
+          "mountActualMs": 0.5374600000013743,
+          "updateActualAvgMs": 0.6568324542431961,
+          "updateActualP95Ms": 2.148043000001053,
+          "profilerCommitCount": 602
+        },
+        {
+          "mountWallMs": 5.761833000000479,
+          "updatesWallMs": 661.6964579999994,
+          "updateWallPerUpdateMs": 2.2056548599999983,
+          "mountActualMs": 0.46329099999911705,
+          "updateActualAvgMs": 0.6207145973376418,
+          "updateActualP95Ms": 2.0344480000039766,
+          "profilerCommitCount": 602
+        },
+        {
+          "mountWallMs": 11.023084000000381,
+          "updatesWallMs": 732.7487919999985,
+          "updateWallPerUpdateMs": 2.4424959733333282,
+          "mountActualMs": 0.5594590000000608,
+          "updateActualAvgMs": 0.5528165008320514,
+          "updateActualP95Ms": 1.7087479999827337,
+          "profilerCommitCount": 602
+        },
+        {
+          "mountWallMs": 7.477875000000495,
+          "updatesWallMs": 629.5150420000009,
+          "updateWallPerUpdateMs": 2.098383473333336,
+          "mountActualMs": 0.3296710000031453,
+          "updateActualAvgMs": 0.5466423311153117,
+          "updateActualP95Ms": 2.0114440000106697,
+          "profilerCommitCount": 602
+        },
+        {
+          "mountWallMs": 6.145582999999533,
+          "updatesWallMs": 632.9466250000005,
+          "updateWallPerUpdateMs": 2.1098220833333348,
+          "mountActualMs": 0.28779299999951036,
+          "updateActualAvgMs": 0.590346623960191,
+          "updateActualP95Ms": 1.894043000000238,
+          "profilerCommitCount": 602
+        },
+        {
+          "mountWallMs": 12.349625000000742,
+          "updatesWallMs": 509.36154199999874,
+          "updateWallPerUpdateMs": 1.6978718066666625,
+          "mountActualMs": 0.40087400000265916,
+          "updateActualAvgMs": 0.39679722129767164,
+          "updateActualP95Ms": 0.6158340000165481,
+          "profilerCommitCount": 602
+        }
+      ],
+      "summary": {
+        "mountWallMs": {
+          "mean": 8.109640625000111,
+          "median": 6.258874999999534,
+          "p95": 12.349625000000742,
+          "stdev": 2.453778994881343
+        },
+        "updatesWallMs": {
+          "mean": 652.3366302499996,
+          "median": 661.6964579999994,
+          "p95": 732.7487919999985,
+          "stdev": 63.382690602048086
+        },
+        "updateWallPerUpdateMs": {
+          "mean": 2.1744554341666653,
+          "median": 2.2056548599999983,
+          "p95": 2.4424959733333282,
+          "stdev": 0.21127563534016028
+        },
+        "mountActualMs": {
+          "mean": 0.47621487500100557,
+          "median": 0.40087400000265916,
+          "p95": 0.8767100000022765,
+          "stdev": 0.17632430532253127
+        },
+        "updateActualAvgMs": {
+          "mean": 0.5645421100250866,
+          "median": 0.5528165008320514,
+          "p95": 0.6568324542431961,
+          "stdev": 0.07308849217956169
+        },
+        "updateActualP95Ms": {
+          "mean": 1.6903215000012324,
+          "median": 1.894043000000238,
+          "p95": 2.148043000001053,
+          "stdev": 0.5012839039501102
+        }
+      }
+    },
+    "reactChessboard": {
+      "rounds": [
+        {
+          "mountWallMs": 50.61420799999905,
+          "updatesWallMs": 1561.7814579999995,
+          "updateWallPerUpdateMs": 5.205938193333331,
+          "mountActualMs": 33.85768200000166,
+          "updateActualAvgMs": 3.1601786788057824,
+          "updateActualP95Ms": 10.028175000064948,
+          "profilerCommitCount": 303
+        },
+        {
+          "mountWallMs": 67.31995900000038,
+          "updatesWallMs": 1642.0904999999984,
+          "updateWallPerUpdateMs": 5.4736349999999945,
+          "mountActualMs": 43.048098000024765,
+          "updateActualAvgMs": 3.283019533113595,
+          "updateActualP95Ms": 11.326824999989185,
+          "profilerCommitCount": 303
+        },
+        {
+          "mountWallMs": 328.4681660000024,
+          "updatesWallMs": 8317.165084,
+          "updateWallPerUpdateMs": 27.723883613333335,
+          "mountActualMs": 256.2318120000091,
+          "updateActualAvgMs": 18.930762327816687,
+          "updateActualP95Ms": 64.63069699998596,
+          "profilerCommitCount": 303
+        },
+        {
+          "mountWallMs": 61.940583000003244,
+          "updatesWallMs": 5069.108832999998,
+          "updateWallPerUpdateMs": 16.897029443333327,
+          "mountActualMs": 30.667038999970828,
+          "updateActualAvgMs": 10.604976115892732,
+          "updateActualP95Ms": 45.154500999979064,
+          "profilerCommitCount": 303
+        },
+        {
+          "mountWallMs": 49.953125,
+          "updatesWallMs": 3558.8924169999955,
+          "updateWallPerUpdateMs": 11.862974723333318,
+          "mountActualMs": 32.94296699992992,
+          "updateActualAvgMs": 8.265312132447024,
+          "updateActualP95Ms": 24.40904099999898,
+          "profilerCommitCount": 303
+        },
+        {
+          "mountWallMs": 21.159417000002577,
+          "updatesWallMs": 1240.836292,
+          "updateWallPerUpdateMs": 4.136120973333333,
+          "mountActualMs": 12.569651000048907,
+          "updateActualAvgMs": 2.3521742748329753,
+          "updateActualP95Ms": 8.627456999958667,
+          "profilerCommitCount": 303
+        },
+        {
+          "mountWallMs": 18.83916699999827,
+          "updatesWallMs": 1094.490208000003,
+          "updateWallPerUpdateMs": 3.648300693333343,
+          "mountActualMs": 11.76146300011169,
+          "updateActualAvgMs": 2.07978143708733,
+          "updateActualP95Ms": 8.41448600005242,
+          "profilerCommitCount": 303
+        },
+        {
+          "mountWallMs": 15.787334000000556,
+          "updatesWallMs": 1024.96875,
+          "updateWallPerUpdateMs": 3.4165625,
+          "mountActualMs": 9.78873300003761,
+          "updateActualAvgMs": 1.9529697582784018,
+          "updateActualP95Ms": 7.147926999881747,
+          "profilerCommitCount": 303
+        }
+      ],
+      "summary": {
+        "mountWallMs": {
+          "mean": 76.76024487500081,
+          "median": 49.953125,
+          "p95": 328.4681660000024,
+          "stdev": 96.9741299496808
+        },
+        "updatesWallMs": {
+          "mean": 2938.666692749999,
+          "median": 1561.7814579999995,
+          "p95": 8317.165084,
+          "stdev": 2433.4770949362064
+        },
+        "updateWallPerUpdateMs": {
+          "mean": 9.795555642499998,
+          "median": 5.205938193333331,
+          "p95": 27.723883613333335,
+          "stdev": 8.111590316454022
+        },
+        "mountActualMs": {
+          "mean": 53.85843062501681,
+          "median": 30.667038999970828,
+          "p95": 256.2318120000091,
+          "stdev": 77.35165822820093
+        },
+        "updateActualAvgMs": {
+          "mean": 6.3286467822843155,
+          "median": 3.1601786788057824,
+          "p95": 18.930762327816687,
+          "stdev": 5.625586154761418
+        },
+        "updateActualP95Ms": {
+          "mean": 22.46738862498887,
+          "median": 10.028175000064948,
+          "p95": 64.63069699998596,
+          "stdev": 19.99618567542839
+        }
+      }
+    },
+    "comparison": {
+      "mountWallFasterPct": 89.4351032383936,
+      "updatesWallFasterPct": 77.80161214405896,
+      "updateWallPerRenderFasterPct": 77.80161214405898,
+      "profilerUpdateFasterPct": 91.07957625940824
+    }
+  }
+}
