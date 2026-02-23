@@ -1,4 +1,4 @@
-import { forwardRef, useImperativeHandle, useMemo, useRef } from 'react';
+import { forwardRef, useCallback, useImperativeHandle, useMemo, useRef } from 'react';
 import type { ChessiroCanvasProps, ChessiroCanvasRef, BoardTheme } from './types';
 import { INITIAL_FEN, readFen } from './utils/fen';
 import { useBoardSize } from './hooks/useBoardSize';
@@ -126,6 +126,11 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
       blockTouchScroll,
     });
 
+    const handleDeselect = useCallback(() => {
+      interaction.clearSelection();
+      onDeselect?.();
+    }, [interaction.clearSelection, onDeselect]);
+
     useKeyboard({
       onPrevious,
       onNext,
@@ -133,7 +138,7 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
       onLast,
       onFlipBoard,
       onShowThreat,
-      onDeselect,
+      onDeselect: handleDeselect,
     });
 
     useImperativeHandle(ref, () => ({
@@ -160,7 +165,7 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
 
     // Cursor: grab when hovering pieces, grabbing while dragging
     const isDragging = !!interaction.drag;
-    const cursor = !interactive ? 'default' : isDragging ? 'grabbing' : 'grab';
+    const cursor = !interactive ? 'default' : isDragging ? 'grabbing' : allowDragging ? 'grab' : 'pointer';
 
     const marginPx = showMargin ? marginThickness : 0;
 

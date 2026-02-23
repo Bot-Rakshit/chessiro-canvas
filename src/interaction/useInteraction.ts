@@ -66,6 +66,7 @@ export interface InteractionState {
   drag: DragState | null;
   activeMarkedSquares: Record<string, boolean>;
   renderedArrows: Arrow[];
+  clearSelection: () => void;
   handlePointerDown: (e: React.MouseEvent | React.TouchEvent) => void;
   handlePromotionSelect: (piece: PromotionPiece) => void;
   handlePromotionDismiss: () => void;
@@ -76,7 +77,7 @@ export function useInteraction(opts: UseInteractionOptions): InteractionState {
     position, orientation, interactive, allowDragging, allowDrawingArrows,
     boardRef, boardBounds, onMove, dests,
     turnColor, movableColor, premovable,
-    arrows, onArrowsChange: _onArrowsChange,
+    arrows, onArrowsChange,
     arrowBrushes: customBrushes, snapArrowsToValidMoves = true,
     markedSquares: externalMarkedSquares, onMarkedSquaresChange,
     plyIndex, plyArrows, onPlyArrowsChange, plyMarks, onPlyMarksChange,
@@ -109,10 +110,14 @@ export function useInteraction(opts: UseInteractionOptions): InteractionState {
   const legalRef = useRef(legalSquares);
   const premoveRef = useRef(premoveSquares);
   const piecesRef = useRef(pieces);
+  const dragRef = useRef<DragState | null>(null);
+  const arrowsRef = useRef(arrows);
   selectedRef.current = selectedSquare;
   legalRef.current = legalSquares;
   premoveRef.current = premoveSquares;
   piecesRef.current = pieces;
+  dragRef.current = drag;
+  arrowsRef.current = arrows;
 
   // When turnColor/movableColor not provided, allow both colors (free mode)
   const freeMode = turnColor === undefined && movableColor === undefined;
@@ -206,6 +211,17 @@ export function useInteraction(opts: UseInteractionOptions): InteractionState {
     setPremoveSquares([]);
   }, [premovable]);
 
+  const clearSelection = useCallback(() => {
+    setSelectedSquare(null);
+    setLegalSquares([]);
+    setPremoveSquares([]);
+    setPendingPromotion(null);
+    if (premoveCurrent) {
+      setPremoveCurrent(null);
+      premovable?.events?.unset?.();
+    }
+  }, [premoveCurrent, premovable]);
+
   // ── Clear overlays for current ply ──
 
   const clearOverlaysForPly = useCallback(() => {
@@ -219,11 +235,13 @@ export function useInteraction(opts: UseInteractionOptions): InteractionState {
     }
     if (onPlyArrowsChange && plyIndex !== undefined) {
       onPlyArrowsChange(plyIndex, []);
+    } else if (onArrowsChange) {
+      onArrowsChange([]);
     } else {
       setInternalArrowsMap(prev => { const m = new Map(prev); m.set(ply, []); return m; });
     }
     onClearOverlays?.();
-  }, [plyIndex, externalMarkedSquares, onMarkedSquaresChange, onPlyMarksChange, onPlyArrowsChange, onClearOverlays]);
+  }, [plyIndex, externalMarkedSquares, onMarkedSquaresChange, onPlyMarksChange, onPlyArrowsChange, onArrowsChange, onClearOverlays]);
 
   // ── Square click/selection logic ──
 
@@ -257,9 +275,7 @@ export function useInteraction(opts: UseInteractionOptions): InteractionState {
 
     // Clicking the same square deselects
     if (sel === sq) {
-      setSelectedSquare(null);
-      setLegalSquares([]);
-      setPremoveSquares([]);
+      clearSelection();
       return;
     }
 
@@ -290,13 +306,11 @@ export function useInteraction(opts: UseInteractionOptions): InteractionState {
       }
     }
 
-    setSelectedSquare(null);
-    setLegalSquares([]);
-    setPremoveSquares([]);
+    clearSelection();
     onSquareClick?.(sq);
   }, [interactive, attemptMove, attemptPremove, getDestsForSquare, dests,
     canMoveColor, canPremoveColor, premoveCurrent, premovable,
-    onSquareClick, clearOverlaysForPly]);
+    onSquareClick, clearOverlaysForPly, clearSelection]);
 
   // ── Toggle arrow/mark helpers ──
 
@@ -305,7 +319,7 @@ export function useInteraction(opts: UseInteractionOptions): InteractionState {
     const key = `${start}-${end}`;
     const current = (plyArrows && plyIndex !== undefined)
       ? (plyArrows.get(plyIndex) || [])
-      : (internalArrowsMap.get(ply) || []);
+      : (onArrowsChange ? arrowsRef.current : (internalArrowsMap.get(ply) || []));
 
     const exists = current.some(a => `${a.startSquare}-${a.endSquare}` === key);
     const next = exists
@@ -314,10 +328,12 @@ export function useInteraction(opts: UseInteractionOptions): InteractionState {
 
     if (onPlyArrowsChange && plyIndex !== undefined) {
       onPlyArrowsChange(plyIndex, next);
+    } else if (onArrowsChange) {
+      onArrowsChange(next);
     } else {
       setInternalArrowsMap(prev => { const m = new Map(prev); m.set(ply, next); return m; });
     }
-  }, [plyIndex, plyArrows, onPlyArrowsChange, internalArrowsMap]);
+  }, [plyIndex, plyArrows, onPlyArrowsChange, onArrowsChange, internalArrowsMap]);
 
   const toggleMark = useCallback((sq: string) => {
     const ply = plyIndex ?? 0;
@@ -438,11 +454,16 @@ export function useInteraction(opts: UseInteractionOptions): InteractionState {
       if (arrowStartRef.current) {
         arrowPosRef.current = pos;
       }
+      if (blockTouchScroll && 'touches' in e && (arrowStartRef.current || dragRef.current)) {
+        e.preventDefault();
+      }
+      let dragStartedSquare: string | null = null;
       setDrag(prev => {
         if (!prev) return null;
         const next = { ...prev, currentPos: pos };
         if (!next.started && hasDragStarted(next)) {
           next.started = true;
+          dragStartedSquare = next.origSquare;
         }
         if (next.started && boardBounds) {
           const currentSq = screenPos2square(pos[0], pos[1], asWhite, boardBounds);
@@ -452,6 +473,29 @@ export function useInteraction(opts: UseInteractionOptions): InteractionState {
         }
         return next;
       });
+      if (dragStartedSquare) {
+        const piece = piecesRef.current.get(dragStartedSquare as Square);
+        if (!piece) return;
+
+        if (canMoveColor(piece.color)) {
+          const targets = getDestsForSquare(dragStartedSquare);
+          if (targets.length > 0 || !dests) {
+            setSelectedSquare(dragStartedSquare);
+            setLegalSquares(targets);
+            setPremoveSquares([]);
+            return;
+          }
+        }
+
+        if (canPremoveColor(piece.color)) {
+          const pmTargets = premoveDests(dragStartedSquare as Square, piecesRef.current, piece.color);
+          if (pmTargets.length > 0) {
+            setSelectedSquare(dragStartedSquare);
+            setLegalSquares([]);
+            setPremoveSquares(pmTargets);
+          }
+        }
+      }
     };
 
     const handleUp = (e: MouseEvent | TouchEvent) => {
@@ -531,7 +575,7 @@ export function useInteraction(opts: UseInteractionOptions): InteractionState {
     };
 
     document.addEventListener('mousemove', handleMove);
-    document.addEventListener('touchmove', handleMove, { passive: true });
+    document.addEventListener('touchmove', handleMove, { passive: !blockTouchScroll });
     document.addEventListener('mouseup', handleUp);
     document.addEventListener('touchend', handleUp);
     return () => {
@@ -541,7 +585,8 @@ export function useInteraction(opts: UseInteractionOptions): InteractionState {
       document.removeEventListener('touchend', handleUp);
     };
   }, [boardBounds, asWhite, interactive, attemptMove, attemptPremove,
-    toggleArrow, toggleMark, getSnappedSquare, snapArrowsToValidMoves, canMoveColor, canPremoveColor]);
+    toggleArrow, toggleMark, getSnappedSquare, snapArrowsToValidMoves,
+    canMoveColor, canPremoveColor, blockTouchScroll]);
 
   // Prevent context menu on the board
   useEffect(() => {
@@ -555,7 +600,9 @@ export function useInteraction(opts: UseInteractionOptions): InteractionState {
   // ── Computed values ──
 
   const activeMarkedSquares = useMemo((): Record<string, boolean> => {
-    if (externalMarkedSquares) return Object.fromEntries(externalMarkedSquares.map(s => [s, true]));
+    if (externalMarkedSquares !== undefined) {
+      return Object.fromEntries(externalMarkedSquares.map(s => [s, true]));
+    }
     const ply = plyIndex ?? 0;
     const marks = (plyMarks && plyIndex !== undefined ? plyMarks.get(plyIndex) : undefined) || internalMarksMap.get(ply) || [];
     return Object.fromEntries(marks.map(s => [s, true]));
@@ -565,11 +612,28 @@ export function useInteraction(opts: UseInteractionOptions): InteractionState {
     const final: Arrow[] = [];
     const seen = new Set<string>();
     const ply = plyIndex ?? 0;
-    const plyArr = (plyArrows && plyIndex !== undefined ? plyArrows.get(plyIndex) : undefined) || internalArrowsMap.get(ply) || [];
-    for (const a of plyArr) { const k = `${a.startSquare}-${a.endSquare}`; if (!seen.has(k)) { final.push(a); seen.add(k); } }
-    for (const a of arrows) { const k = `${a.startSquare}-${a.endSquare}`; if (!seen.has(k)) { final.push(a); seen.add(k); } }
+    const lists: Arrow[][] = [];
+    if (plyArrows && plyIndex !== undefined) {
+      lists.push(plyArrows.get(plyIndex) || []);
+      lists.push(arrows);
+    } else if (onArrowsChange) {
+      lists.push(arrows);
+    } else {
+      lists.push(internalArrowsMap.get(ply) || []);
+      lists.push(arrows);
+    }
+
+    for (const list of lists) {
+      for (const a of list) {
+        const k = `${a.startSquare}-${a.endSquare}`;
+        if (!seen.has(k)) {
+          final.push(a);
+          seen.add(k);
+        }
+      }
+    }
     return final;
-  }, [arrows, plyIndex, plyArrows, internalArrowsMap]);
+  }, [arrows, plyIndex, plyArrows, internalArrowsMap, onArrowsChange]);
 
   const handlePromotionSelect = useCallback((piece: PromotionPiece) => {
     if (!pendingPromotion) return;
@@ -578,11 +642,8 @@ export function useInteraction(opts: UseInteractionOptions): InteractionState {
   }, [pendingPromotion, attemptMove]);
 
   const handlePromotionDismiss = useCallback(() => {
-    setPendingPromotion(null);
-    setSelectedSquare(null);
-    setLegalSquares([]);
-    setPremoveSquares([]);
-  }, []);
+    clearSelection();
+  }, [clearSelection]);
 
   return {
     selectedSquare,
@@ -593,6 +654,7 @@ export function useInteraction(opts: UseInteractionOptions): InteractionState {
     drag: drag?.started ? drag : null,
     activeMarkedSquares,
     renderedArrows,
+    clearSelection,
     handlePointerDown,
     handlePromotionSelect,
     handlePromotionDismiss,

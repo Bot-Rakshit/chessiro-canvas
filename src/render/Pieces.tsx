@@ -35,9 +35,11 @@ export const PiecesLayer = memo(function PiecesLayer({
   const asWhite = orientation === 'white';
   const piecePath = pieceSet?.path || '/pieces/cases';
   const pieces = useMemo(() => readFen(position || INITIAL_FEN), [position]);
+  const currentPos = position || INITIAL_FEN;
 
   const skipNextAnimRef = useRef(false);
   const prevDraggingRef = useRef<string | null | undefined>(draggingSquare);
+  const prevPositionRef = useRef(currentPos);
   const rafIdRef = useRef<number | null>(null);
   const pieceElsRef = useRef<Map<string, HTMLDivElement>>(new Map());
 
@@ -46,48 +48,6 @@ export const PiecesLayer = memo(function PiecesLayer({
     startTime: number;
     frequency: number;
   } | null>(null);
-
-  // Track previous position in render phase (not inside effects) so it survives
-  // React Strict Mode double-invocations and callback-dep re-runs.
-  // positionHistory stores [previousPosition, lastSeenPosition]
-  const positionHistory = useRef<{ prev: string; last: string }>({
-    prev: position || INITIAL_FEN,
-    last: position || INITIAL_FEN,
-  });
-
-  const currentPos = position || INITIAL_FEN;
-  let pendingAnimPlan: AnimationPlan | null = null;
-
-  if (currentPos !== positionHistory.current.last) {
-    // Position actually changed - compute animation plan during render
-    const prevPos = positionHistory.current.last;
-    positionHistory.current = { prev: prevPos, last: currentPos };
-
-    if (prevDraggingRef.current && !draggingSquare) {
-      // Drag just ended, skip this animation
-      skipNextAnimRef.current = true;
-    }
-
-    if (skipNextAnimRef.current) {
-      skipNextAnimRef.current = false;
-    } else if (showAnimations && animationDurationMs >= 50) {
-      const prevPieces = readFen(prevPos);
-      pendingAnimPlan = computeAnimPlan(prevPieces, pieces);
-      if (pendingAnimPlan.anims.size === 0) {
-        pendingAnimPlan = null;
-      }
-    }
-  }
-
-  // Handle drag end detection for non-position-change renders
-  if (prevDraggingRef.current && !draggingSquare) {
-    skipNextAnimRef.current = true;
-  }
-  prevDraggingRef.current = draggingSquare;
-
-  // Store pending plan in a ref so the layoutEffect can consume it
-  const pendingPlanRef = useRef<AnimationPlan | null>(null);
-  pendingPlanRef.current = pendingAnimPlan;
 
   useEffect(() => {
     preloadPieceSet(piecePath);
@@ -152,36 +112,56 @@ export const PiecesLayer = memo(function PiecesLayer({
     }
   }, [applyTransforms]);
 
-  // Runs synchronously before paint. Consumes the pending animation plan
-  // computed during render and applies transforms.
   useLayoutEffect(() => {
-    // Cancel any running rAF loop
+    if (prevDraggingRef.current && !draggingSquare) {
+      skipNextAnimRef.current = true;
+    }
+    prevDraggingRef.current = draggingSquare;
+
+    const prevPos = prevPositionRef.current;
+    const positionChanged = currentPos !== prevPos;
+    let nextPlan: AnimationPlan | null = null;
+
+    if (positionChanged) {
+      if (skipNextAnimRef.current) {
+        skipNextAnimRef.current = false;
+      } else if (showAnimations && animationDurationMs >= 50) {
+        const plan = computeAnimPlan(readFen(prevPos), pieces);
+        if (plan.anims.size > 0) {
+          nextPlan = plan;
+        }
+      }
+      prevPositionRef.current = currentPos;
+    }
+
+    if (nextPlan) {
+      animRef.current = {
+        plan: nextPlan,
+        startTime: performance.now(),
+        frequency: 1 / animationDurationMs,
+      };
+    } else if (positionChanged || !showAnimations || animationDurationMs < 50) {
+      animRef.current = null;
+    }
+
     if (rafIdRef.current !== null) {
       cancelAnimationFrame(rafIdRef.current);
       rafIdRef.current = null;
     }
 
-    // Consume pending animation plan (computed in render phase)
-    const plan = pendingPlanRef.current;
-    pendingPlanRef.current = null;
-
-    if (plan) {
-      animRef.current = {
-        plan,
-        startTime: performance.now(),
-        frequency: 1 / animationDurationMs,
-      };
-    } else if (!animRef.current) {
-      // No pending plan and no running animation - just snap
-      animRef.current = null;
-    }
-
-    applyTransforms();
-
-    if (animRef.current) {
+    const stillAnimating = applyTransforms();
+    if (stillAnimating) {
       rafIdRef.current = requestAnimationFrame(animLoop);
     }
-  });
+  }, [
+    currentPos,
+    pieces,
+    draggingSquare,
+    showAnimations,
+    animationDurationMs,
+    applyTransforms,
+    animLoop,
+  ]);
 
   useEffect(() => {
     return () => {

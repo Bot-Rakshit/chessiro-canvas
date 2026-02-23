@@ -54,6 +54,17 @@ const OverlayItem = memo(function OverlayItem({
   const [visible, setVisible] = useState(true);
 
   useEffect(() => {
+    setVisible(true);
+  }, [
+    overlay.id,
+    overlay.text,
+    overlay.square,
+    overlay.duration,
+    overlay.position?.x,
+    overlay.position?.y,
+  ]);
+
+  useEffect(() => {
     if (overlay.duration && overlay.duration > 0) {
       const timer = setTimeout(() => setVisible(false), overlay.duration);
       return () => clearTimeout(timer);
