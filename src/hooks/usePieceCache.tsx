@@ -4,7 +4,16 @@ import type { ReactNode } from 'react';
 const blobCache = new Map<string, string>();
 const loadPromises = new Map<string, Promise<string>>();
 
+function isDirectSource(src: string): boolean {
+  return src.startsWith('data:') || src.startsWith('blob:');
+}
+
 async function loadAndCache(src: string): Promise<string> {
+  if (isDirectSource(src)) {
+    blobCache.set(src, src);
+    return src;
+  }
+
   const cached = blobCache.get(src);
   if (cached) return cached;
 

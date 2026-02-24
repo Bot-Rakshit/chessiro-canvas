@@ -39,6 +39,29 @@ export default function App() {
 }
 ```
 
+### Piece Rendering (Default + Custom)
+
+`ChessiroCanvas` ships with embedded Chessiro SVG pieces and renders them by default with no asset hosting setup.
+
+```tsx
+<ChessiroCanvas position={fen} />
+```
+
+Use `pieceSet.path` only when you want to override with your own hosted piece set.
+
+```tsx
+<ChessiroCanvas
+  position={fen}
+  pieceSet={{
+    id: 'alpha',
+    name: 'Alpha',
+    path: '/pieces/alpha', // expects /pieces/alpha/wp.svg ... /bk.svg
+  }}
+/>
+```
+
+If pieces appear as broken images, upgrade to the latest package version.
+
 ## Features
 
 - FEN-based board rendering
