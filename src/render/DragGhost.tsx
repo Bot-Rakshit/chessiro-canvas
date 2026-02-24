@@ -1,4 +1,5 @@
 import { memo } from 'react';
+import { createPortal } from 'react-dom';
 import type { Piece, PieceSet, PieceRenderer } from '../types';
 import { CachedPieceImg } from '../hooks/usePieceCache';
 import { resolvePieceImageSrc } from '../defaultPieces';
@@ -34,7 +35,7 @@ export const DragGhost = memo(function DragGhost({
   // Offset so piece is centered under the cursor
   const offset = squareSize / 2;
 
-  return (
+  const ghost = (
     <div
       style={{
         position: 'fixed',
@@ -52,4 +53,7 @@ export const DragGhost = memo(function DragGhost({
       {content}
     </div>
   );
+
+  if (typeof document === 'undefined') return ghost;
+  return createPortal(ghost, document.body);
 });
