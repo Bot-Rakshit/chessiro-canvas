@@ -399,6 +399,8 @@ export function useInteraction(opts: UseInteractionOptions): InteractionState {
 
   const handlePointerDown = useCallback((e: React.MouseEvent | React.TouchEvent) => {
     if (!boardBounds) return;
+    // Promotion chooser is modal: ignore board pointer handling until resolved.
+    if (pendingPromotion) return;
     const sq = getSquareFromEvent(e.nativeEvent, asWhite, boardBounds);
     if (!sq) return;
 
@@ -441,7 +443,7 @@ export function useInteraction(opts: UseInteractionOptions): InteractionState {
     }
 
     handleSquareInteraction(sq);
-  }, [boardBounds, asWhite, interactive, allowDragging, allowDrawingArrows,
+  }, [boardBounds, pendingPromotion, asWhite, interactive, allowDragging, allowDrawingArrows,
     handleSquareInteraction, brushes, canMoveColor, canPremoveColor, blockTouchScroll]);
 
   // ── Document-level move/up for drag and arrow drawing ──

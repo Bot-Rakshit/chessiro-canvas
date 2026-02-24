@@ -46,6 +46,8 @@ export const PromotionDialog = memo(function PromotionDialog({
         justifyContent: 'center',
         zIndex: 20,
       }}
+      onMouseDown={(e) => e.stopPropagation()}
+      onTouchStart={(e) => e.stopPropagation()}
       onClick={onDismiss}
     >
       <div
