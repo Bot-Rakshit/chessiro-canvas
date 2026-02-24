@@ -1,261 +1,313 @@
-import { useState, useCallback, useMemo } from 'react';
-import { ChessiroCanvas, type Arrow, type BoardTheme, type Dests, type TextOverlay } from 'chessiro-canvas';
+import { useCallback, useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
+import { ChessiroCanvas, type BoardTheme } from 'chessiro-canvas';
 import { computeDests, applyMove } from './chess-logic';
 
 const STARTING_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 
-// A sample game: Italian Game opening (pre-computed FENs and moves)
-const SAMPLE_GAME: { fen: string; lastMove: { from: string; to: string } | null }[] = [
-  { fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', lastMove: null },
-  { fen: 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1', lastMove: { from: 'e2', to: 'e4' } },
-  { fen: 'rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq e6 0 2', lastMove: { from: 'e7', to: 'e5' } },
-  { fen: 'rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2', lastMove: { from: 'g1', to: 'f3' } },
-  { fen: 'r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3', lastMove: { from: 'b8', to: 'c6' } },
-  { fen: 'r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3', lastMove: { from: 'f1', to: 'c4' } },
-  { fen: 'r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4', lastMove: { from: 'g8', to: 'f6' } },
-  { fen: 'r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/3P1N2/PPP2PPP/RNBQK2R b KQkq - 0 4', lastMove: { from: 'd2', to: 'd3' } },
-  { fen: 'r1bqk2r/pppp1ppp/2n2n2/2b1p3/2B1P3/3P1N2/PPP2PPP/RNBQK2R w KQkq - 1 5', lastMove: { from: 'f8', to: 'c5' } },
-  { fen: 'r1bqk2r/pppp1ppp/2n2n2/2b1p3/2B1P3/2NP1N2/PPP2PPP/R1BQK2R b KQkq - 2 5', lastMove: { from: 'b1', to: 'c3' } },
-  { fen: 'r1bq1rk1/pppp1ppp/2n2n2/2b1p3/2B1P3/2NP1N2/PPP2PPP/R1BQK2R w KQ - 3 6', lastMove: { from: 'e8', to: 'g8' } },
+const THEMES: BoardTheme[] = [
+  {
+    id: 'chessiro',
+    name: 'Chessiro',
+    darkSquare: '#785E45',
+    lightSquare: '#DFC29A',
+    margin: '#66503B',
+    lastMoveHighlight: '#DFAA4E',
+    selectedPiece: '#B57340',
+  },
+  {
+    id: 'slate',
+    name: 'Slate',
+    darkSquare: '#566073',
+    lightSquare: '#D2D8E1',
+    margin: '#3D4554',
+    lastMoveHighlight: '#6FA4D9',
+    selectedPiece: '#2E6C9E',
+  },
+  {
+    id: 'forest',
+    name: 'Forest',
+    darkSquare: '#6C7A3A',
+    lightSquare: '#E8E7C8',
+    margin: '#4F5929',
+    lastMoveHighlight: '#94B23B',
+    selectedPiece: '#4E6A2A',
+  },
 ];
 
-const THEMES: BoardTheme[] = [
-  { id: 'chessiro', name: 'Chessiro', darkSquare: '#785E45', lightSquare: '#DFC29A', margin: '#66503B', lastMoveHighlight: '#DFAA4E', selectedPiece: '#B57340' },
-  { id: 'lichess', name: 'Lichess Brown', darkSquare: '#b58863', lightSquare: '#f0d9b5', margin: '#9a7650', lastMoveHighlight: '#9bc700', selectedPiece: '#14551e' },
-  { id: 'blue', name: 'Ice Blue', darkSquare: '#4682B4', lightSquare: '#B0C4DE', margin: '#34628a', lastMoveHighlight: '#6CB4EE', selectedPiece: '#2E5090' },
-  { id: 'green', name: 'Forest', darkSquare: '#769656', lightSquare: '#eeeed2', margin: '#5f7a44', lastMoveHighlight: '#bbcc44', selectedPiece: '#567d2e' },
-];
+const QUICK_START_CODE = `import { useState } from 'react';
+import { ChessiroCanvas, INITIAL_FEN } from 'chessiro-canvas';
+
+export function Board() {
+  const [fen, setFen] = useState(INITIAL_FEN);
+
+  return (
+    <div style={{ width: 520 }}>
+      <ChessiroCanvas
+        position={fen}
+        onMove={(from, to) => {
+          // validate + apply in your game logic
+          return true;
+        }}
+      />
+    </div>
+  );
+}`;
+
+const CUSTOM_PIECES_CODE = `<ChessiroCanvas
+  position={fen}
+  pieceSet={{
+    id: 'alpha',
+    name: 'Alpha',
+    path: '/pieces/alpha',
+  }}
+/>`;
 
 export function App() {
-  // === Game replay state ===
-  const [plyIndex, setPlyIndex] = useState(0);
-  const currentGame = SAMPLE_GAME[plyIndex];
-
-  // === Interactive play state ===
-  const [playFen, setPlayFen] = useState(STARTING_FEN);
-  const [playLastMove, setPlayLastMove] = useState<{ from: string; to: string } | null>(null);
-
-  const [mode, setMode] = useState<'replay' | 'play'>('replay');
+  const [fen, setFen] = useState(STARTING_FEN);
+  const [lastMove, setLastMove] = useState<{ from: string; to: string } | null>(null);
   const [orientation, setOrientation] = useState<'white' | 'black'>('white');
-  const [themeIdx, setThemeIdx] = useState(0);
-  const [showMargin, setShowMargin] = useState(true);
-  const [showNotation, setShowNotation] = useState(true);
+  const [themeIndex, setThemeIndex] = useState(0);
   const [showAnimations, setShowAnimations] = useState(true);
-  const [animDuration, setAnimDuration] = useState(200);
-  const [arrows, setArrows] = useState<Arrow[]>([]);
+  const [showNotation, setShowNotation] = useState(true);
+  const [showMargin, setShowMargin] = useState(true);
+  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>('idle');
 
-  const theme = THEMES[themeIdx];
+  const theme = THEMES[themeIndex];
+  const dests = useMemo(() => computeDests(fen), [fen]);
 
-  // Replay navigation
-  const goNext = useCallback(() => {
-    setPlyIndex(i => Math.min(i + 1, SAMPLE_GAME.length - 1));
-  }, []);
-  const goPrev = useCallback(() => {
-    setPlyIndex(i => Math.max(i - 1, 0));
-  }, []);
-  const goFirst = useCallback(() => { setPlyIndex(0); }, []);
-  const goLast = useCallback(() => { setPlyIndex(SAMPLE_GAME.length - 1); }, []);
+  const handleMove = useCallback(
+    (from: string, to: string, promotion?: string): boolean => {
+      const nextFen = applyMove(fen, from, to, promotion);
+      if (nextFen === fen) return false;
+      setFen(nextFen);
+      setLastMove({ from, to });
+      return true;
+    },
+    [fen],
+  );
 
-  // Interactive play
-  const playDests = useMemo(() => computeDests(playFen), [playFen]);
-  const handlePlayMove = useCallback((from: string, to: string, promotion?: string): boolean => {
-    const newFen = applyMove(playFen, from, to, promotion);
-    if (newFen === playFen) return false;
-    setPlayFen(newFen);
-    setPlayLastMove({ from, to });
-    return true;
-  }, [playFen]);
-
-  const handleFlip = useCallback(() => {
-    setOrientation(o => o === 'white' ? 'black' : 'white');
+  const resetBoard = useCallback(() => {
+    setFen(STARTING_FEN);
+    setLastMove(null);
   }, []);
 
-  // Current board props based on mode
-  const boardPosition = mode === 'replay' ? currentGame.fen : playFen;
-  const boardLastMove = mode === 'replay' ? currentGame.lastMove : playLastMove;
-  const boardDests = mode === 'replay' ? undefined : playDests;
-  const boardInteractive = mode === 'play';
+  const copyInstallCommand = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText('npm i chessiro-canvas');
+      setCopyState('copied');
+      window.setTimeout(() => setCopyState('idle'), 1400);
+    } catch {
+      setCopyState('error');
+      window.setTimeout(() => setCopyState('idle'), 1400);
+    }
+  }, []);
 
   return (
-    <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', justifyContent: 'center', padding: 20 }}>
-      {/* Board */}
-      <div style={{ width: 'min(500px, 90vw)', flexShrink: 0 }}>
-        <ChessiroCanvas
-          position={boardPosition}
-          orientation={orientation}
-          theme={theme}
-          pieceSet={{ id: 'cases', name: 'Cases', path: '/pieces/cases' }}
-          interactive={boardInteractive}
-          allowDragging={mode === 'play'}
-          allowDrawingArrows={true}
-          showMargin={showMargin}
-          showNotation={showNotation}
-          showAnimations={showAnimations}
-          animationDurationMs={animDuration}
-          dests={boardDests}
-          lastMove={boardLastMove}
-          arrows={arrows}
-          onArrowsChange={setArrows}
-          onMove={mode === 'play' ? handlePlayMove : undefined}
-          onFlipBoard={handleFlip}
-          onPrevious={mode === 'replay' ? goPrev : undefined}
-          onNext={mode === 'replay' ? goNext : undefined}
-          onFirst={mode === 'replay' ? goFirst : undefined}
-          onLast={mode === 'replay' ? goLast : undefined}
-        />
+    <div className="docs-root">
+      <div className="bg-glow bg-glow-amber" />
+      <div className="bg-glow bg-glow-sky" />
 
-        {/* Replay controls */}
-        {mode === 'replay' && (
-          <div style={{ display: 'flex', gap: 8, marginTop: 12, justifyContent: 'center' }}>
-            <NavBtn onClick={goFirst} disabled={plyIndex === 0}>|&lt;</NavBtn>
-            <NavBtn onClick={goPrev} disabled={plyIndex === 0}>&lt;</NavBtn>
-            <span style={{ padding: '8px 16px', color: '#ccc', fontSize: 14, fontFamily: 'monospace' }}>
-              {plyIndex} / {SAMPLE_GAME.length - 1}
-            </span>
-            <NavBtn onClick={goNext} disabled={plyIndex === SAMPLE_GAME.length - 1}>&gt;</NavBtn>
-            <NavBtn onClick={goLast} disabled={plyIndex === SAMPLE_GAME.length - 1}>&gt;|</NavBtn>
-          </div>
-        )}
-
-        {/* FEN display */}
-        <div style={{ marginTop: 8, fontSize: 11, color: '#666', fontFamily: 'monospace', wordBreak: 'break-all' }}>
-          {boardPosition}
+      <header className="hero panel reveal">
+        <p className="eyebrow">Chess UI Toolkit</p>
+        <h1>chessiro-canvas Documentation</h1>
+        <p className="hero-copy">
+          Lightweight React chessboard focused on smooth interaction, low bundle footprint,
+          and practical control for analysis and coaching interfaces.
+        </p>
+        <div className="hero-actions">
+          <button className="btn btn-primary" onClick={copyInstallCommand}>
+            {copyState === 'copied' && 'Copied'}
+            {copyState === 'error' && 'Copy failed'}
+            {copyState === 'idle' && 'Copy install command'}
+          </button>
+          <a className="btn btn-ghost" href="#quick-start">Quick Start</a>
+          <a className="btn btn-ghost" href="#playground">Live Playground</a>
         </div>
-        {mode === 'replay' && currentGame.lastMove && (
-          <div style={{ marginTop: 2, fontSize: 11, color: '#888' }}>
-            Last move: {currentGame.lastMove.from} → {currentGame.lastMove.to}
+        <div className="stat-strip">
+          <span>14.8 KB gzip</span>
+          <span>TypeScript-first API</span>
+          <span>Embedded default pieces</span>
+        </div>
+      </header>
+
+      <main className="docs-main">
+        <section id="playground" className="panel reveal delay-1">
+          <div className="section-head">
+            <h2>Live Playground</h2>
+            <p>Test interactions exactly as users will experience them.</p>
           </div>
-        )}
-      </div>
 
-      {/* Controls */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 240 }}>
-        <Section title="Mode">
-          <Btn onClick={() => { setMode('replay'); setPlyIndex(0); }} active={mode === 'replay'}>
-            Game Replay (arrow keys)
-          </Btn>
-          <Btn onClick={() => { setMode('play'); setPlayFen(STARTING_FEN); setPlayLastMove(null); }} active={mode === 'play'}>
-            Interactive Play
-          </Btn>
-        </Section>
-
-        <Section title="Themes">
-          {THEMES.map((t, i) => (
-            <Btn key={t.id} onClick={() => setThemeIdx(i)} active={themeIdx === i}>
-              <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
-                <span style={{ width: 14, height: 14, borderRadius: 3, background: t.darkSquare, border: '1px solid rgba(255,255,255,0.2)' }} />
-                <span style={{ width: 14, height: 14, borderRadius: 3, background: t.lightSquare, border: '1px solid rgba(255,255,255,0.2)' }} />
-                {t.name}
-              </span>
-            </Btn>
-          ))}
-        </Section>
-
-        <Section title="Board">
-          <Btn onClick={handleFlip}>Flip Board (F)</Btn>
-          <Toggle label="Margin" value={showMargin} onChange={setShowMargin} />
-          <Toggle label="Notation" value={showNotation} onChange={setShowNotation} />
-          <Toggle label="Animations" value={showAnimations} onChange={setShowAnimations} />
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
-            <span style={{ color: '#999' }}>Speed</span>
-            <input
-              type="range" min={50} max={500} step={50}
-              value={animDuration}
-              onChange={e => setAnimDuration(Number(e.target.value))}
-              style={{ flex: 1 }}
-            />
-            <span style={{ color: '#ccc', minWidth: 40 }}>{animDuration}ms</span>
-          </div>
-        </Section>
-
-        {mode === 'replay' && (
-          <Section title="Replay Info">
-            <div style={{ fontSize: 12, color: '#999', lineHeight: 1.6 }}>
-              <b>Italian Game</b> (10 moves)<br />
-              Use <b>arrow keys</b> or buttons to navigate.<br />
-              Watch the animation direction carefully.
+          <div className="playground-grid">
+            <div className="board-shell">
+              <ChessiroCanvas
+                position={fen}
+                lastMove={lastMove}
+                dests={dests}
+                onMove={handleMove}
+                interactive
+                orientation={orientation}
+                theme={theme}
+                showAnimations={showAnimations}
+                showNotation={showNotation}
+                showMargin={showMargin}
+              />
             </div>
-          </Section>
-        )}
-      </div>
+
+            <div className="control-shell">
+              <ControlGroup label="Theme">
+                <div className="theme-grid">
+                  {THEMES.map((candidate, index) => (
+                    <button
+                      key={candidate.id}
+                      className={`chip ${themeIndex === index ? 'chip-active' : ''}`}
+                      onClick={() => setThemeIndex(index)}
+                    >
+                      <span
+                        className="swatch"
+                        style={{
+                          background: `linear-gradient(135deg, ${candidate.lightSquare} 0%, ${candidate.darkSquare} 100%)`,
+                        }}
+                      />
+                      {candidate.name}
+                    </button>
+                  ))}
+                </div>
+              </ControlGroup>
+
+              <ControlGroup label="Board">
+                <div className="control-row">
+                  <button className="btn btn-ghost" onClick={() => setOrientation('white')}>White</button>
+                  <button className="btn btn-ghost" onClick={() => setOrientation('black')}>Black</button>
+                  <button className="btn btn-ghost" onClick={resetBoard}>Reset</button>
+                </div>
+
+                <Toggle label="Animations" checked={showAnimations} onChange={setShowAnimations} />
+                <Toggle label="Notation" checked={showNotation} onChange={setShowNotation} />
+                <Toggle label="Margin" checked={showMargin} onChange={setShowMargin} />
+              </ControlGroup>
+
+              <div className="fen-box">
+                <span>Current FEN</span>
+                <code>{fen}</code>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="quick-start" className="panel reveal delay-2">
+          <div className="section-head">
+            <h2>Quick Start</h2>
+            <p>Install and render the board in under a minute.</p>
+          </div>
+
+          <CodeBlock code="npm i chessiro-canvas" language="bash" />
+          <CodeBlock code={QUICK_START_CODE} language="tsx" />
+
+          <div className="info-box">
+            Default Chessiro pieces are embedded and render automatically. No static file setup required.
+          </div>
+        </section>
+
+        <section className="panel reveal delay-3">
+          <div className="section-head">
+            <h2>Custom Piece Sets</h2>
+            <p>Override with your own hosted SVG set when needed.</p>
+          </div>
+          <CodeBlock code={CUSTOM_PIECES_CODE} language="tsx" />
+        </section>
+
+        <section className="panel reveal delay-4">
+          <div className="section-head">
+            <h2>Core Capabilities</h2>
+            <p>What ships out of the box.</p>
+          </div>
+
+          <div className="feature-grid">
+            <FeatureCard title="Interaction">
+              Drag and click move, right-click arrows, marks, promotion chooser, and keyboard callbacks.
+            </FeatureCard>
+            <FeatureCard title="State Control">
+              Controlled props for legal destinations, highlights, arrows, overlays, and orientation.
+            </FeatureCard>
+            <FeatureCard title="Performance">
+              Lightweight render path, low overhead updates, and animation controls for your use case.
+            </FeatureCard>
+            <FeatureCard title="Styling">
+              Theme and piece customization, custom renderers, and clean integration in any React app.
+            </FeatureCard>
+          </div>
+        </section>
+
+        <section className="panel reveal delay-5">
+          <div className="section-head">
+            <h2>Deploy Docs</h2>
+            <p>Build static docs and host them on Vercel, Netlify, Cloudflare Pages, or GitHub Pages.</p>
+          </div>
+
+          <CodeBlock
+            language="bash"
+            code={`npm install\nnpm run docs:dev\nnpm run docs:build`}
+          />
+
+          <div className="info-box">
+            Static output is generated at <code>demo/dist</code>.
+          </div>
+        </section>
+      </main>
     </div>
   );
 }
 
-function NavBtn({ children, onClick, disabled }: { children: React.ReactNode; onClick: () => void; disabled?: boolean }) {
+function ControlGroup({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      style={{
-        padding: '8px 16px',
-        border: '1px solid rgba(255,255,255,0.15)',
-        borderRadius: 6,
-        background: disabled ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.08)',
-        color: disabled ? '#444' : '#ccc',
-        cursor: disabled ? 'default' : 'pointer',
-        fontSize: 16,
-        fontWeight: 700,
-      }}
-    >
+    <section className="control-group">
+      <h3>{label}</h3>
       {children}
-    </button>
+    </section>
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Toggle({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (value: boolean) => void;
+}) {
   return (
-    <div>
-      <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1, color: '#666', marginBottom: 6 }}>
-        {title}
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        {children}
-      </div>
-    </div>
-  );
-}
-
-function Btn({ children, onClick, active }: { children: React.ReactNode; onClick: () => void; active?: boolean }) {
-  return (
-    <button
-      onClick={onClick}
-      style={{
-        padding: '6px 12px',
-        border: `1px solid ${active ? '#DFC29A' : 'rgba(255,255,255,0.1)'}`,
-        borderRadius: 6,
-        background: active ? 'rgba(223,194,154,0.15)' : 'rgba(255,255,255,0.04)',
-        color: active ? '#DFC29A' : '#ccc',
-        cursor: 'pointer',
-        fontSize: 13,
-        textAlign: 'left',
-        transition: 'all 150ms',
-      }}
-    >
-      {children}
-    </button>
-  );
-}
-
-function Toggle({ label, value, onChange }: { label: string; value: boolean; onChange: (v: boolean) => void }) {
-  return (
-    <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#ccc', cursor: 'pointer' }}>
-      <div
-        onClick={() => onChange(!value)}
-        style={{
-          width: 36, height: 20, borderRadius: 10,
-          background: value ? '#785E45' : 'rgba(255,255,255,0.1)',
-          position: 'relative', transition: 'background 150ms', flexShrink: 0,
-        }}
+    <label className="toggle-row">
+      <span>{label}</span>
+      <button
+        type="button"
+        aria-pressed={checked}
+        className={`toggle ${checked ? 'toggle-on' : ''}`}
+        onClick={() => onChange(!checked)}
       >
-        <div style={{
-          width: 16, height: 16, borderRadius: 8,
-          background: value ? '#DFC29A' : '#666',
-          position: 'absolute', top: 2, left: value ? 18 : 2,
-          transition: 'left 150ms',
-        }} />
-      </div>
-      {label}
+        <span className="toggle-knob" />
+      </button>
     </label>
+  );
+}
+
+function CodeBlock({ code, language }: { code: string; language: string }) {
+  return (
+    <div className="code-block">
+      <div className="code-head">{language}</div>
+      <pre>
+        <code>{code}</code>
+      </pre>
+    </div>
+  );
+}
+
+function FeatureCard({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <article className="feature-card">
+      <h3>{title}</h3>
+      <p>{children}</p>
+    </article>
   );
 }

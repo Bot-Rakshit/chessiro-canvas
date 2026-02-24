@@ -233,11 +233,36 @@ Notes:
 - Numbers will vary by machine, Node version, and benchmark config.
 - This benchmark is for relative comparison under the same harness, not an absolute browser FPS claim.
 
+## Docs Site
+
+An interactive docs/playground app is included under `demo/`.
+
+Run locally:
+
+```bash
+npm run docs:dev
+```
+
+Build static docs:
+
+```bash
+npm run docs:build
+```
+
+Preview built docs:
+
+```bash
+npm run docs:preview
+```
+
+Static output is written to `demo/dist`, ready to deploy on Vercel, Netlify, Cloudflare Pages, or GitHub Pages.
+
 ## Development
 
 ```bash
 npm install
 npm run dev
+npm run docs:dev
 npm run build
 npm run typecheck
 npm run benchmark

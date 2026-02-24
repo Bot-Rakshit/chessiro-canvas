@@ -21,6 +21,9 @@
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
+    "docs:dev": "npm --prefix demo run dev",
+    "docs:build": "npm --prefix demo run build",
+    "docs:preview": "npm --prefix demo run preview",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/",
     "clean": "rm -rf dist",
