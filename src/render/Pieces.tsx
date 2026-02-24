@@ -4,6 +4,7 @@ import { readFen, INITIAL_FEN } from '../utils/fen';
 import { square2pos, pos2translate } from '../utils/coords';
 import { computeAnimPlan } from '../animation/anim';
 import { CachedPieceImg, preloadPieceSet } from '../hooks/usePieceCache';
+import { resolvePieceImageSrc } from '../defaultPieces';
 
 interface PiecesLayerProps {
   position: string;
@@ -33,7 +34,7 @@ export const PiecesLayer = memo(function PiecesLayer({
   draggingSquare,
 }: PiecesLayerProps) {
   const asWhite = orientation === 'white';
-  const piecePath = pieceSet?.path || '/pieces/cases';
+  const piecePath = pieceSet?.path;
   const pieces = useMemo(() => readFen(position || INITIAL_FEN), [position]);
   const currentPos = position || INITIAL_FEN;
 
@@ -50,7 +51,7 @@ export const PiecesLayer = memo(function PiecesLayer({
   } | null>(null);
 
   useEffect(() => {
-    preloadPieceSet(piecePath);
+    if (piecePath) preloadPieceSet(piecePath);
   }, [piecePath]);
 
   const applyTransforms = useCallback(() => {
@@ -202,7 +203,7 @@ export const PiecesLayer = memo(function PiecesLayer({
       if (customPieces?.[key]) {
         return customPieces[key]();
       }
-      const src = `${piecePath}/${key.toLowerCase()}.svg`;
+      const src = resolvePieceImageSrc(key, piecePath);
       return <CachedPieceImg src={src} alt={key} />;
     },
     [piecePath, customPieces],

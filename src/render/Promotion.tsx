@@ -1,6 +1,7 @@
 import { memo, useCallback } from 'react';
 import type { PromotionContext, PromotionPiece, PieceSet } from '../types';
 import { CachedPieceImg } from '../hooks/usePieceCache';
+import { resolvePieceImageSrc } from '../defaultPieces';
 
 const PROMO_PIECES: readonly PromotionPiece[] = ['q', 'r', 'b', 'n'];
 const PROMO_LABELS: Record<PromotionPiece, string> = {
@@ -23,12 +24,12 @@ export const PromotionDialog = memo(function PromotionDialog({
   onSelect,
   onDismiss,
 }: PromotionDialogProps) {
-  const piecePath = pieceSet?.path || '/pieces/cases';
+  const piecePath = pieceSet?.path;
 
   const renderPiece = useCallback(
     (color: 'w' | 'b', piece: PromotionPiece) => {
       const key = `${color}${piece.toUpperCase()}`;
-      const src = `${piecePath}/${key.toLowerCase()}.svg`;
+      const src = resolvePieceImageSrc(key, piecePath);
       return <CachedPieceImg src={src} alt={key} />;
     },
     [piecePath],

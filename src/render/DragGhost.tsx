@@ -1,6 +1,7 @@
 import { memo } from 'react';
 import type { Piece, PieceSet, PieceRenderer } from '../types';
 import { CachedPieceImg } from '../hooks/usePieceCache';
+import { resolvePieceImageSrc } from '../defaultPieces';
 
 interface DragGhostProps {
   piece: Piece;
@@ -19,14 +20,14 @@ export const DragGhost = memo(function DragGhost({
   pieceSet,
   customPieces,
 }: DragGhostProps) {
-  const piecePath = pieceSet?.path || '/pieces/cases';
+  const piecePath = pieceSet?.path;
   const key = `${piece.color}${piece.role.toUpperCase()}`;
 
   let content: React.ReactNode;
   if (customPieces?.[key]) {
     content = customPieces[key]();
   } else {
-    const src = `${piecePath}/${key.toLowerCase()}.svg`;
+    const src = resolvePieceImageSrc(key, piecePath);
     content = <CachedPieceImg src={src} alt={key} />;
   }
 

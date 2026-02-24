@@ -1,6 +1,6 @@
 {
   "name": "chessiro-canvas",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Lightweight, high-performance React chessboard component",
   "type": "module",
   "main": "dist/index.js",
@@ -10,11 +10,13 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    }
+    },
+    "./assets/*": "./assets/*"
   },
   "files": [
     "dist",
-    "src"
+    "src",
+    "assets"
   ],
   "scripts": {
     "build": "tsup",

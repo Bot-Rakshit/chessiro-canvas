@@ -42,6 +42,7 @@ export default function App() {
 ## Features
 
 - FEN-based board rendering
+- Built-in Chessiro piece set shipped with the package
 - Click-to-move and drag-to-move
 - Legal move dots and capture rings
 - Premoves with optional external event hooks
@@ -76,7 +77,7 @@ export default function App() {
 | `arrowBrushes` | `Partial<ArrowBrushes>` | default set | Override arrow colors |
 | `snapArrowsToValidMoves` | `boolean` | `true` | Queen/knight snap behavior |
 | `theme` | `BoardTheme` | built-in theme | Board colors |
-| `pieceSet` | `PieceSet` | default | Piece asset path config |
+| `pieceSet` | `PieceSet` | bundled Chessiro pieces | Optional custom piece asset path config |
 | `pieces` | `Record<string, () => ReactNode>` | `undefined` | Custom piece renderer map |
 | `showMargin` | `boolean` | `true` | Margin frame for notation |
 | `marginThickness` | `number` | `24` | Margin px |
