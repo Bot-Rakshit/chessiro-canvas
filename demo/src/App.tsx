@@ -5,6 +5,11 @@ import { Chess } from 'chessops/chess';
 import { chessgroundDests } from 'chessops/compat';
 import { parseFen, makeFen } from 'chessops/fen';
 import { parseUci } from 'chessops/util';
+import { Copy, Check, ChevronDown, Code2, Sparkles, Zap, Layers } from 'lucide-react';
+
+function cn(...classes: (string | undefined | null | false)[]) {
+  return classes.filter(Boolean).join(' ');
+}
 
 const STARTING_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 
@@ -51,7 +56,7 @@ const SECTION_LINKS = [
   { id: 'integrations', label: 'Integrations' },
 ] as const;
 
-const QUICK_START_CODE = `import { useState } from 'react';
+const BOARD_ONLY_CODE = `import { useState } from 'react';
 import { ChessiroCanvas, INITIAL_FEN } from 'chessiro-canvas';
 
 export function Board() {
@@ -62,13 +67,73 @@ export function Board() {
       <ChessiroCanvas
         position={fen}
         onMove={(from, to) => {
-          // validate + apply in your game logic
           return true;
         }}
       />
     </div>
   );
 }`;
+
+const CHESSOPS_QUICKSTART_CODE = `import { useMemo, useState } from 'react';
+import { Chess } from 'chessops/chess';
+import { chessgroundDests } from 'chessops/compat';
+import { parseFen, makeFen } from 'chessops/fen';
+import { parseUci } from 'chessops/util';
+import { ChessiroCanvas, INITIAL_FEN } from 'chessiro-canvas';
+
+export function LegalBoard() {
+  const [pos, setPos] = useState(() =>
+    Chess.fromSetup(parseFen(INITIAL_FEN).unwrap()).unwrap()
+  );
+  const fen = useMemo(() => makeFen(pos.toSetup()), [pos]);
+  const dests = useMemo(() => chessgroundDests(pos), [pos]);
+  const turn = pos.turn === 'white' ? 'w' : 'b';
+
+  return (
+    <ChessiroCanvas
+      position={fen}
+      turnColor={turn}
+      movableColor={turn}
+      dests={dests}
+      onMove={(from, to, promotion) => {
+        const move = parseUci(from + to + (promotion ?? ''));
+        if (!move || !pos.isLegal(move)) return false;
+        const next = pos.clone();
+        next.play(move);
+        setPos(next);
+        return true;
+      }}
+    />
+  );
+}`;
+
+const PROMPTS = {
+  board: `Build a React + TypeScript component named BoardOnly.tsx with chessiro-canvas.
+
+Requirements:
+- Use npm install command: npm i chessiro-canvas
+- Render <ChessiroCanvas /> inside a container width of 520px
+- Start from INITIAL_FEN and keep state in useState
+- Implement onMove(from, to, promotion?) and return true
+- No chess engine in this version (UI only)
+- Export the component
+
+Return only code (no explanation).`,
+  chessops: `Build a React + TypeScript component named LegalBoard.tsx with chessiro-canvas + chessops.
+
+Requirements:
+- Use npm install command: npm i chessops chessiro-canvas
+- Initialize chessops position from INITIAL_FEN
+- Compute FEN using makeFen(pos.toSetup())
+- Compute legal destinations with chessgroundDests(pos)
+- In onMove: parse UCI, validate with pos.isLegal(move), then clone/play/update state
+- Pass turnColor + movableColor so only side-to-move can move
+- Keep code production ready and concise
+
+Return only code (imports + component).`,
+};
+
+type PromptKey = keyof typeof PROMPTS;
 
 const CUSTOM_PIECES_CODE = `<ChessiroCanvas
   position={fen}
@@ -90,37 +155,15 @@ const SQUARE_VISUALS_CODE = `<ChessiroCanvas
     premoveCaptureRing: 'rgba(155, 89, 182, 0.75)',
     selectedOutline: 'rgba(255, 255, 255, 1)',
     markOverlay: 'rgba(244, 67, 54, 0.6)',
-    markOutline: 'rgba(244, 67, 54, 0.9)',
   }}
 />`;
 
 const UI_VISUALS_CODE = `<ChessiroCanvas
   position={fen}
-  arrowVisuals={{
-    lineWidth: 0.2,
-    opacity: 1,
-    markerWidth: 5,
-    markerHeight: 5,
-  }}
-  notationVisuals={{
-    fontFamily: 'JetBrains Mono, monospace',
-    fontSize: '11px',
-    onBoardFontSize: '11px',
-    opacity: 0.95,
-  }}
-  promotionVisuals={{
-    panelColor: 'rgba(20, 24, 36, 0.98)',
-    titleColor: '#f2f6ff',
-    optionBackground: 'rgba(255, 255, 255, 0.08)',
-    optionTextColor: '#f2f6ff',
-    cancelTextColor: '#cbd5e1',
-  }}
-  overlayVisuals={{
-    background: 'rgba(2, 6, 23, 0.85)',
-    color: '#f8fafc',
-    borderRadius: '6px',
-    fontSize: '11px',
-  }}
+  arrowVisuals={{ lineWidth: 0.2, opacity: 1 }}
+  notationVisuals={{ fontFamily: 'JetBrains Mono', fontSize: '11px' }}
+  promotionVisuals={{ panelColor: 'rgba(20, 24, 36, 0.98)' }}
+  overlayVisuals={{ background: 'rgba(2, 6, 23, 0.85)', borderRadius: '6px' }}
 />`;
 
 const CHESS_JS_CODE = `import { useMemo, useState } from 'react';
@@ -169,9 +212,8 @@ import { ChessiroCanvas, INITIAL_FEN } from 'chessiro-canvas';
 
 export function ChessopsBoard() {
   const [pos, setPos] = useState(() =>
-    Chess.fromSetup(parseFen(INITIAL_FEN).unwrap()).unwrap(),
+    Chess.fromSetup(parseFen(INITIAL_FEN).unwrap()).unwrap()
   );
-
   const fen = useMemo(() => makeFen(pos.toSetup()), [pos]);
   const dests = useMemo(() => chessgroundDests(pos), [pos]);
   const turn = pos.turn === 'white' ? 'w' : 'b';
@@ -195,61 +237,24 @@ export function ChessopsBoard() {
   );
 }`;
 
-type PropRow = {
-  prop: string;
-  type: string;
-  defaultValue: string;
-  notes: string;
-};
-
-const PROPS: PropRow[] = [
-  { prop: 'position', type: 'string', defaultValue: 'INITIAL_FEN', notes: 'FEN string (piece placement or full FEN).' },
+const PROPS: { prop: string; type: string; defaultValue: string; notes: string }[] = [
+  { prop: 'position', type: 'string', defaultValue: 'INITIAL_FEN', notes: 'FEN string for board position.' },
   { prop: 'orientation', type: "'white' | 'black'", defaultValue: "'white'", notes: 'Board orientation.' },
-  { prop: 'interactive', type: 'boolean', defaultValue: 'true', notes: 'Disables move interactions when false.' },
-  { prop: 'turnColor', type: "'w' | 'b'", defaultValue: 'undefined', notes: 'Current side to move (for turn-aware behavior).' },
-  { prop: 'movableColor', type: "'w' | 'b' | 'both'", defaultValue: 'undefined', notes: 'Restricts which side is movable.' },
-  { prop: 'onMove', type: '(from, to, promotion?) => boolean', defaultValue: 'undefined', notes: 'Return true to accept a move.' },
-  { prop: 'dests', type: 'Map<Square, Square[]>', defaultValue: 'undefined', notes: 'Legal destinations for move hints and validation.' },
+  { prop: 'interactive', type: 'boolean', defaultValue: 'true', notes: 'Enable move interactions.' },
+  { prop: 'turnColor', type: "'w' | 'b'", defaultValue: 'undefined', notes: 'Current side to move.' },
+  { prop: 'movableColor', type: "'w' | 'b' | 'both'", defaultValue: 'undefined', notes: 'Restricts movable side.' },
+  { prop: 'onMove', type: '(from, to, promotion?) => boolean', defaultValue: 'undefined', notes: 'Move callback, return true to accept.' },
+  { prop: 'dests', type: 'Map<Square, Square[]>', defaultValue: 'undefined', notes: 'Legal move destinations.' },
   { prop: 'lastMove', type: '{ from; to } | null', defaultValue: 'undefined', notes: 'Last move highlight.' },
-  { prop: 'check', type: 'string | null', defaultValue: 'undefined', notes: 'Square to highlight as king in check.' },
-  { prop: 'premovable', type: 'PremoveConfig', defaultValue: 'undefined', notes: 'Enable/store premoves and callbacks.' },
-  { prop: 'arrows', type: 'Arrow[]', defaultValue: '[]', notes: 'Controlled arrow list.' },
-  { prop: 'onArrowsChange', type: '(arrows) => void', defaultValue: 'undefined', notes: 'Arrow update callback.' },
-  { prop: 'arrowBrushes', type: 'Partial<ArrowBrushes>', defaultValue: 'default set', notes: 'Brush color overrides.' },
-  { prop: 'arrowVisuals', type: 'Partial<ArrowVisuals>', defaultValue: 'undefined', notes: 'Arrow width, opacity, marker size, and margin.' },
-  { prop: 'snapArrowsToValidMoves', type: 'boolean', defaultValue: 'true', notes: 'Snap arrows to queen/knight vectors.' },
-  { prop: 'markedSquares', type: 'string[]', defaultValue: 'internal', notes: 'Controlled right-click marks.' },
-  { prop: 'onMarkedSquaresChange', type: '(squares) => void', defaultValue: 'undefined', notes: 'Mark update callback.' },
-  { prop: 'plyIndex', type: 'number', defaultValue: 'undefined', notes: 'Optional ply index for per-ply overlays.' },
-  { prop: 'plyArrows', type: 'Map<number, Arrow[]>', defaultValue: 'undefined', notes: 'Controlled per-ply arrows.' },
-  { prop: 'onPlyArrowsChange', type: '(ply, arrows) => void', defaultValue: 'undefined', notes: 'Per-ply arrow update callback.' },
-  { prop: 'plyMarks', type: 'Map<number, string[]>', defaultValue: 'undefined', notes: 'Controlled per-ply marks.' },
-  { prop: 'onPlyMarksChange', type: '(ply, marks) => void', defaultValue: 'undefined', notes: 'Per-ply mark update callback.' },
-  { prop: 'theme', type: 'BoardTheme', defaultValue: 'built-in', notes: 'Board palette and highlight colors.' },
-  { prop: 'pieceSet', type: 'PieceSet', defaultValue: 'embedded default pieces', notes: 'Hosted piece set path override. Bundled defaults are generated from react-chessboard pieces (MIT).' },
-  { prop: 'pieces', type: 'Record<string, () => ReactNode>', defaultValue: 'undefined', notes: 'Custom piece renderer map.' },
-  { prop: 'showMargin', type: 'boolean', defaultValue: 'true', notes: 'Show outer board margin frame.' },
-  { prop: 'marginThickness', type: 'number', defaultValue: '24', notes: 'Margin thickness in pixels.' },
+  { prop: 'theme', type: 'BoardTheme', defaultValue: 'built-in', notes: 'Board color palette.' },
+  { prop: 'pieceSet', type: 'PieceSet', defaultValue: 'embedded', notes: 'Custom piece set path.' },
+  { prop: 'showMargin', type: 'boolean', defaultValue: 'true', notes: 'Show outer margin frame.' },
   { prop: 'showNotation', type: 'boolean', defaultValue: 'true', notes: 'Show file/rank labels.' },
-  { prop: 'notationVisuals', type: 'Partial<NotationVisuals>', defaultValue: 'undefined', notes: 'Notation font, color, opacity, and offsets.' },
-  { prop: 'highlightedSquares', type: 'Record<string, string>', defaultValue: '{}', notes: 'Custom square background colors.' },
-  { prop: 'squareVisuals', type: 'Partial<SquareVisuals>', defaultValue: 'undefined', notes: 'Legal/premove hints, mark colors, selected outline, check overlay.' },
-  { prop: 'moveQualityBadge', type: 'MoveQualityBadge | null', defaultValue: 'undefined', notes: 'Badge icon/label on a square.' },
-  { prop: 'allowDragging', type: 'boolean', defaultValue: 'true', notes: 'Enable drag interaction.' },
-  { prop: 'allowDrawingArrows', type: 'boolean', defaultValue: 'true', notes: 'Enable right-click arrows/marks.' },
-  { prop: 'showAnimations', type: 'boolean', defaultValue: 'true', notes: 'Toggle piece animations.' },
-  { prop: 'animationDurationMs', type: 'number', defaultValue: '200', notes: 'Animation duration in ms.' },
-  { prop: 'blockTouchScroll', type: 'boolean', defaultValue: 'false', notes: 'Prevent page scroll during touch interaction.' },
-  { prop: 'overlays', type: 'TextOverlay[]', defaultValue: '[]', notes: 'Custom text overlays.' },
-  { prop: 'overlayRenderer', type: '(overlay) => ReactNode', defaultValue: 'undefined', notes: 'Custom overlay renderer.' },
-  { prop: 'overlayVisuals', type: 'Partial<OverlayVisuals>', defaultValue: 'undefined', notes: 'Default bubble style when overlayRenderer is not provided.' },
-  { prop: 'promotionVisuals', type: 'Partial<PromotionVisuals>', defaultValue: 'undefined', notes: 'Promotion modal colors, borders, radius, and text styles.' },
-  { prop: 'onSquareClick', type: '(square) => void', defaultValue: 'undefined', notes: 'Square click callback.' },
-  { prop: 'onClearOverlays', type: '() => void', defaultValue: 'undefined', notes: 'Called when overlays are cleared for current ply.' },
-  { prop: 'onPrevious / onNext / onFirst / onLast', type: '() => void', defaultValue: 'undefined', notes: 'Keyboard navigation callbacks.' },
-  { prop: 'onFlipBoard / onShowThreat / onDeselect', type: '() => void', defaultValue: 'undefined', notes: 'Additional keyboard callback hooks.' },
+  { prop: 'squareVisuals', type: 'Partial<SquareVisuals>', defaultValue: 'undefined', notes: 'Legal/premove hints, marks.' },
+  { prop: 'arrowVisuals', type: 'Partial<ArrowVisuals>', defaultValue: 'undefined', notes: 'Arrow styling.' },
+  { prop: 'promotionVisuals', type: 'Partial<PromotionVisuals>', defaultValue: 'undefined', notes: 'Promotion modal style.' },
+  { prop: 'showAnimations', type: 'boolean', defaultValue: 'true', notes: 'Piece animation toggle.' },
   { prop: 'className', type: 'string', defaultValue: 'undefined', notes: 'Wrapper class name.' },
-  { prop: 'style', type: 'CSSProperties', defaultValue: 'undefined', notes: 'Wrapper inline style.' },
 ];
 
 export function App() {
@@ -261,6 +266,8 @@ export function App() {
   const [showNotation, setShowNotation] = useState(true);
   const [showMargin, setShowMargin] = useState(true);
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>('idle');
+  const [promptDropdownOpen, setPromptDropdownOpen] = useState(false);
+  const [copiedPrompts, setCopiedPrompts] = useState<Record<PromptKey, 'idle' | 'copied'>>({ board: 'idle', chessops: 'idle' });
   const [activeSection, setActiveSection] = useState<(typeof SECTION_LINKS)[number]['id']>('overview');
 
   const theme = THEMES[themeIndex];
@@ -273,7 +280,6 @@ export function App() {
       const promo = promotion?.toLowerCase();
       const move = parseUci(`${from}${to}${promo ?? ''}`);
       if (!move || !pos.isLegal(move)) return false;
-
       const next = pos.clone();
       next.play(move);
       setPos(next);
@@ -292,93 +298,154 @@ export function App() {
     try {
       await navigator.clipboard.writeText('npm i chessiro-canvas');
       setCopyState('copied');
-      window.setTimeout(() => setCopyState('idle'), 1400);
+      window.setTimeout(() => setCopyState('idle'), 2000);
     } catch {
       setCopyState('error');
-      window.setTimeout(() => setCopyState('idle'), 1400);
+      window.setTimeout(() => setCopyState('idle'), 2000);
+    }
+  }, []);
+
+  const copyPrompt = useCallback(async (key: PromptKey) => {
+    try {
+      await navigator.clipboard.writeText(PROMPTS[key]);
+      setCopiedPrompts((prev) => ({ ...prev, [key]: 'copied' }));
+      window.setTimeout(() => {
+        setCopiedPrompts((prev) => ({ ...prev, [key]: 'idle' }));
+        setPromptDropdownOpen(false);
+      }, 1500);
+    } catch {
+      setCopiedPrompts((prev) => ({ ...prev, [key]: 'idle' }));
     }
   }, []);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
-        const visible = entries
-          .filter((entry) => entry.isIntersecting)
-          .sort((a, b) => b.intersectionRatio - a.intersectionRatio);
+        const visible = entries.filter((e) => e.isIntersecting);
         if (visible[0]) {
           setActiveSection(visible[0].target.id as (typeof SECTION_LINKS)[number]['id']);
         }
       },
-      { rootMargin: '-20% 0px -65% 0px', threshold: [0.2, 0.35, 0.6] },
+      { rootMargin: '-20% 0px -65% 0px' },
     );
-
     for (const section of SECTION_LINKS) {
       const el = document.getElementById(section.id);
       if (el) observer.observe(el);
     }
-
     return () => observer.disconnect();
   }, []);
 
   return (
-    <div className="docs-root">
-      <div className="bg-glow bg-glow-amber" />
-      <div className="bg-glow bg-glow-sky" />
+    <div className="min-h-screen bg-[#0a0e17] text-slate-100">
+      <div className="fixed inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-0 left-1/4 w-[600px] h-[600px] bg-amber-500/5 rounded-full blur-3xl" />
+        <div className="absolute bottom-0 right-1/4 w-[500px] h-[500px] bg-sky-500/5 rounded-full blur-3xl" />
+      </div>
 
-      <div className="docs-layout">
-        <aside className="docs-sidebar panel">
-          <div className="sidebar-brand">
-            <p className="eyebrow">Chess UI Toolkit</p>
-            <h1>chessiro-canvas</h1>
-            <p>Lightweight, controlled React chessboard.</p>
+      <div className="relative flex">
+        <aside className="fixed left-0 top-0 w-64 h-screen border-r border-slate-800/50 bg-[#0a0e17]/80 backdrop-blur-xl p-6 flex flex-col">
+          <div className="mb-8">
+            <p className="text-xs font-medium text-amber-500 uppercase tracking-wider mb-1">Chess UI Toolkit</p>
+            <h1 className="text-2xl font-bold text-white">chessiro-canvas</h1>
+            <p className="text-sm text-slate-400 mt-1">Lightweight, controlled React chessboard</p>
           </div>
 
-          <nav className="sidebar-nav" aria-label="Sections">
+          <nav className="flex-1 space-y-1">
             {SECTION_LINKS.map((section) => (
               <a
                 key={section.id}
                 href={`#${section.id}`}
-                className={activeSection === section.id ? 'sidebar-link sidebar-link-active' : 'sidebar-link'}
+                className={cn(
+                  'block px-3 py-2 rounded-lg text-sm font-medium transition-colors',
+                  activeSection === section.id
+                    ? 'bg-amber-500/10 text-amber-500'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+                )}
               >
                 {section.label}
               </a>
             ))}
           </nav>
 
-          <div className="sidebar-meta">
-            <div className="stat-chip">14.8 KB gzip</div>
-            <div className="stat-chip">TypeScript-first</div>
-            <div className="stat-chip">Embedded pieces</div>
+          <div className="flex gap-2 flex-wrap">
+            <span className="px-2 py-1 rounded-md bg-slate-800/50 text-xs text-slate-400">14.8 KB</span>
+            <span className="px-2 py-1 rounded-md bg-slate-800/50 text-xs text-slate-400">TypeScript</span>
+            <span className="px-2 py-1 rounded-md bg-slate-800/50 text-xs text-slate-400">No deps</span>
           </div>
         </aside>
 
-        <main className="docs-main">
-          <section id="overview" className="panel reveal">
-            <p className="eyebrow">Overview</p>
-            <h2>Professional chessboard UI primitives for React</h2>
-            <p className="hero-copy">
-              chessiro-canvas gives you a high-performance board with controlled state,
-              flexible visuals, and practical integrations for real products.
+        <main className="ml-64 flex-1 p-8 max-w-4xl">
+          <section id="overview" className="mb-16">
+            <p className="text-amber-500 font-medium mb-2">Overview</p>
+            <h2 className="text-4xl font-bold text-white mb-4">Professional chessboard UI for React</h2>
+            <p className="text-slate-400 text-lg mb-6 max-w-2xl">
+              High-performance canvas-based chessboard with controlled state, flexible visuals, 
+              and seamless integration with chess logic libraries.
             </p>
-            <div className="hero-actions">
-              <button className="btn btn-primary" onClick={copyInstallCommand}>
-                {copyState === 'copied' && 'Copied'}
-                {copyState === 'error' && 'Copy failed'}
-                {copyState === 'idle' && 'Copy install command'}
+
+            <div className="flex flex-wrap gap-3 mb-8">
+              <button
+                onClick={copyInstallCommand}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold transition-colors"
+              >
+                {copyState === 'copied' ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                {copyState === 'copied' ? 'Copied!' : copyState === 'error' ? 'Failed' : 'npm i chessiro-canvas'}
               </button>
-              <a className="btn btn-ghost" href="#quick-start">Quick Start</a>
-              <a className="btn btn-ghost" href="#props">View Props</a>
+              <a href="#quick-start" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-700 hover:bg-slate-800 text-slate-300 transition-colors">
+                Quick Start
+              </a>
+              <a href="#props" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-700 hover:bg-slate-800 text-slate-300 transition-colors">
+                Props Reference
+              </a>
+
+              <div className="relative">
+                <button
+                  onClick={() => setPromptDropdownOpen(!promptDropdownOpen)}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-700 hover:bg-slate-800 text-slate-300 transition-colors"
+                >
+                  <Sparkles className="w-4 h-4 text-amber-500" />
+                  Copy prompt
+                  <ChevronDown className={cn("w-4 h-4 transition-transform", promptDropdownOpen && "rotate-180")} />
+                </button>
+                {promptDropdownOpen && (
+                  <div className="absolute top-full mt-2 left-0 w-56 bg-slate-900 border border-slate-700 rounded-lg shadow-xl z-50 overflow-hidden">
+                    <button
+                      onClick={() => copyPrompt('board')}
+                      className="w-full px-4 py-3 text-left text-sm hover:bg-slate-800 flex items-center justify-between"
+                    >
+                      <span>Board only</span>
+                      {copiedPrompts.board === 'copied' && <Check className="w-4 h-4 text-green-500" />}
+                    </button>
+                    <button
+                      onClick={() => copyPrompt('chessops')}
+                      className="w-full px-4 py-3 text-left text-sm hover:bg-slate-800 flex items-center justify-between"
+                    >
+                      <span>Board + chessops</span>
+                      {copiedPrompts.chessops === 'copied' && <Check className="w-4 h-4 text-green-500" />}
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="inline-flex items-center gap-3 px-4 py-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
+              <Zap className="w-5 h-5 text-amber-500" />
+              <span className="text-sm">
+                <strong className="text-amber-500">Recommended:</strong> Pair with{' '}
+                <code className="px-1.5 py-0.5 rounded bg-slate-800 text-amber-400">chessops</code> for complete 
+                legal-move validation, castling, en passant, and promotions in just 20 lines.
+              </span>
             </div>
           </section>
 
-          <section id="playground" className="panel reveal delay-1">
-            <div className="section-head">
-              <h2>Live Playground</h2>
-              <p>Test interactions exactly as users will experience them.</p>
+          <section id="playground" className="mb-16">
+            <div className="mb-8">
+              <h2 className="text-2xl font-bold text-white mb-2">Live Playground</h2>
+              <p className="text-slate-400">Test interactions exactly as users will experience them.</p>
             </div>
 
-            <div className="playground-grid">
-              <div className="board-shell">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="aspect-square rounded-xl overflow-hidden border border-slate-800 bg-slate-900/50">
                 <ChessiroCanvas
                   position={fen}
                   lastMove={lastMove}
@@ -395,100 +462,143 @@ export function App() {
                 />
               </div>
 
-              <div className="control-shell">
-                <ControlGroup label="Theme">
-                  <div className="theme-grid">
-                    {THEMES.map((candidate, index) => (
+              <div className="space-y-4">
+                <div className="p-4 rounded-lg bg-slate-900/50 border border-slate-800">
+                  <h3 className="text-sm font-medium text-slate-400 mb-3">Theme</h3>
+                  <div className="flex gap-2">
+                    {THEMES.map((t, i) => (
                       <button
-                        key={candidate.id}
-                        className={`chip ${themeIndex === index ? 'chip-active' : ''}`}
-                        onClick={() => setThemeIndex(index)}
+                        key={t.id}
+                        onClick={() => setThemeIndex(i)}
+                        className={cn(
+                          "flex items-center gap-2 px-3 py-2 rounded-lg border transition-all",
+                          themeIndex === i
+                            ? "border-amber-500 bg-amber-500/10"
+                            : "border-slate-700 hover:border-slate-600"
+                        )}
                       >
                         <span
-                          className="swatch"
-                          style={{ background: `linear-gradient(135deg, ${candidate.lightSquare} 0%, ${candidate.darkSquare} 100%)` }}
+                          className="w-5 h-5 rounded"
+                          style={{ background: `linear-gradient(135deg, ${t.lightSquare} 50%, ${t.darkSquare} 50%)` }}
                         />
-                        {candidate.name}
+                        <span className="text-sm">{t.name}</span>
                       </button>
                     ))}
                   </div>
-                </ControlGroup>
+                </div>
 
-                <ControlGroup label="Board">
-                  <div className="control-row">
-                    <button className="btn btn-ghost" onClick={() => setOrientation('white')}>White</button>
-                    <button className="btn btn-ghost" onClick={() => setOrientation('black')}>Black</button>
-                    <button className="btn btn-ghost" onClick={resetBoard}>Reset</button>
+                <div className="p-4 rounded-lg bg-slate-900/50 border border-slate-800">
+                  <h3 className="text-sm font-medium text-slate-400 mb-3">Board</h3>
+                  <div className="flex gap-2 mb-4">
+                    <button
+                      onClick={() => setOrientation('white')}
+                      className={cn("px-3 py-1.5 rounded text-sm border", orientation === 'white' ? "border-amber-500 bg-amber-500/10" : "border-slate-700")}
+                    >
+                      White
+                    </button>
+                    <button
+                      onClick={() => setOrientation('black')}
+                      className={cn("px-3 py-1.5 rounded text-sm border", orientation === 'black' ? "border-amber-500 bg-amber-500/10" : "border-slate-700")}
+                    >
+                      Black
+                    </button>
+                    <button
+                      onClick={resetBoard}
+                      className="px-3 py-1.5 rounded text-sm border border-slate-700 hover:bg-slate-800"
+                    >
+                      Reset
+                    </button>
                   </div>
+                  <div className="space-y-3">
+                    <Toggle label="Animations" checked={showAnimations} onChange={setShowAnimations} />
+                    <Toggle label="Notation" checked={showNotation} onChange={setShowNotation} />
+                    <Toggle label="Margin" checked={showMargin} onChange={setShowMargin} />
+                  </div>
+                </div>
 
-                  <Toggle label="Animations" checked={showAnimations} onChange={setShowAnimations} />
-                  <Toggle label="Notation" checked={showNotation} onChange={setShowNotation} />
-                  <Toggle label="Margin" checked={showMargin} onChange={setShowMargin} />
-                </ControlGroup>
-
-                <div className="fen-box">
-                  <span>Current FEN</span>
-                  <code>{fen}</code>
+                <div className="p-4 rounded-lg bg-slate-900/50 border border-slate-800">
+                  <span className="text-xs text-slate-500">Current FEN</span>
+                  <code className="block mt-1 text-xs text-amber-400 break-all">{fen}</code>
                 </div>
               </div>
             </div>
           </section>
 
-          <section id="quick-start" className="panel reveal delay-2">
-            <div className="section-head">
-              <h2>Quick Start</h2>
-              <p>Install and render the board in under a minute.</p>
+          <section id="quick-start" className="mb-16">
+            <div className="mb-8">
+              <h2 className="text-2xl font-bold text-white mb-2">Quick Start</h2>
+              <p className="text-slate-400">Choose your setup path.</p>
             </div>
 
-            <CodeBlock code="npm i chessiro-canvas" language="bash" />
-            <CodeBlock code={QUICK_START_CODE} language="tsx" />
+            <div className="space-y-8">
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <Code2 className="w-5 h-5 text-slate-400" />
+                  <h3 className="text-lg font-semibold text-white">Board only (UI scaffold)</h3>
+                </div>
+                <CodeBlock code="npm i chessiro-canvas" language="bash" />
+                <CodeBlock code={BOARD_ONLY_CODE} language="tsx" />
+              </div>
 
-            <div className="info-box">
-              Default pieces are embedded and render automatically, so no static file setup is required.
-              Bundled defaults are generated from react-chessboard pieces (MIT) and can be replaced with
-              `pieceSet.path` at any time.
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <Layers className="w-5 h-5 text-amber-500" />
+                  <h3 className="text-lg font-semibold text-white">Board + chessops (recommended)</h3>
+                </div>
+                <CodeBlock code="npm i chessops chessiro-canvas" language="bash" />
+                <CodeBlock code={CHESSOPS_QUICKSTART_CODE} language="tsx" />
+                <div className="mt-3 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-sm text-slate-300">
+                  For production gameplay, use chessops. It prevents illegal moves and handles castling, en passant, and promotions correctly.
+                </div>
+              </div>
             </div>
           </section>
 
-          <section id="customization" className="panel reveal delay-3">
-            <div className="section-head">
-              <h2>Customization</h2>
-              <p>Customize board visuals without forking the library.</p>
+          <section id="customization" className="mb-16">
+            <div className="mb-8">
+              <h2 className="text-2xl font-bold text-white mb-2">Customization</h2>
+              <p className="text-slate-400">Customize board visuals without forking the library.</p>
             </div>
 
-            <h3 className="integration-heading">Custom piece set</h3>
-            <CodeBlock code={CUSTOM_PIECES_CODE} language="tsx" />
-
-            <h3 className="integration-heading">Legal and premove indicators</h3>
-            <CodeBlock code={SQUARE_VISUALS_CODE} language="tsx" />
-
-            <h3 className="integration-heading">Arrows, notation, promotion dialog, overlays</h3>
-            <CodeBlock code={UI_VISUALS_CODE} language="tsx" />
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-sm font-medium text-slate-400 mb-3">Custom piece set</h3>
+                <CodeBlock code={CUSTOM_PIECES_CODE} language="tsx" />
+              </div>
+              <div>
+                <h3 className="text-sm font-medium text-slate-400 mb-3">Legal and premove indicators</h3>
+                <CodeBlock code={SQUARE_VISUALS_CODE} language="tsx" />
+              </div>
+              <div>
+                <h3 className="text-sm font-medium text-slate-400 mb-3">Arrows, notation, promotion, overlays</h3>
+                <CodeBlock code={UI_VISUALS_CODE} language="tsx" />
+              </div>
+            </div>
           </section>
 
-          <section id="props" className="panel reveal delay-4">
-            <div className="section-head">
-              <h2>Props Reference</h2>
-              <p>Complete `ChessiroCanvas` API with defaults and practical notes.</p>
+          <section id="props" className="mb-16">
+            <div className="mb-8">
+              <h2 className="text-2xl font-bold text-white mb-2">Props Reference</h2>
+              <p className="text-slate-400">Complete ChessiroCanvas API.</p>
             </div>
 
-            <div className="props-table-wrap">
-              <table className="props-table">
-                <thead>
+            <div className="overflow-x-auto rounded-lg border border-slate-800">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-900/50">
                   <tr>
-                    <th>Prop</th>
-                    <th>Type</th>
-                    <th>Default</th>
-                    <th>Notes</th>
+                    <th className="text-left p-3 font-medium text-slate-400">Prop</th>
+                    <th className="text-left p-3 font-medium text-slate-400">Type</th>
+                    <th className="text-left p-3 font-medium text-slate-400">Default</th>
+                    <th className="text-left p-3 font-medium text-slate-400">Notes</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-slate-800">
                   {PROPS.map((row) => (
-                    <tr key={row.prop}>
-                      <td><code>{row.prop}</code></td>
-                      <td><code>{row.type}</code></td>
-                      <td><code>{row.defaultValue}</code></td>
-                      <td>{row.notes}</td>
+                    <tr key={row.prop} className="hover:bg-slate-900/30">
+                      <td className="p-3"><code className="text-amber-400">{row.prop}</code></td>
+                      <td className="p-3"><code className="text-slate-300">{row.type}</code></td>
+                      <td className="p-3"><code className="text-slate-500">{row.defaultValue}</code></td>
+                      <td className="p-3 text-slate-400">{row.notes}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -496,19 +606,28 @@ export function App() {
             </div>
           </section>
 
-          <section id="integrations" className="panel reveal delay-5">
-            <div className="section-head">
-              <h2>Engine Integrations</h2>
-              <p>Use your preferred rules engine and keep the board fully controlled.</p>
+          <section id="integrations" className="mb-16">
+            <div className="mb-8">
+              <h2 className="text-2xl font-bold text-white mb-2">Engine Integrations</h2>
+              <p className="text-slate-400">Use your preferred rules engine. chessops is recommended.</p>
             </div>
 
-            <h3 className="integration-heading">chess.js</h3>
-            <CodeBlock language="bash" code="npm i chess.js chessiro-canvas" />
-            <CodeBlock language="tsx" code={CHESS_JS_CODE} />
+            <div className="space-y-6">
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="px-2 py-0.5 rounded text-xs font-medium bg-amber-500/20 text-amber-500">Recommended</span>
+                  <h3 className="text-lg font-semibold text-white">chessops</h3>
+                </div>
+                <CodeBlock code="npm i chessops chessiro-canvas" language="bash" />
+                <CodeBlock code={CHESSOPS_CODE} language="tsx" />
+              </div>
 
-            <h3 className="integration-heading">chessops</h3>
-            <CodeBlock language="bash" code="npm i chessops chessiro-canvas" />
-            <CodeBlock language="tsx" code={CHESSOPS_CODE} />
+              <div>
+                <h3 className="text-lg font-semibold text-white mb-3">chess.js</h3>
+                <CodeBlock code="npm i chess.js chessiro-canvas" language="bash" />
+                <CodeBlock code={CHESS_JS_CODE} language="tsx" />
+              </div>
+            </div>
           </section>
         </main>
       </div>
@@ -516,45 +635,54 @@ export function App() {
   );
 }
 
-function ControlGroup({ label, children }: { label: string; children: ReactNode }) {
+function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
   return (
-    <section className="control-group">
-      <h3>{label}</h3>
-      {children}
-    </section>
-  );
-}
-
-function Toggle({
-  label,
-  checked,
-  onChange,
-}: {
-  label: string;
-  checked: boolean;
-  onChange: (value: boolean) => void;
-}) {
-  return (
-    <label className="toggle-row">
-      <span>{label}</span>
+    <label className="flex items-center justify-between cursor-pointer">
+      <span className="text-sm text-slate-300">{label}</span>
       <button
         type="button"
-        aria-pressed={checked}
-        className={`toggle ${checked ? 'toggle-on' : ''}`}
+        role="switch"
+        aria-checked={checked}
         onClick={() => onChange(!checked)}
+        className={cn(
+          "relative w-10 h-5 rounded-full transition-colors",
+          checked ? "bg-amber-500" : "bg-slate-700"
+        )}
       >
-        <span className="toggle-knob" />
+        <span
+          className={cn(
+            "absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform",
+            checked && "translate-x-5"
+          )}
+        />
       </button>
     </label>
   );
 }
 
 function CodeBlock({ code, language }: { code: string; language: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const copy = useCallback(async () => {
+    await navigator.clipboard.writeText(code);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }, [code]);
+
   return (
-    <div className="code-block">
-      <div className="code-head">{language}</div>
-      <pre>
-        <code>{code}</code>
+    <div className="rounded-lg border border-slate-800 overflow-hidden mb-3">
+      <div className="flex items-center justify-between px-4 py-2 bg-slate-900/50 border-b border-slate-800">
+        <span className="text-xs text-slate-500 uppercase">{language}</span>
+        <button
+          onClick={copy}
+          className="text-xs text-slate-400 hover:text-white transition-colors flex items-center gap-1"
+        >
+          {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+          {copied ? 'Copied' : 'Copy'}
+        </button>
+      </div>
+      <pre className="p-4 bg-slate-950 overflow-x-auto">
+        <code className="text-xs text-slate-300 font-mono">{code}</code>
       </pre>
     </div>
   );
