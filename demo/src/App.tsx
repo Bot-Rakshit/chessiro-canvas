@@ -1,9 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { ChessiroCanvas, type BoardTheme } from 'chessiro-canvas';
-import { computeDests, applyMove } from './chess-logic';
+import { Chess } from 'chessops/chess';
+import { chessgroundDests } from 'chessops/compat';
+import { parseFen, makeFen } from 'chessops/fen';
+import { parseUci } from 'chessops/util';
 
 const STARTING_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+
+function createInitialPosition() {
+  return Chess.fromSetup(parseFen(STARTING_FEN).unwrap()).unwrap();
+}
 
 const THEMES: BoardTheme[] = [
   {
@@ -246,7 +253,7 @@ const PROPS: PropRow[] = [
 ];
 
 export function App() {
-  const [fen, setFen] = useState(STARTING_FEN);
+  const [pos, setPos] = useState(createInitialPosition);
   const [lastMove, setLastMove] = useState<{ from: string; to: string } | null>(null);
   const [orientation, setOrientation] = useState<'white' | 'black'>('white');
   const [themeIndex, setThemeIndex] = useState(0);
@@ -257,21 +264,27 @@ export function App() {
   const [activeSection, setActiveSection] = useState<(typeof SECTION_LINKS)[number]['id']>('overview');
 
   const theme = THEMES[themeIndex];
-  const dests = useMemo(() => computeDests(fen), [fen]);
+  const fen = useMemo(() => makeFen(pos.toSetup()), [pos]);
+  const dests = useMemo(() => chessgroundDests(pos), [pos]);
+  const turnColor = pos.turn === 'white' ? 'w' : 'b';
 
   const handleMove = useCallback(
     (from: string, to: string, promotion?: string): boolean => {
-      const nextFen = applyMove(fen, from, to, promotion);
-      if (nextFen === fen) return false;
-      setFen(nextFen);
+      const promo = promotion?.toLowerCase();
+      const move = parseUci(`${from}${to}${promo ?? ''}`);
+      if (!move || !pos.isLegal(move)) return false;
+
+      const next = pos.clone();
+      next.play(move);
+      setPos(next);
       setLastMove({ from, to });
       return true;
     },
-    [fen],
+    [pos],
   );
 
   const resetBoard = useCallback(() => {
-    setFen(STARTING_FEN);
+    setPos(createInitialPosition());
     setLastMove(null);
   }, []);
 
@@ -369,6 +382,8 @@ export function App() {
                 <ChessiroCanvas
                   position={fen}
                   lastMove={lastMove}
+                  turnColor={turnColor}
+                  movableColor={turnColor}
                   dests={dests}
                   onMove={handleMove}
                   interactive

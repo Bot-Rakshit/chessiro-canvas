@@ -8,6 +8,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "chessops": "^0.14.2",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "chessiro-canvas": "file:.."
