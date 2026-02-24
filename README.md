@@ -1,7 +1,8 @@
 # chessiro-canvas
 
 Lightweight React chessboard with low overhead interaction primitives inspired by [chessground](https://github.com/lichess-org/chessground).
-built for chessiro.com, but can be used by all 
+
+Built for https://chessiro.com, but can be used by all 
 - Zero runtime dependencies
 - TypeScript-first API
 - Drag, click-move, arrows, marks, premoves, promotion, overlays
