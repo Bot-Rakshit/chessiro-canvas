@@ -1,6 +1,6 @@
 {
   "name": "chessiro-canvas",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "description": "Lightweight, high-performance React chessboard component",
   "type": "module",
   "main": "dist/index.js",

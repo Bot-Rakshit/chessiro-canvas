@@ -62,6 +62,94 @@ Use `pieceSet.path` only when you want to override with your own hosted piece se
 
 If pieces appear as broken images, upgrade to the latest package version.
 
+## Integration With `chess.js`
+
+```bash
+npm install chess.js chessiro-canvas
+```
+
+```tsx
+import { useMemo, useState } from 'react';
+import { Chess } from 'chess.js';
+import { ChessiroCanvas, type Dests, type Square } from 'chessiro-canvas';
+
+export function ChessJsBoard() {
+  const [chess] = useState(() => new Chess());
+  const [fen, setFen] = useState(() => chess.fen());
+
+  const dests = useMemo<Dests>(() => {
+    const map = new Map<Square, Square[]>();
+    const moves = chess.moves({ verbose: true });
+    for (const move of moves) {
+      const from = move.from as Square;
+      const to = move.to as Square;
+      const current = map.get(from);
+      if (current) current.push(to);
+      else map.set(from, [to]);
+    }
+    return map;
+  }, [chess, fen]);
+
+  return (
+    <ChessiroCanvas
+      position={fen}
+      turnColor={chess.turn()}
+      movableColor={chess.turn()}
+      dests={dests}
+      onMove={(from, to, promotion) => {
+        const result = chess.move({ from, to, promotion });
+        if (!result) return false;
+        setFen(chess.fen());
+        return true;
+      }}
+    />
+  );
+}
+```
+
+## Integration With `chessops`
+
+```bash
+npm install chessops chessiro-canvas
+```
+
+```tsx
+import { useMemo, useState } from 'react';
+import { Chess } from 'chessops/chess';
+import { chessgroundDests } from 'chessops/compat';
+import { parseFen, makeFen } from 'chessops/fen';
+import { parseUci } from 'chessops/util';
+import { ChessiroCanvas, INITIAL_FEN } from 'chessiro-canvas';
+
+export function ChessopsBoard() {
+  const [pos, setPos] = useState(() =>
+    Chess.fromSetup(parseFen(INITIAL_FEN).unwrap()).unwrap(),
+  );
+
+  const fen = useMemo(() => makeFen(pos.toSetup()), [pos]);
+  const dests = useMemo(() => chessgroundDests(pos), [pos]);
+  const turn = pos.turn === 'white' ? 'w' : 'b';
+
+  return (
+    <ChessiroCanvas
+      position={fen}
+      turnColor={turn}
+      movableColor={turn}
+      dests={dests}
+      onMove={(from, to, promotion) => {
+        const uci = `${from}${to}${promotion ?? ''}`;
+        const move = parseUci(uci);
+        if (!move || !pos.isLegal(move)) return false;
+        const next = pos.clone();
+        next.play(move);
+        setPos(next);
+        return true;
+      }}
+    />
+  );
+}
+```
+
 ## Features
 
 - FEN-based board rendering
@@ -232,30 +320,6 @@ Notes:
 
 - Numbers will vary by machine, Node version, and benchmark config.
 - This benchmark is for relative comparison under the same harness, not an absolute browser FPS claim.
-
-## Docs Site
-
-An interactive docs/playground app is included under `demo/`.
-
-Run locally:
-
-```bash
-npm run docs:dev
-```
-
-Build static docs:
-
-```bash
-npm run docs:build
-```
-
-Preview built docs:
-
-```bash
-npm run docs:preview
-```
-
-Static output is written to `demo/dist`, ready to deploy on Vercel, Netlify, Cloudflare Pages, or GitHub Pages.
 
 ## Development
 

@@ -63,6 +63,77 @@ const CUSTOM_PIECES_CODE = `<ChessiroCanvas
   }}
 />`;
 
+const CHESS_JS_CODE = `import { useMemo, useState } from 'react';
+import { Chess } from 'chess.js';
+import { ChessiroCanvas, type Dests, type Square } from 'chessiro-canvas';
+
+export function ChessJsBoard() {
+  const [chess] = useState(() => new Chess());
+  const [fen, setFen] = useState(() => chess.fen());
+
+  const dests = useMemo<Dests>(() => {
+    const map = new Map<Square, Square[]>();
+    const moves = chess.moves({ verbose: true });
+    for (const move of moves) {
+      const from = move.from as Square;
+      const to = move.to as Square;
+      const current = map.get(from);
+      if (current) current.push(to);
+      else map.set(from, [to]);
+    }
+    return map;
+  }, [chess, fen]);
+
+  return (
+    <ChessiroCanvas
+      position={fen}
+      turnColor={chess.turn()}
+      movableColor={chess.turn()}
+      dests={dests}
+      onMove={(from, to, promotion) => {
+        const result = chess.move({ from, to, promotion });
+        if (!result) return false;
+        setFen(chess.fen());
+        return true;
+      }}
+    />
+  );
+}`;
+
+const CHESSOPS_CODE = `import { useMemo, useState } from 'react';
+import { Chess } from 'chessops/chess';
+import { chessgroundDests } from 'chessops/compat';
+import { parseFen, makeFen } from 'chessops/fen';
+import { parseUci } from 'chessops/util';
+import { ChessiroCanvas, INITIAL_FEN } from 'chessiro-canvas';
+
+export function ChessopsBoard() {
+  const [pos, setPos] = useState(() =>
+    Chess.fromSetup(parseFen(INITIAL_FEN).unwrap()).unwrap(),
+  );
+  const fen = useMemo(() => makeFen(pos.toSetup()), [pos]);
+  const dests = useMemo(() => chessgroundDests(pos), [pos]);
+  const turn = pos.turn === 'white' ? 'w' : 'b';
+
+  return (
+    <ChessiroCanvas
+      position={fen}
+      turnColor={turn}
+      movableColor={turn}
+      dests={dests}
+      onMove={(from, to, promotion) => {
+        const uci = from + to + (promotion ?? '');
+        const move = parseUci(uci);
+        if (!move || !pos.isLegal(move)) return false;
+        const next = pos.clone();
+        next.play(move);
+        setPos(next);
+        return true;
+      }}
+    />
+  );
+}`;
+
 export function App() {
   const [fen, setFen] = useState(STARTING_FEN);
   const [lastMove, setLastMove] = useState<{ from: string; to: string } | null>(null);
@@ -123,6 +194,7 @@ export function App() {
           </button>
           <a className="btn btn-ghost" href="#quick-start">Quick Start</a>
           <a className="btn btn-ghost" href="#playground">Live Playground</a>
+          <a className="btn btn-ghost" href="#integrations">Engine Integrations</a>
         </div>
         <div className="stat-strip">
           <span>14.8 KB gzip</span>
@@ -239,20 +311,19 @@ export function App() {
           </div>
         </section>
 
-        <section className="panel reveal delay-5">
+        <section id="integrations" className="panel reveal delay-5">
           <div className="section-head">
-            <h2>Deploy Docs</h2>
-            <p>Build static docs and host them on Vercel, Netlify, Cloudflare Pages, or GitHub Pages.</p>
+            <h2>Engine Integrations</h2>
+            <p>Use your preferred rules engine and keep the board fully controlled.</p>
           </div>
 
-          <CodeBlock
-            language="bash"
-            code={`npm install\nnpm run docs:dev\nnpm run docs:build`}
-          />
+          <h3 className="integration-heading">chess.js</h3>
+          <CodeBlock language="bash" code="npm i chess.js chessiro-canvas" />
+          <CodeBlock language="tsx" code={CHESS_JS_CODE} />
 
-          <div className="info-box">
-            Static output is generated at <code>demo/dist</code>.
-          </div>
+          <h3 className="integration-heading">chessops</h3>
+          <CodeBlock language="bash" code="npm i chessops chessiro-canvas" />
+          <CodeBlock language="tsx" code={CHESSOPS_CODE} />
         </section>
       </main>
     </div>

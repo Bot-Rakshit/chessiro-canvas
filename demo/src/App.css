@@ -342,6 +342,13 @@ pre {
   color: #f4cb95;
 }
 
+.integration-heading {
+  margin: 8px 0 10px;
+  font-size: 0.95rem;
+  color: #cfd8e9;
+  letter-spacing: 0.03em;
+}
+
 .feature-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
