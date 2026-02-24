@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo, forwardRef } from 'react';
 import { createPortal } from 'react-dom';
 import type { Piece, PieceSet, PieceRenderer } from '../types';
 import { CachedPieceImg } from '../hooks/usePieceCache';
@@ -13,14 +13,14 @@ interface DragGhostProps {
   customPieces?: PieceRenderer;
 }
 
-export const DragGhost = memo(function DragGhost({
+export const DragGhost = memo(forwardRef<HTMLDivElement, DragGhostProps>(function DragGhost({
   piece,
   x,
   y,
   squareSize,
   pieceSet,
   customPieces,
-}: DragGhostProps) {
+}, ref) {
   const piecePath = pieceSet?.path;
   const key = `${piece.color}${piece.role.toUpperCase()}`;
 
@@ -37,6 +37,7 @@ export const DragGhost = memo(function DragGhost({
 
   const ghost = (
     <div
+      ref={ref}
       style={{
         position: 'fixed',
         width: squareSize,
@@ -56,4 +57,4 @@ export const DragGhost = memo(function DragGhost({
 
   if (typeof document === 'undefined') return ghost;
   return createPortal(ghost, document.body);
-});
+}));

@@ -1,6 +1,6 @@
 import { memo, useCallback, useLayoutEffect, useEffect, useRef, useMemo } from 'react';
-import type { Piece, Square, Orientation, PieceSet, PieceRenderer, AnimationPlan } from '../types';
-import { readFen, INITIAL_FEN } from '../utils/fen';
+import type { Piece, Pieces, Square, Orientation, PieceSet, PieceRenderer, AnimationPlan } from '../types';
+import { INITIAL_FEN } from '../utils/fen';
 import { square2pos, pos2translate } from '../utils/coords';
 import { computeAnimPlan } from '../animation/anim';
 import { CachedPieceImg, preloadPieceSet } from '../hooks/usePieceCache';
@@ -8,6 +8,7 @@ import { resolvePieceImageSrc } from '../defaultPieces';
 
 interface PiecesLayerProps {
   position: string;
+  pieces: Pieces;
   orientation: Orientation;
   pieceSet?: PieceSet;
   customPieces?: PieceRenderer;
@@ -24,6 +25,7 @@ function easing(t: number): number {
 
 export const PiecesLayer = memo(function PiecesLayer({
   position,
+  pieces,
   orientation,
   pieceSet,
   customPieces,
@@ -35,12 +37,12 @@ export const PiecesLayer = memo(function PiecesLayer({
 }: PiecesLayerProps) {
   const asWhite = orientation === 'white';
   const piecePath = pieceSet?.path;
-  const pieces = useMemo(() => readFen(position || INITIAL_FEN), [position]);
   const currentPos = position || INITIAL_FEN;
 
   const skipNextAnimRef = useRef(false);
   const prevDraggingRef = useRef<string | null | undefined>(draggingSquare);
   const prevPositionRef = useRef(currentPos);
+  const prevPiecesRef = useRef(pieces);
   const rafIdRef = useRef<number | null>(null);
   const pieceElsRef = useRef<Map<string, HTMLDivElement>>(new Map());
 
@@ -127,12 +129,13 @@ export const PiecesLayer = memo(function PiecesLayer({
       if (skipNextAnimRef.current) {
         skipNextAnimRef.current = false;
       } else if (showAnimations && animationDurationMs >= 50) {
-        const plan = computeAnimPlan(readFen(prevPos), pieces);
+        const plan = computeAnimPlan(prevPiecesRef.current, pieces);
         if (plan.anims.size > 0) {
           nextPlan = plan;
         }
       }
       prevPositionRef.current = currentPos;
+      prevPiecesRef.current = pieces;
     }
 
     if (nextPlan) {

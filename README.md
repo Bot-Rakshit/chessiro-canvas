@@ -356,11 +356,24 @@ function AnalysisBoard({ fen }: { fen: string }) {
 ## Benchmark vs `react-chessboard`
 
 Latest benchmark file: [`benchmarks/latest.json`](./benchmarks/latest.json)
+Latest browser benchmark file: [`benchmarks/browser/latest.json`](./benchmarks/browser/latest.json)
 
-Run it locally:
+Run Node benchmark:
 
 ```bash
 npm run benchmark
+```
+
+Run browser benchmark (Playwright + Chromium, local vs `origin/main` vs `react-chessboard`):
+
+```bash
+npm run benchmark:browser
+```
+
+Quick browser benchmark:
+
+```bash
+npm run benchmark:browser:quick
 ```
 
 Method:
@@ -368,9 +381,17 @@ Method:
 - Environment: Node `v25.6.1`, macOS arm64, Apple M4 (10 cores), 16 GB RAM
 - 8 measured rounds + 2 warmup rounds
 - 300 position updates per round
+- Position updates replay multiple real move-playthrough scenarios (castling, captures, endgames, promotion)
 - Same board size (`640px`) and animations disabled for both libraries
 - Metrics: mount wall time, update wall time, React Profiler update duration, bundle gzip
-- Harness: `scripts/benchmark.mjs`
+- Harnesses: `scripts/benchmark.mjs` (Node) and `scripts/benchmark-playwright.mjs` (browser)
+
+Run a subset of scenarios:
+
+```bash
+BENCH_SCENARIOS=italian-castling,sicilian-captures npm run benchmark
+BENCH_SCENARIOS=italian-castling,sicilian-captures npm run benchmark:browser
+```
 
 Results (generated on 2026-02-24 UTC):
 

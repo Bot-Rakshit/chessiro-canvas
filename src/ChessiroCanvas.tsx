@@ -23,6 +23,9 @@ const DEFAULT_THEME: BoardTheme = {
   selectedPiece: '#B57340',
 };
 
+const EMPTY_ARRAY: any[] = [];
+const EMPTY_OBJECT: any = {};
+
 export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>(
   function ChessiroCanvas(props, ref) {
     const {
@@ -35,7 +38,7 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
       lastMove,
       dests,
       premovable,
-      arrows = [],
+      arrows = EMPTY_ARRAY,
       onArrowsChange,
       arrowBrushes,
       snapArrowsToValidMoves = true,
@@ -51,7 +54,7 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
       showMargin = true,
       marginThickness = 24,
       showNotation = true,
-      highlightedSquares = {},
+      highlightedSquares = EMPTY_OBJECT,
       squareVisuals,
       arrowVisuals,
       notationVisuals,
@@ -73,7 +76,7 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
       onDeselect,
       onSquareClick,
       onClearOverlays,
-      overlays = [],
+      overlays = EMPTY_ARRAY,
       overlayRenderer,
       pieces: customPieces,
       className,
@@ -83,12 +86,7 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
     const boardRef = useRef<HTMLDivElement>(null);
     const { bounds } = useBoardSize(boardRef);
 
-    const occupiedSquares = useMemo(() => {
-      const set = new Set<string>();
-      const p = readFen(position || INITIAL_FEN);
-      for (const sq of p.keys()) set.add(sq);
-      return set;
-    }, [position]);
+    const piecesMap = useMemo(() => readFen(position || INITIAL_FEN), [position]);
 
     const boardDomRect = useMemo(() => {
       if (!bounds) return null;
@@ -104,6 +102,7 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
 
     const interaction = useInteraction({
       position,
+      pieces: piecesMap,
       orientation,
       interactive,
       allowDragging,
@@ -130,6 +129,15 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
       onClearOverlays,
       blockTouchScroll,
     });
+
+    const occupiedSquares = useMemo(() => {
+      if (interaction.legalSquares.length === 0 && interaction.premoveSquares.length === 0) {
+        return undefined;
+      }
+      const set = new Set<string>();
+      for (const sq of piecesMap.keys()) set.add(sq);
+      return set;
+    }, [piecesMap, interaction.legalSquares, interaction.premoveSquares]);
 
     const handleDeselect = useCallback(() => {
       interaction.clearSelection();
@@ -216,91 +224,94 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
             onMouseDown={interaction.handlePointerDown as any}
             onTouchStart={interaction.handlePointerDown as any}
           >
-          {hasValidSize && (
-            <div style={{ position: 'absolute', inset: 0 }}>
-              <Squares
-                theme={theme}
-                orientation={orientation}
-                lastMove={lastMove}
-                selectedSquare={interaction.selectedSquare}
-                legalSquares={interaction.legalSquares}
-                premoveSquares={interaction.premoveSquares}
-                premoveCurrent={interaction.premoveCurrent}
-                occupiedSquares={occupiedSquares}
-                markedSquares={interaction.activeMarkedSquares}
-                highlightedSquares={highlightedSquares}
-                squareVisuals={squareVisuals}
-                check={check}
-              />
-
-              <PiecesLayer
-                position={position}
-                orientation={orientation}
-                pieceSet={pieceSet}
-                customPieces={customPieces}
-                boardWidth={boardWidth}
-                boardHeight={boardHeight}
-                animationDurationMs={showAnimations ? animationDurationMs : 0}
-                showAnimations={showAnimations}
-                draggingSquare={interaction.drag?.origSquare}
-              />
-
-              <ArrowsLayer
-                arrows={interaction.renderedArrows}
-                orientation={orientation}
-                boardWidth={boardWidth}
-                boardHeight={boardHeight}
-                visuals={arrowVisuals}
-              />
-
-              {moveQualityBadge && (
-                <Badge
-                  badge={moveQualityBadge}
-                  orientation={orientation}
-                  squareSize={squareSize}
-                />
-              )}
-
-              {showNotation && (
-                <Notation
-                  orientation={orientation}
+            {hasValidSize && (
+              <div style={{ position: 'absolute', inset: 0 }}>
+                <Squares
                   theme={theme}
-                  showOnMargin={showMargin}
-                  marginThickness={marginThickness}
-                  visuals={notationVisuals}
+                  orientation={orientation}
+                  lastMove={lastMove}
+                  selectedSquare={interaction.selectedSquare}
+                  draggingSquare={interaction.drag?.origSquare}
+                  legalSquares={interaction.legalSquares}
+                  premoveSquares={interaction.premoveSquares}
+                  premoveCurrent={interaction.premoveCurrent}
+                  occupiedSquares={occupiedSquares}
+                  markedSquares={interaction.activeMarkedSquares}
+                  highlightedSquares={highlightedSquares}
+                  squareVisuals={squareVisuals}
+                  check={check}
                 />
-              )}
 
-              {overlays.length > 0 && (
-                <OverlaysLayer
-                  overlays={overlays}
+                <PiecesLayer
+                  position={position}
+                  pieces={piecesMap}
+                  orientation={orientation}
+                  pieceSet={pieceSet}
+                  customPieces={customPieces}
+                  boardWidth={boardWidth}
+                  boardHeight={boardHeight}
+                  animationDurationMs={showAnimations ? animationDurationMs : 0}
+                  showAnimations={showAnimations}
+                  draggingSquare={interaction.drag?.origSquare}
+                />
+
+                <ArrowsLayer
+                  arrows={interaction.renderedArrows}
                   orientation={orientation}
                   boardWidth={boardWidth}
                   boardHeight={boardHeight}
-                  renderer={overlayRenderer}
-                  visuals={overlayVisuals}
+                  visuals={arrowVisuals}
                 />
-              )}
 
-              {interaction.pendingPromotion && (
-                <PromotionDialog
-                  promotion={interaction.pendingPromotion}
-                  pieceSet={pieceSet}
-                  visuals={promotionVisuals}
-                  onSelect={interaction.handlePromotionSelect}
-                  onDismiss={interaction.handlePromotionDismiss}
-                />
-              )}
-            </div>
-          )}
-        </div>
+                {moveQualityBadge && (
+                  <Badge
+                    badge={moveQualityBadge}
+                    orientation={orientation}
+                    squareSize={squareSize}
+                  />
+                )}
+
+                {showNotation && (
+                  <Notation
+                    orientation={orientation}
+                    theme={theme}
+                    showOnMargin={showMargin}
+                    marginThickness={marginThickness}
+                    visuals={notationVisuals}
+                  />
+                )}
+
+                {overlays.length > 0 && (
+                  <OverlaysLayer
+                    overlays={overlays}
+                    orientation={orientation}
+                    boardWidth={boardWidth}
+                    boardHeight={boardHeight}
+                    renderer={overlayRenderer}
+                    visuals={overlayVisuals}
+                  />
+                )}
+
+                {interaction.pendingPromotion && (
+                  <PromotionDialog
+                    promotion={interaction.pendingPromotion}
+                    pieceSet={pieceSet}
+                    visuals={promotionVisuals}
+                    onSelect={interaction.handlePromotionSelect}
+                    onDismiss={interaction.handlePromotionDismiss}
+                  />
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         {interaction.drag && (
           <DragGhost
+            ref={interaction.dragGhostRef}
             piece={interaction.drag.piece}
-            x={interaction.drag.currentPos[0]}
-            y={interaction.drag.currentPos[1]}
+            x={interaction.drag.startPos[0]}
+            y={interaction.drag.startPos[1]}
             squareSize={squareSize}
             pieceSet={pieceSet}
             customPieces={customPieces}

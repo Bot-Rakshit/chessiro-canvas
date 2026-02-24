@@ -8,6 +8,7 @@ interface SquaresProps {
   orientation: Orientation;
   lastMove?: { from: string; to: string } | null;
   selectedSquare?: string | null;
+  draggingSquare?: string | null;
   legalSquares?: string[];
   premoveSquares?: string[];
   premoveCurrent?: [string, string] | null;
@@ -32,23 +33,31 @@ const DEFAULT_SQUARE_VISUALS: Required<SquareVisuals> = {
   checkGradient:
     'radial-gradient(ellipse at center, rgba(255, 0, 0, 1) 0%, rgba(231, 0, 0, 1) 25%, rgba(169, 0, 0, 0) 89%, rgba(158, 0, 0, 0) 100%)',
 };
+const EMPTY_SQUARES: string[] = [];
+const EMPTY_MARKS: Record<string, boolean> = {};
+const EMPTY_HIGHLIGHTS: Record<string, string> = {};
+const EMPTY_SQUARE_VISUALS: Partial<SquareVisuals> = {};
 
 export const Squares = memo(function Squares({
   theme,
   orientation,
   lastMove,
   selectedSquare,
-  legalSquares = [],
+  draggingSquare,
+  legalSquares = EMPTY_SQUARES,
   occupiedSquares,
-  premoveSquares = [],
+  premoveSquares = EMPTY_SQUARES,
   premoveCurrent,
-  markedSquares = {},
-  highlightedSquares = {},
-  squareVisuals = {},
+  markedSquares = EMPTY_MARKS,
+  highlightedSquares = EMPTY_HIGHLIGHTS,
+  squareVisuals = EMPTY_SQUARE_VISUALS,
   check,
   lastMoveColor,
 }: SquaresProps) {
-  const visuals = { ...DEFAULT_SQUARE_VISUALS, ...squareVisuals };
+  const visuals = useMemo(
+    () => ({ ...DEFAULT_SQUARE_VISUALS, ...squareVisuals }),
+    [squareVisuals],
+  );
 
   const highlightColor = lastMoveColor
     || hexToRgba(theme.lastMoveHighlight || '#DFAA4E', 0.5)
@@ -98,7 +107,7 @@ export const Squares = memo(function Squares({
       {squares.map(({ sq, isLight }) => {
         const isLastMoveFrom = lastMove?.from === sq;
         const isLastMoveTo = lastMove?.to === sq;
-        const isSelected = selectedSquare === sq;
+        const isSelected = selectedSquare === sq && draggingSquare !== sq;
         const isLegal = legalSet.has(sq);
         const isPremoveDest = premoveSet.has(sq);
         const isPremoveCurrent = premoveCurrentSet.has(sq);
@@ -179,7 +188,6 @@ export const Squares = memo(function Squares({
               backgroundImage,
               borderRadius,
               position: 'relative',
-              transition: 'background-color 150ms ease',
             }}
           />
         );
