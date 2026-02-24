@@ -41,11 +41,15 @@ export default function App() {
 
 ### Piece Rendering (Default + Custom)
 
-`ChessiroCanvas` ships with embedded Chessiro SVG pieces and renders them by default with no asset hosting setup.
+`ChessiroCanvas` ships with embedded default SVG pieces and renders them by default with no asset hosting setup.
 
 ```tsx
 <ChessiroCanvas position={fen} />
 ```
+
+Piece license note:
+- Bundled default piece artwork is generated from `react-chessboard` defaults (MIT license).
+- You can replace it any time via `pieceSet.path`.
 
 Use `pieceSet.path` only when you want to override with your own hosted piece set.
 
@@ -207,7 +211,7 @@ export function ChessopsBoard() {
 ## Features
 
 - FEN-based board rendering
-- Built-in Chessiro piece set shipped with the package
+- Built-in default piece set shipped with the package
 - Click-to-move and drag-to-move
 - Legal move dots and capture rings
 - Premoves with optional external event hooks
@@ -243,7 +247,7 @@ export function ChessopsBoard() {
 | `arrowVisuals` | `Partial<ArrowVisuals>` | `undefined` | Customize arrow width, opacity, marker size, and arrow margin |
 | `snapArrowsToValidMoves` | `boolean` | `true` | Queen/knight snap behavior |
 | `theme` | `BoardTheme` | built-in theme | Board colors |
-| `pieceSet` | `PieceSet` | bundled Chessiro pieces | Optional custom piece asset path config |
+| `pieceSet` | `PieceSet` | bundled default pieces | Optional custom piece asset path config |
 | `pieces` | `Record<string, () => ReactNode>` | `undefined` | Custom piece renderer map |
 | `showMargin` | `boolean` | `true` | Margin frame for notation |
 | `marginThickness` | `number` | `24` | Margin px |

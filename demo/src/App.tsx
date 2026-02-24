@@ -219,7 +219,7 @@ const PROPS: PropRow[] = [
   { prop: 'plyMarks', type: 'Map<number, string[]>', defaultValue: 'undefined', notes: 'Controlled per-ply marks.' },
   { prop: 'onPlyMarksChange', type: '(ply, marks) => void', defaultValue: 'undefined', notes: 'Per-ply mark update callback.' },
   { prop: 'theme', type: 'BoardTheme', defaultValue: 'built-in', notes: 'Board palette and highlight colors.' },
-  { prop: 'pieceSet', type: 'PieceSet', defaultValue: 'embedded Chessiro', notes: 'Hosted piece set path override.' },
+  { prop: 'pieceSet', type: 'PieceSet', defaultValue: 'embedded default pieces', notes: 'Hosted piece set path override. Bundled defaults are generated from react-chessboard pieces (MIT).' },
   { prop: 'pieces', type: 'Record<string, () => ReactNode>', defaultValue: 'undefined', notes: 'Custom piece renderer map.' },
   { prop: 'showMargin', type: 'boolean', defaultValue: 'true', notes: 'Show outer board margin frame.' },
   { prop: 'marginThickness', type: 'number', defaultValue: '24', notes: 'Margin thickness in pixels.' },
@@ -429,7 +429,9 @@ export function App() {
             <CodeBlock code={QUICK_START_CODE} language="tsx" />
 
             <div className="info-box">
-              Default Chessiro pieces are embedded and render automatically. No static file setup required.
+              Default pieces are embedded and render automatically, so no static file setup is required.
+              Bundled defaults are generated from react-chessboard pieces (MIT) and can be replaced with
+              `pieceSet.path` at any time.
             </div>
           </section>
 

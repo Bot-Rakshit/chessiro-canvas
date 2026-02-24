@@ -19,7 +19,7 @@
     "assets"
   ],
   "scripts": {
-    "pieces:generate": "node scripts/generate-default-piece-data.mjs",
+    "pieces:generate": "node scripts/generate-default-piece-svgs.mjs && node scripts/generate-default-piece-data.mjs",
     "build": "tsup",
     "dev": "tsup --watch",
     "docs:dev": "npm --prefix demo run dev",
