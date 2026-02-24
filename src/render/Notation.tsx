@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import type { Orientation, BoardTheme } from '../types';
+import type { Orientation, BoardTheme, NotationVisuals } from '../types';
 import { FILES, RANKS } from '../types';
 
 interface NotationProps {
@@ -7,6 +7,7 @@ interface NotationProps {
   theme: BoardTheme;
   showOnMargin: boolean;
   marginThickness: number;
+  visuals?: Partial<NotationVisuals>;
 }
 
 export const Notation = memo(function Notation({
@@ -14,28 +15,38 @@ export const Notation = memo(function Notation({
   theme,
   showOnMargin,
   marginThickness,
+  visuals = {},
 }: NotationProps) {
   const asWhite = orientation === 'white';
   const files = asWhite ? FILES : [...FILES].reverse();
   const ranks = asWhite ? [...RANKS].reverse() : RANKS;
 
   if (showOnMargin) {
-    return <MarginNotation files={files} ranks={ranks} theme={theme} thickness={marginThickness} />;
+    return <MarginNotation files={files} ranks={ranks} theme={theme} thickness={marginThickness} visuals={visuals} />;
   }
 
-  return <OnBoardNotation files={files} ranks={ranks} theme={theme} orientation={orientation} />;
+  return <OnBoardNotation files={files} ranks={ranks} theme={theme} orientation={orientation} visuals={visuals} />;
 });
 
-const notationFont = 'var(--font-geist-sans, system-ui, sans-serif)';
+const DEFAULT_NOTATION_VISUALS: Required<NotationVisuals> = {
+  fontFamily: 'var(--font-geist-sans, system-ui, sans-serif)',
+  fontSize: '12px',
+  fontWeight: 500,
+  color: '',
+  opacity: 0.85,
+  onBoardFontSize: '10px',
+  onBoardLeftOffset: '2px',
+  onBoardBottomOffset: '1px',
+};
 
-const coordStyle = (theme: BoardTheme): React.CSSProperties => ({
+const coordStyle = (theme: BoardTheme, visuals: Required<NotationVisuals>): React.CSSProperties => ({
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
-  fontSize: '12px',
-  fontWeight: 500,
-  fontFamily: notationFont,
-  color: theme.lightSquare,
+  fontSize: visuals.fontSize,
+  fontWeight: visuals.fontWeight,
+  fontFamily: visuals.fontFamily,
+  color: visuals.color || theme.lightSquare,
   userSelect: 'none',
 });
 
@@ -44,14 +55,17 @@ function MarginNotation({
   ranks,
   theme,
   thickness,
+  visuals,
 }: {
   files: readonly string[];
   ranks: readonly string[];
   theme: BoardTheme;
   thickness: number;
+  visuals: Partial<NotationVisuals>;
 }) {
+  const notationVisuals = { ...DEFAULT_NOTATION_VISUALS, ...visuals };
   const bg = theme.margin || theme.darkSquare;
-  const cs = coordStyle(theme);
+  const cs = coordStyle(theme, notationVisuals);
 
   return (
     <>
@@ -129,13 +143,16 @@ function OnBoardNotation({
   ranks,
   theme,
   orientation,
+  visuals,
 }: {
   files: readonly string[];
   ranks: readonly string[];
   theme: BoardTheme;
   orientation: Orientation;
+  visuals: Partial<NotationVisuals>;
 }) {
   const asWhite = orientation === 'white';
+  const notationVisuals = { ...DEFAULT_NOTATION_VISUALS, ...visuals };
 
   return (
     <div style={{
@@ -157,13 +174,13 @@ function OnBoardNotation({
             key={`f-${f}`}
             style={{
               position: 'absolute',
-              bottom: '1px',
+              bottom: notationVisuals.onBoardBottomOffset,
               right: `${(7 - i) * 12.5 + 0.5}%`,
-              fontSize: '10px',
-              fontWeight: 700,
-              fontFamily: notationFont,
-              color: isLight ? theme.darkSquare : theme.lightSquare,
-              opacity: 0.85,
+              fontSize: notationVisuals.onBoardFontSize,
+              fontWeight: notationVisuals.fontWeight,
+              fontFamily: notationVisuals.fontFamily,
+              color: notationVisuals.color || (isLight ? theme.darkSquare : theme.lightSquare),
+              opacity: notationVisuals.opacity,
               userSelect: 'none',
               lineHeight: 1,
             }}
@@ -184,12 +201,12 @@ function OnBoardNotation({
             style={{
               position: 'absolute',
               top: `${i * 12.5 + 0.5}%`,
-              left: '2px',
-              fontSize: '10px',
-              fontWeight: 700,
-              fontFamily: notationFont,
-              color: isLight ? theme.darkSquare : theme.lightSquare,
-              opacity: 0.85,
+              left: notationVisuals.onBoardLeftOffset,
+              fontSize: notationVisuals.onBoardFontSize,
+              fontWeight: notationVisuals.fontWeight,
+              fontFamily: notationVisuals.fontFamily,
+              color: notationVisuals.color || (isLight ? theme.darkSquare : theme.lightSquare),
+              opacity: notationVisuals.opacity,
               userSelect: 'none',
               lineHeight: 1,
             }}

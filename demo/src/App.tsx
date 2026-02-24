@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { ChessiroCanvas, type BoardTheme } from 'chessiro-canvas';
 import { computeDests, applyMove } from './chess-logic';
@@ -34,6 +34,15 @@ const THEMES: BoardTheme[] = [
     selectedPiece: '#4E6A2A',
   },
 ];
+
+const SECTION_LINKS = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'playground', label: 'Playground' },
+  { id: 'quick-start', label: 'Quick Start' },
+  { id: 'customization', label: 'Customization' },
+  { id: 'props', label: 'Props' },
+  { id: 'integrations', label: 'Integrations' },
+] as const;
 
 const QUICK_START_CODE = `import { useState } from 'react';
 import { ChessiroCanvas, INITIAL_FEN } from 'chessiro-canvas';
@@ -75,6 +84,35 @@ const SQUARE_VISUALS_CODE = `<ChessiroCanvas
     selectedOutline: 'rgba(255, 255, 255, 1)',
     markOverlay: 'rgba(244, 67, 54, 0.6)',
     markOutline: 'rgba(244, 67, 54, 0.9)',
+  }}
+/>`;
+
+const UI_VISUALS_CODE = `<ChessiroCanvas
+  position={fen}
+  arrowVisuals={{
+    lineWidth: 0.2,
+    opacity: 1,
+    markerWidth: 5,
+    markerHeight: 5,
+  }}
+  notationVisuals={{
+    fontFamily: 'JetBrains Mono, monospace',
+    fontSize: '11px',
+    onBoardFontSize: '11px',
+    opacity: 0.95,
+  }}
+  promotionVisuals={{
+    panelColor: 'rgba(20, 24, 36, 0.98)',
+    titleColor: '#f2f6ff',
+    optionBackground: 'rgba(255, 255, 255, 0.08)',
+    optionTextColor: '#f2f6ff',
+    cancelTextColor: '#cbd5e1',
+  }}
+  overlayVisuals={{
+    background: 'rgba(2, 6, 23, 0.85)',
+    color: '#f8fafc',
+    borderRadius: '6px',
+    fontSize: '11px',
   }}
 />`;
 
@@ -126,6 +164,7 @@ export function ChessopsBoard() {
   const [pos, setPos] = useState(() =>
     Chess.fromSetup(parseFen(INITIAL_FEN).unwrap()).unwrap(),
   );
+
   const fen = useMemo(() => makeFen(pos.toSetup()), [pos]);
   const dests = useMemo(() => chessgroundDests(pos), [pos]);
   const turn = pos.turn === 'white' ? 'w' : 'b';
@@ -169,6 +208,9 @@ const PROPS: PropRow[] = [
   { prop: 'premovable', type: 'PremoveConfig', defaultValue: 'undefined', notes: 'Enable/store premoves and callbacks.' },
   { prop: 'arrows', type: 'Arrow[]', defaultValue: '[]', notes: 'Controlled arrow list.' },
   { prop: 'onArrowsChange', type: '(arrows) => void', defaultValue: 'undefined', notes: 'Arrow update callback.' },
+  { prop: 'arrowBrushes', type: 'Partial<ArrowBrushes>', defaultValue: 'default set', notes: 'Brush color overrides.' },
+  { prop: 'arrowVisuals', type: 'Partial<ArrowVisuals>', defaultValue: 'undefined', notes: 'Arrow width, opacity, marker size, and margin.' },
+  { prop: 'snapArrowsToValidMoves', type: 'boolean', defaultValue: 'true', notes: 'Snap arrows to queen/knight vectors.' },
   { prop: 'markedSquares', type: 'string[]', defaultValue: 'internal', notes: 'Controlled right-click marks.' },
   { prop: 'onMarkedSquaresChange', type: '(squares) => void', defaultValue: 'undefined', notes: 'Mark update callback.' },
   { prop: 'plyIndex', type: 'number', defaultValue: 'undefined', notes: 'Optional ply index for per-ply overlays.' },
@@ -176,16 +218,15 @@ const PROPS: PropRow[] = [
   { prop: 'onPlyArrowsChange', type: '(ply, arrows) => void', defaultValue: 'undefined', notes: 'Per-ply arrow update callback.' },
   { prop: 'plyMarks', type: 'Map<number, string[]>', defaultValue: 'undefined', notes: 'Controlled per-ply marks.' },
   { prop: 'onPlyMarksChange', type: '(ply, marks) => void', defaultValue: 'undefined', notes: 'Per-ply mark update callback.' },
-  { prop: 'arrowBrushes', type: 'Partial<ArrowBrushes>', defaultValue: 'default set', notes: 'Brush color overrides.' },
-  { prop: 'snapArrowsToValidMoves', type: 'boolean', defaultValue: 'true', notes: 'Snap arrows to queen/knight vectors.' },
   { prop: 'theme', type: 'BoardTheme', defaultValue: 'built-in', notes: 'Board palette and highlight colors.' },
   { prop: 'pieceSet', type: 'PieceSet', defaultValue: 'embedded Chessiro', notes: 'Hosted piece set path override.' },
   { prop: 'pieces', type: 'Record<string, () => ReactNode>', defaultValue: 'undefined', notes: 'Custom piece renderer map.' },
-  { prop: 'squareVisuals', type: 'Partial<SquareVisuals>', defaultValue: 'undefined', notes: 'Customize legal/premove dots, rings, marks, check overlay.' },
   { prop: 'showMargin', type: 'boolean', defaultValue: 'true', notes: 'Show outer board margin frame.' },
   { prop: 'marginThickness', type: 'number', defaultValue: '24', notes: 'Margin thickness in pixels.' },
   { prop: 'showNotation', type: 'boolean', defaultValue: 'true', notes: 'Show file/rank labels.' },
+  { prop: 'notationVisuals', type: 'Partial<NotationVisuals>', defaultValue: 'undefined', notes: 'Notation font, color, opacity, and offsets.' },
   { prop: 'highlightedSquares', type: 'Record<string, string>', defaultValue: '{}', notes: 'Custom square background colors.' },
+  { prop: 'squareVisuals', type: 'Partial<SquareVisuals>', defaultValue: 'undefined', notes: 'Legal/premove hints, mark colors, selected outline, check overlay.' },
   { prop: 'moveQualityBadge', type: 'MoveQualityBadge | null', defaultValue: 'undefined', notes: 'Badge icon/label on a square.' },
   { prop: 'allowDragging', type: 'boolean', defaultValue: 'true', notes: 'Enable drag interaction.' },
   { prop: 'allowDrawingArrows', type: 'boolean', defaultValue: 'true', notes: 'Enable right-click arrows/marks.' },
@@ -193,7 +234,9 @@ const PROPS: PropRow[] = [
   { prop: 'animationDurationMs', type: 'number', defaultValue: '200', notes: 'Animation duration in ms.' },
   { prop: 'blockTouchScroll', type: 'boolean', defaultValue: 'false', notes: 'Prevent page scroll during touch interaction.' },
   { prop: 'overlays', type: 'TextOverlay[]', defaultValue: '[]', notes: 'Custom text overlays.' },
-  { prop: 'overlayRenderer', type: '(overlay) => ReactNode', defaultValue: 'undefined', notes: 'Render overlays with your own component.' },
+  { prop: 'overlayRenderer', type: '(overlay) => ReactNode', defaultValue: 'undefined', notes: 'Custom overlay renderer.' },
+  { prop: 'overlayVisuals', type: 'Partial<OverlayVisuals>', defaultValue: 'undefined', notes: 'Default bubble style when overlayRenderer is not provided.' },
+  { prop: 'promotionVisuals', type: 'Partial<PromotionVisuals>', defaultValue: 'undefined', notes: 'Promotion modal colors, borders, radius, and text styles.' },
   { prop: 'onSquareClick', type: '(square) => void', defaultValue: 'undefined', notes: 'Square click callback.' },
   { prop: 'onClearOverlays', type: '() => void', defaultValue: 'undefined', notes: 'Called when overlays are cleared for current ply.' },
   { prop: 'onPrevious / onNext / onFirst / onLast', type: '() => void', defaultValue: 'undefined', notes: 'Keyboard navigation callbacks.' },
@@ -211,6 +254,7 @@ export function App() {
   const [showNotation, setShowNotation] = useState(true);
   const [showMargin, setShowMargin] = useState(true);
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>('idle');
+  const [activeSection, setActiveSection] = useState<(typeof SECTION_LINKS)[number]['id']>('overview');
 
   const theme = THEMES[themeIndex];
   const dests = useMemo(() => computeDests(fen), [fen]);
@@ -242,197 +286,215 @@ export function App() {
     }
   }, []);
 
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio);
+        if (visible[0]) {
+          setActiveSection(visible[0].target.id as (typeof SECTION_LINKS)[number]['id']);
+        }
+      },
+      { rootMargin: '-20% 0px -65% 0px', threshold: [0.2, 0.35, 0.6] },
+    );
+
+    for (const section of SECTION_LINKS) {
+      const el = document.getElementById(section.id);
+      if (el) observer.observe(el);
+    }
+
+    return () => observer.disconnect();
+  }, []);
+
   return (
     <div className="docs-root">
       <div className="bg-glow bg-glow-amber" />
       <div className="bg-glow bg-glow-sky" />
 
-      <header className="hero panel reveal">
-        <p className="eyebrow">Chess UI Toolkit</p>
-        <h1>chessiro-canvas Documentation</h1>
-        <p className="hero-copy">
-          Lightweight React chessboard focused on smooth interaction, low bundle footprint,
-          and practical control for analysis and coaching interfaces.
-        </p>
-        <div className="hero-actions">
-          <button className="btn btn-primary" onClick={copyInstallCommand}>
-            {copyState === 'copied' && 'Copied'}
-            {copyState === 'error' && 'Copy failed'}
-            {copyState === 'idle' && 'Copy install command'}
-          </button>
-          <a className="btn btn-ghost" href="#quick-start">Quick Start</a>
-          <a className="btn btn-ghost" href="#playground">Live Playground</a>
-          <a className="btn btn-ghost" href="#integrations">Engine Integrations</a>
-          <a className="btn btn-ghost" href="#props">Props</a>
-        </div>
-        <div className="stat-strip">
-          <span>14.8 KB gzip</span>
-          <span>TypeScript-first API</span>
-          <span>Embedded default pieces</span>
-        </div>
-      </header>
-
-      <main className="docs-main">
-        <section id="playground" className="panel reveal delay-1">
-          <div className="section-head">
-            <h2>Live Playground</h2>
-            <p>Test interactions exactly as users will experience them.</p>
+      <div className="docs-layout">
+        <aside className="docs-sidebar panel">
+          <div className="sidebar-brand">
+            <p className="eyebrow">Chess UI Toolkit</p>
+            <h1>chessiro-canvas</h1>
+            <p>Lightweight, controlled React chessboard.</p>
           </div>
 
-          <div className="playground-grid">
-            <div className="board-shell">
-              <ChessiroCanvas
-                position={fen}
-                lastMove={lastMove}
-                dests={dests}
-                onMove={handleMove}
-                interactive
-                orientation={orientation}
-                theme={theme}
-                showAnimations={showAnimations}
-                showNotation={showNotation}
-                showMargin={showMargin}
-              />
+          <nav className="sidebar-nav" aria-label="Sections">
+            {SECTION_LINKS.map((section) => (
+              <a
+                key={section.id}
+                href={`#${section.id}`}
+                className={activeSection === section.id ? 'sidebar-link sidebar-link-active' : 'sidebar-link'}
+              >
+                {section.label}
+              </a>
+            ))}
+          </nav>
+
+          <div className="sidebar-meta">
+            <div className="stat-chip">14.8 KB gzip</div>
+            <div className="stat-chip">TypeScript-first</div>
+            <div className="stat-chip">Embedded pieces</div>
+          </div>
+        </aside>
+
+        <main className="docs-main">
+          <section id="overview" className="panel reveal">
+            <p className="eyebrow">Overview</p>
+            <h2>Professional chessboard UI primitives for React</h2>
+            <p className="hero-copy">
+              chessiro-canvas gives you a high-performance board with controlled state,
+              flexible visuals, and practical integrations for real products.
+            </p>
+            <div className="hero-actions">
+              <button className="btn btn-primary" onClick={copyInstallCommand}>
+                {copyState === 'copied' && 'Copied'}
+                {copyState === 'error' && 'Copy failed'}
+                {copyState === 'idle' && 'Copy install command'}
+              </button>
+              <a className="btn btn-ghost" href="#quick-start">Quick Start</a>
+              <a className="btn btn-ghost" href="#props">View Props</a>
+            </div>
+          </section>
+
+          <section id="playground" className="panel reveal delay-1">
+            <div className="section-head">
+              <h2>Live Playground</h2>
+              <p>Test interactions exactly as users will experience them.</p>
             </div>
 
-            <div className="control-shell">
-              <ControlGroup label="Theme">
-                <div className="theme-grid">
-                  {THEMES.map((candidate, index) => (
-                    <button
-                      key={candidate.id}
-                      className={`chip ${themeIndex === index ? 'chip-active' : ''}`}
-                      onClick={() => setThemeIndex(index)}
-                    >
-                      <span
-                        className="swatch"
-                        style={{
-                          background: `linear-gradient(135deg, ${candidate.lightSquare} 0%, ${candidate.darkSquare} 100%)`,
-                        }}
-                      />
-                      {candidate.name}
-                    </button>
-                  ))}
+            <div className="playground-grid">
+              <div className="board-shell">
+                <ChessiroCanvas
+                  position={fen}
+                  lastMove={lastMove}
+                  dests={dests}
+                  onMove={handleMove}
+                  interactive
+                  orientation={orientation}
+                  theme={theme}
+                  showAnimations={showAnimations}
+                  showNotation={showNotation}
+                  showMargin={showMargin}
+                />
+              </div>
+
+              <div className="control-shell">
+                <ControlGroup label="Theme">
+                  <div className="theme-grid">
+                    {THEMES.map((candidate, index) => (
+                      <button
+                        key={candidate.id}
+                        className={`chip ${themeIndex === index ? 'chip-active' : ''}`}
+                        onClick={() => setThemeIndex(index)}
+                      >
+                        <span
+                          className="swatch"
+                          style={{ background: `linear-gradient(135deg, ${candidate.lightSquare} 0%, ${candidate.darkSquare} 100%)` }}
+                        />
+                        {candidate.name}
+                      </button>
+                    ))}
+                  </div>
+                </ControlGroup>
+
+                <ControlGroup label="Board">
+                  <div className="control-row">
+                    <button className="btn btn-ghost" onClick={() => setOrientation('white')}>White</button>
+                    <button className="btn btn-ghost" onClick={() => setOrientation('black')}>Black</button>
+                    <button className="btn btn-ghost" onClick={resetBoard}>Reset</button>
+                  </div>
+
+                  <Toggle label="Animations" checked={showAnimations} onChange={setShowAnimations} />
+                  <Toggle label="Notation" checked={showNotation} onChange={setShowNotation} />
+                  <Toggle label="Margin" checked={showMargin} onChange={setShowMargin} />
+                </ControlGroup>
+
+                <div className="fen-box">
+                  <span>Current FEN</span>
+                  <code>{fen}</code>
                 </div>
-              </ControlGroup>
-
-              <ControlGroup label="Board">
-                <div className="control-row">
-                  <button className="btn btn-ghost" onClick={() => setOrientation('white')}>White</button>
-                  <button className="btn btn-ghost" onClick={() => setOrientation('black')}>Black</button>
-                  <button className="btn btn-ghost" onClick={resetBoard}>Reset</button>
-                </div>
-
-                <Toggle label="Animations" checked={showAnimations} onChange={setShowAnimations} />
-                <Toggle label="Notation" checked={showNotation} onChange={setShowNotation} />
-                <Toggle label="Margin" checked={showMargin} onChange={setShowMargin} />
-              </ControlGroup>
-
-              <div className="fen-box">
-                <span>Current FEN</span>
-                <code>{fen}</code>
               </div>
             </div>
-          </div>
-        </section>
+          </section>
 
-        <section id="quick-start" className="panel reveal delay-2">
-          <div className="section-head">
-            <h2>Quick Start</h2>
-            <p>Install and render the board in under a minute.</p>
-          </div>
+          <section id="quick-start" className="panel reveal delay-2">
+            <div className="section-head">
+              <h2>Quick Start</h2>
+              <p>Install and render the board in under a minute.</p>
+            </div>
 
-          <CodeBlock code="npm i chessiro-canvas" language="bash" />
-          <CodeBlock code={QUICK_START_CODE} language="tsx" />
+            <CodeBlock code="npm i chessiro-canvas" language="bash" />
+            <CodeBlock code={QUICK_START_CODE} language="tsx" />
 
-          <div className="info-box">
-            Default Chessiro pieces are embedded and render automatically. No static file setup required.
-          </div>
-        </section>
+            <div className="info-box">
+              Default Chessiro pieces are embedded and render automatically. No static file setup required.
+            </div>
+          </section>
 
-        <section className="panel reveal delay-3">
-          <div className="section-head">
-            <h2>Custom Piece Sets</h2>
-            <p>Override with your own hosted SVG set when needed.</p>
-          </div>
-          <CodeBlock code={CUSTOM_PIECES_CODE} language="tsx" />
-        </section>
+          <section id="customization" className="panel reveal delay-3">
+            <div className="section-head">
+              <h2>Customization</h2>
+              <p>Customize board visuals without forking the library.</p>
+            </div>
 
-        <section className="panel reveal delay-4">
-          <div className="section-head">
-            <h2>Customize Legal Move UI</h2>
-            <p>Style legal dots, capture rings, premove hints, marks, and check overlay.</p>
-          </div>
-          <CodeBlock code={SQUARE_VISUALS_CODE} language="tsx" />
-        </section>
+            <h3 className="integration-heading">Custom piece set</h3>
+            <CodeBlock code={CUSTOM_PIECES_CODE} language="tsx" />
 
-        <section id="props" className="panel reveal delay-5">
-          <div className="section-head">
-            <h2>Props Reference</h2>
-            <p>Complete `ChessiroCanvas` prop list for integration and customization.</p>
-          </div>
+            <h3 className="integration-heading">Legal and premove indicators</h3>
+            <CodeBlock code={SQUARE_VISUALS_CODE} language="tsx" />
 
-          <div className="props-table-wrap">
-            <table className="props-table">
-              <thead>
-                <tr>
-                  <th>Prop</th>
-                  <th>Type</th>
-                  <th>Default</th>
-                  <th>Notes</th>
-                </tr>
-              </thead>
-              <tbody>
-                {PROPS.map((row) => (
-                  <tr key={row.prop}>
-                    <td><code>{row.prop}</code></td>
-                    <td><code>{row.type}</code></td>
-                    <td><code>{row.defaultValue}</code></td>
-                    <td>{row.notes}</td>
+            <h3 className="integration-heading">Arrows, notation, promotion dialog, overlays</h3>
+            <CodeBlock code={UI_VISUALS_CODE} language="tsx" />
+          </section>
+
+          <section id="props" className="panel reveal delay-4">
+            <div className="section-head">
+              <h2>Props Reference</h2>
+              <p>Complete `ChessiroCanvas` API with defaults and practical notes.</p>
+            </div>
+
+            <div className="props-table-wrap">
+              <table className="props-table">
+                <thead>
+                  <tr>
+                    <th>Prop</th>
+                    <th>Type</th>
+                    <th>Default</th>
+                    <th>Notes</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
+                </thead>
+                <tbody>
+                  {PROPS.map((row) => (
+                    <tr key={row.prop}>
+                      <td><code>{row.prop}</code></td>
+                      <td><code>{row.type}</code></td>
+                      <td><code>{row.defaultValue}</code></td>
+                      <td>{row.notes}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
 
-        <section className="panel reveal delay-6">
-          <div className="section-head">
-            <h2>Core Capabilities</h2>
-            <p>What ships out of the box.</p>
-          </div>
+          <section id="integrations" className="panel reveal delay-5">
+            <div className="section-head">
+              <h2>Engine Integrations</h2>
+              <p>Use your preferred rules engine and keep the board fully controlled.</p>
+            </div>
 
-          <div className="feature-grid">
-            <FeatureCard title="Interaction">
-              Drag and click move, right-click arrows, marks, promotion chooser, and keyboard callbacks.
-            </FeatureCard>
-            <FeatureCard title="State Control">
-              Controlled props for legal destinations, highlights, arrows, overlays, and orientation.
-            </FeatureCard>
-            <FeatureCard title="Performance">
-              Lightweight render path, low overhead updates, and animation controls for your use case.
-            </FeatureCard>
-            <FeatureCard title="Styling">
-              Theme and piece customization, custom renderers, and clean integration in any React app.
-            </FeatureCard>
-          </div>
-        </section>
+            <h3 className="integration-heading">chess.js</h3>
+            <CodeBlock language="bash" code="npm i chess.js chessiro-canvas" />
+            <CodeBlock language="tsx" code={CHESS_JS_CODE} />
 
-        <section id="integrations" className="panel reveal delay-7">
-          <div className="section-head">
-            <h2>Engine Integrations</h2>
-            <p>Use your preferred rules engine and keep the board fully controlled.</p>
-          </div>
-
-          <h3 className="integration-heading">chess.js</h3>
-          <CodeBlock language="bash" code="npm i chess.js chessiro-canvas" />
-          <CodeBlock language="tsx" code={CHESS_JS_CODE} />
-
-          <h3 className="integration-heading">chessops</h3>
-          <CodeBlock language="bash" code="npm i chessops chessiro-canvas" />
-          <CodeBlock language="tsx" code={CHESSOPS_CODE} />
-        </section>
-      </main>
+            <h3 className="integration-heading">chessops</h3>
+            <CodeBlock language="bash" code="npm i chessops chessiro-canvas" />
+            <CodeBlock language="tsx" code={CHESSOPS_CODE} />
+          </section>
+        </main>
+      </div>
     </div>
   );
 }
@@ -478,14 +540,5 @@ function CodeBlock({ code, language }: { code: string; language: string }) {
         <code>{code}</code>
       </pre>
     </div>
-  );
-}
-
-function FeatureCard({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <article className="feature-card">
-      <h3>{title}</h3>
-      <p>{children}</p>
-    </article>
   );
 }

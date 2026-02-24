@@ -1,5 +1,5 @@
 import { memo, useEffect, useState } from 'react';
-import type { TextOverlay, Orientation } from '../types';
+import type { TextOverlay, Orientation, OverlayVisuals } from '../types';
 import { square2pos, pos2translate } from '../utils/coords';
 import type { Square } from '../types';
 
@@ -9,6 +9,7 @@ interface OverlaysProps {
   boardWidth: number;
   boardHeight: number;
   renderer?: (overlay: TextOverlay) => React.ReactNode;
+  visuals?: Partial<OverlayVisuals>;
 }
 
 export const OverlaysLayer = memo(function OverlaysLayer({
@@ -17,6 +18,7 @@ export const OverlaysLayer = memo(function OverlaysLayer({
   boardWidth,
   boardHeight,
   renderer,
+  visuals,
 }: OverlaysProps) {
   if (overlays.length === 0) return null;
 
@@ -32,6 +34,7 @@ export const OverlaysLayer = memo(function OverlaysLayer({
           boardWidth={boardWidth}
           boardHeight={boardHeight}
           renderer={renderer}
+          visuals={visuals}
         />
       ))}
     </div>
@@ -44,12 +47,14 @@ const OverlayItem = memo(function OverlayItem({
   boardWidth,
   boardHeight,
   renderer,
+  visuals,
 }: {
   overlay: TextOverlay;
   asWhite: boolean;
   boardWidth: number;
   boardHeight: number;
   renderer?: (overlay: TextOverlay) => React.ReactNode;
+  visuals?: Partial<OverlayVisuals>;
 }) {
   const [visible, setVisible] = useState(true);
 
@@ -103,12 +108,12 @@ const OverlayItem = memo(function OverlayItem({
     <div className={overlay.className} style={style}>
       <span
         style={{
-          background: 'rgba(0,0,0,0.75)',
-          color: '#fff',
-          padding: '2px 8px',
-          borderRadius: '4px',
-          fontSize: '12px',
-          fontWeight: 500,
+          background: visuals?.background || 'rgba(0,0,0,0.75)',
+          color: visuals?.color || '#fff',
+          padding: visuals?.padding || '2px 8px',
+          borderRadius: visuals?.borderRadius || '4px',
+          fontSize: visuals?.fontSize || '12px',
+          fontWeight: visuals?.fontWeight || 500,
           whiteSpace: 'nowrap',
         }}
       >

@@ -95,6 +95,50 @@ export interface SquareVisuals {
   checkGradient?: string;
 }
 
+export interface ArrowVisuals {
+  lineWidth?: number;
+  opacity?: number;
+  margin?: number;
+  markerWidth?: number;
+  markerHeight?: number;
+  markerRefX?: number;
+  markerRefY?: number;
+}
+
+export interface NotationVisuals {
+  fontFamily?: string;
+  fontSize?: string;
+  fontWeight?: number | string;
+  color?: string;
+  opacity?: number;
+  onBoardFontSize?: string;
+  onBoardLeftOffset?: string;
+  onBoardBottomOffset?: string;
+}
+
+export interface PromotionVisuals {
+  backdropColor?: string;
+  panelColor?: string;
+  panelBorderColor?: string;
+  panelShadow?: string;
+  panelRadius?: string;
+  titleColor?: string;
+  optionBackground?: string;
+  optionBorderColor?: string;
+  optionTextColor?: string;
+  optionRadius?: string;
+  cancelTextColor?: string;
+}
+
+export interface OverlayVisuals {
+  background?: string;
+  color?: string;
+  borderRadius?: string;
+  fontSize?: string;
+  fontWeight?: number | string;
+  padding?: string;
+}
+
 // ── Piece Set ──────────────────────────────────────────────────────
 
 export interface PieceSet {
@@ -219,6 +263,10 @@ export interface ChessiroCanvasProps {
   showNotation?: boolean;
   highlightedSquares?: Record<string, string>; // square → color
   squareVisuals?: Partial<SquareVisuals>;
+  arrowVisuals?: Partial<ArrowVisuals>;
+  notationVisuals?: Partial<NotationVisuals>;
+  promotionVisuals?: Partial<PromotionVisuals>;
+  overlayVisuals?: Partial<OverlayVisuals>;
   check?: string | null; // square of the king in check (e.g. 'e1')
   moveQualityBadge?: MoveQualityBadge | null;
 

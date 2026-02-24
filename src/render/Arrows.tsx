@@ -1,11 +1,12 @@
 import { memo, useMemo } from 'react';
-import type { Arrow, Orientation } from '../types';
+import type { Arrow, Orientation, ArrowVisuals } from '../types';
 
 interface ArrowsProps {
   arrows: Arrow[];
   orientation: Orientation;
   boardWidth: number;
   boardHeight: number;
+  visuals?: Partial<ArrowVisuals>;
 }
 
 // Chessground-style normalized coordinate system:
@@ -37,8 +38,17 @@ export const ArrowsLayer = memo(function ArrowsLayer({
   orientation,
   boardWidth,
   boardHeight,
+  visuals = {},
 }: ArrowsProps) {
   const asWhite = orientation === 'white';
+
+  const lineWidth = visuals.lineWidth ?? 10 / 64;
+  const margin = visuals.margin ?? 10 / 64;
+  const lineOpacity = visuals.opacity ?? 0.9;
+  const markerWidth = visuals.markerWidth ?? 4;
+  const markerHeight = visuals.markerHeight ?? 4;
+  const markerRefX = visuals.markerRefX ?? 2.05;
+  const markerRefY = visuals.markerRefY ?? 2;
 
   const markerColors = useMemo(() => {
     const set = new Set<string>();
@@ -47,11 +57,6 @@ export const ArrowsLayer = memo(function ArrowsLayer({
   }, [arrows]);
 
   if (arrows.length === 0 || boardWidth === 0) return null;
-
-  // Line width in normalized coordinates (chessground: (lineWidth || 10) / 64)
-  const lineW = 10 / 64;
-  // Arrow margin: shorten line by this amount so arrowhead sits at square center
-  const margin = 10 / 64;
 
   return (
     <svg
@@ -74,10 +79,10 @@ export const ArrowsLayer = memo(function ArrowsLayer({
             id={markerKey(color)}
             orient="auto"
             overflow="visible"
-            markerWidth={4}
-            markerHeight={4}
-            refX={2.05}
-            refY={2}
+            markerWidth={markerWidth}
+            markerHeight={markerHeight}
+            refX={markerRefX}
+            refY={markerRefY}
           >
             <path d="M0,0 V4 L3,2 Z" fill={color} />
           </marker>
@@ -109,10 +114,10 @@ export const ArrowsLayer = memo(function ArrowsLayer({
             x2={endX}
             y2={endY}
             stroke={arrow.color}
-            strokeWidth={lineW}
+            strokeWidth={lineWidth}
             strokeLinecap="round"
             markerEnd={`url(#${markerKey(arrow.color)})`}
-            opacity={0.9}
+            opacity={lineOpacity}
           />
         );
       })}

@@ -83,6 +83,39 @@ Use `squareVisuals` to customize legal dots, capture rings, premove hints, marks
 />
 ```
 
+### Customize Other UI Layers
+
+```tsx
+<ChessiroCanvas
+  position={fen}
+  arrowVisuals={{
+    lineWidth: 0.2,
+    opacity: 1,
+    markerWidth: 5,
+    markerHeight: 5,
+  }}
+  notationVisuals={{
+    fontFamily: 'JetBrains Mono, monospace',
+    fontSize: '11px',
+    onBoardFontSize: '11px',
+    opacity: 0.95,
+  }}
+  promotionVisuals={{
+    panelColor: 'rgba(20, 24, 36, 0.98)',
+    titleColor: '#f2f6ff',
+    optionBackground: 'rgba(255, 255, 255, 0.08)',
+    optionTextColor: '#f2f6ff',
+    cancelTextColor: '#cbd5e1',
+  }}
+  overlayVisuals={{
+    background: 'rgba(2, 6, 23, 0.85)',
+    color: '#f8fafc',
+    borderRadius: '6px',
+    fontSize: '11px',
+  }}
+/>
+```
+
 ## Integration With `chess.js`
 
 ```bash
@@ -207,6 +240,7 @@ export function ChessopsBoard() {
 | `markedSquares` | `string[]` | internal | Controlled marks |
 | `onMarkedSquaresChange` | `(squares) => void` | `undefined` | Mark updates |
 | `arrowBrushes` | `Partial<ArrowBrushes>` | default set | Override arrow colors |
+| `arrowVisuals` | `Partial<ArrowVisuals>` | `undefined` | Customize arrow width, opacity, marker size, and arrow margin |
 | `snapArrowsToValidMoves` | `boolean` | `true` | Queen/knight snap behavior |
 | `theme` | `BoardTheme` | built-in theme | Board colors |
 | `pieceSet` | `PieceSet` | bundled Chessiro pieces | Optional custom piece asset path config |
@@ -214,6 +248,7 @@ export function ChessopsBoard() {
 | `showMargin` | `boolean` | `true` | Margin frame for notation |
 | `marginThickness` | `number` | `24` | Margin px |
 | `showNotation` | `boolean` | `true` | Coordinate labels |
+| `notationVisuals` | `Partial<NotationVisuals>` | `undefined` | Customize notation font family, size, weight, color, and offsets |
 | `highlightedSquares` | `Record<string, string>` | `{}` | Arbitrary square background colors |
 | `squareVisuals` | `Partial<SquareVisuals>` | `undefined` | Customize legal/premove indicators, marks, selected outline, and check overlay |
 | `moveQualityBadge` | `MoveQualityBadge \| null` | `undefined` | Badge icon on square |
@@ -224,8 +259,10 @@ export function ChessopsBoard() {
 | `blockTouchScroll` | `boolean` | `false` | Prevent scrolling on touch interaction |
 | `overlays` | `TextOverlay[]` | `[]` | Text overlays |
 | `overlayRenderer` | `(overlay) => ReactNode` | `undefined` | Custom overlay renderer |
+| `overlayVisuals` | `Partial<OverlayVisuals>` | `undefined` | Customize default overlay bubble style (when `overlayRenderer` is not provided) |
 | `onSquareClick` | `(square) => void` | `undefined` | Square click callback |
 | `onClearOverlays` | `() => void` | `undefined` | Called when board clears current ply overlays |
+| `promotionVisuals` | `Partial<PromotionVisuals>` | `undefined` | Customize promotion dialog backdrop, panel, option buttons, and text colors |
 | `onPrevious` `onNext` `onFirst` `onLast` `onFlipBoard` `onShowThreat` `onDeselect` | callbacks | `undefined` | Keyboard callback hooks |
 | `className` | `string` | `undefined` | Wrapper class |
 | `style` | `CSSProperties` | `undefined` | Wrapper style |

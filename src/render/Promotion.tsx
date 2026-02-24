@@ -1,5 +1,5 @@
 import { memo, useCallback } from 'react';
-import type { PromotionContext, PromotionPiece, PieceSet } from '../types';
+import type { PromotionContext, PromotionPiece, PieceSet, PromotionVisuals } from '../types';
 import { CachedPieceImg } from '../hooks/usePieceCache';
 import { resolvePieceImageSrc } from '../defaultPieces';
 
@@ -14,6 +14,7 @@ const PROMO_LABELS: Record<PromotionPiece, string> = {
 interface PromotionDialogProps {
   promotion: PromotionContext;
   pieceSet?: PieceSet;
+  visuals?: Partial<PromotionVisuals>;
   onSelect: (piece: PromotionPiece) => void;
   onDismiss: () => void;
 }
@@ -21,10 +22,13 @@ interface PromotionDialogProps {
 export const PromotionDialog = memo(function PromotionDialog({
   promotion,
   pieceSet,
+  visuals = {},
   onSelect,
   onDismiss,
 }: PromotionDialogProps) {
   const piecePath = pieceSet?.path;
+  const panelRadius = visuals.panelRadius || '10px';
+  const optionRadius = visuals.optionRadius || '8px';
 
   const renderPiece = useCallback(
     (color: 'w' | 'b', piece: PromotionPiece) => {
@@ -40,7 +44,7 @@ export const PromotionDialog = memo(function PromotionDialog({
       style={{
         position: 'absolute',
         inset: 0,
-        backgroundColor: 'rgba(17, 24, 39, 0.45)',
+        backgroundColor: visuals.backdropColor || 'rgba(17, 24, 39, 0.45)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -53,18 +57,18 @@ export const PromotionDialog = memo(function PromotionDialog({
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
-          backgroundColor: 'rgba(248, 244, 236, 0.98)',
-          borderRadius: '10px',
+          backgroundColor: visuals.panelColor || 'rgba(248, 244, 236, 0.98)',
+          borderRadius: panelRadius,
           padding: '16px 18px',
           display: 'flex',
           flexDirection: 'column',
           gap: '12px',
           minWidth: '220px',
-          boxShadow: '0 18px 40px rgba(0, 0, 0, 0.25)',
-          border: '1px solid rgba(139, 107, 74, 0.25)',
+          boxShadow: visuals.panelShadow || '0 18px 40px rgba(0, 0, 0, 0.25)',
+          border: `1px solid ${visuals.panelBorderColor || 'rgba(139, 107, 74, 0.25)'}`,
         }}
       >
-        <span style={{ fontSize: '0.95rem', fontWeight: 400, color: '#3B2F23' }}>
+        <span style={{ fontSize: '0.95rem', fontWeight: 400, color: visuals.titleColor || '#3B2F23' }}>
           Select promotion piece
         </span>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
@@ -80,16 +84,16 @@ export const PromotionDialog = memo(function PromotionDialog({
                 justifyContent: 'center',
                 gap: '6px',
                 padding: '10px 12px',
-                border: '1px solid rgba(139, 107, 74, 0.25)',
-                borderRadius: '8px',
-                backgroundColor: 'rgba(255, 255, 255, 0.85)',
+                border: `1px solid ${visuals.optionBorderColor || 'rgba(139, 107, 74, 0.25)'}`,
+                borderRadius: optionRadius,
+                backgroundColor: visuals.optionBackground || 'rgba(255, 255, 255, 0.85)',
                 cursor: 'pointer',
               }}
             >
               <div style={{ width: '42px', height: '42px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 {renderPiece(promotion.color, piece)}
               </div>
-              <span style={{ fontSize: '0.85rem', fontWeight: 400, color: '#4B3621' }}>
+              <span style={{ fontSize: '0.85rem', fontWeight: 400, color: visuals.optionTextColor || '#4B3621' }}>
                 {PROMO_LABELS[piece]}
               </span>
             </button>
@@ -103,7 +107,7 @@ export const PromotionDialog = memo(function PromotionDialog({
             padding: '6px 12px',
             backgroundColor: 'transparent',
             border: 'none',
-            color: 'rgba(107, 83, 59, 0.9)',
+            color: visuals.cancelTextColor || 'rgba(107, 83, 59, 0.9)',
             cursor: 'pointer',
             fontSize: '0.85rem',
             textDecoration: 'underline',

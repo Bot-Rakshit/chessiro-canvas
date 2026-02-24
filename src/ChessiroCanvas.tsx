@@ -53,6 +53,10 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
       showNotation = true,
       highlightedSquares = {},
       squareVisuals,
+      arrowVisuals,
+      notationVisuals,
+      promotionVisuals,
+      overlayVisuals,
       check,
       moveQualityBadge,
       allowDragging = true,
@@ -246,6 +250,7 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
                 orientation={orientation}
                 boardWidth={boardWidth}
                 boardHeight={boardHeight}
+                visuals={arrowVisuals}
               />
 
               {moveQualityBadge && (
@@ -262,6 +267,7 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
                   theme={theme}
                   showOnMargin={showMargin}
                   marginThickness={marginThickness}
+                  visuals={notationVisuals}
                 />
               )}
 
@@ -272,6 +278,7 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
                   boardWidth={boardWidth}
                   boardHeight={boardHeight}
                   renderer={overlayRenderer}
+                  visuals={overlayVisuals}
                 />
               )}
 
@@ -279,6 +286,7 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
                 <PromotionDialog
                   promotion={interaction.pendingPromotion}
                   pieceSet={pieceSet}
+                  visuals={promotionVisuals}
                   onSelect={interaction.handlePromotionSelect}
                   onDismiss={interaction.handlePromotionDismiss}
                 />
