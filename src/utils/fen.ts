@@ -6,6 +6,7 @@ const ROLE_MAP: Record<string, PieceRole> = {
 };
 
 export const INITIAL_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR';
+export const INITIAL_GAME_FEN = `${INITIAL_FEN} w KQkq - 0 1`;
 
 export function readFen(fen: string): Pieces {
   const pieces: Pieces = new Map();

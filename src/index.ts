@@ -1,5 +1,5 @@
 export { ChessiroCanvas } from './ChessiroCanvas';
-export { readFen, writeFen, INITIAL_FEN } from './utils/fen';
+export { readFen, writeFen, INITIAL_FEN, INITIAL_GAME_FEN } from './utils/fen';
 export { preloadPieceSet } from './hooks/usePieceCache';
 export { premoveDests } from './utils/premove';
 

@@ -79,11 +79,11 @@ import { Chess } from 'chessops/chess';
 import { chessgroundDests } from 'chessops/compat';
 import { parseFen, makeFen } from 'chessops/fen';
 import { parseUci } from 'chessops/util';
-import { ChessiroCanvas, INITIAL_FEN } from 'chessiro-canvas';
+import { ChessiroCanvas, INITIAL_GAME_FEN } from 'chessiro-canvas';
 
 export function LegalBoard() {
   const [pos, setPos] = useState(() =>
-    Chess.fromSetup(parseFen(INITIAL_FEN).unwrap()).unwrap()
+    Chess.fromSetup(parseFen(INITIAL_GAME_FEN).unwrap()).unwrap()
   );
   const fen = useMemo(() => makeFen(pos.toSetup()), [pos]);
   const dests = useMemo(() => chessgroundDests(pos), [pos]);
@@ -123,7 +123,7 @@ Return only code (no explanation).`,
 
 Requirements:
 - Use npm install command: npm i chessops chessiro-canvas
-- Initialize chessops position from INITIAL_FEN
+- Initialize chessops position from INITIAL_GAME_FEN
 - Compute FEN using makeFen(pos.toSetup())
 - Compute legal destinations with chessgroundDests(pos)
 - In onMove: parse UCI, validate with pos.isLegal(move), then clone/play/update state
@@ -208,11 +208,11 @@ import { Chess } from 'chessops/chess';
 import { chessgroundDests } from 'chessops/compat';
 import { parseFen, makeFen } from 'chessops/fen';
 import { parseUci } from 'chessops/util';
-import { ChessiroCanvas, INITIAL_FEN } from 'chessiro-canvas';
+import { ChessiroCanvas, INITIAL_GAME_FEN } from 'chessiro-canvas';
 
 export function ChessopsBoard() {
   const [pos, setPos] = useState(() =>
-    Chess.fromSetup(parseFen(INITIAL_FEN).unwrap()).unwrap()
+    Chess.fromSetup(parseFen(INITIAL_GAME_FEN).unwrap()).unwrap()
   );
   const fen = useMemo(() => makeFen(pos.toSetup()), [pos]);
   const dests = useMemo(() => chessgroundDests(pos), [pos]);
