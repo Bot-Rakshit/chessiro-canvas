@@ -42,7 +42,7 @@ pre {
 
 .docs-root {
   position: relative;
-  overflow: hidden;
+  overflow: visible;
   width: min(1300px, 100% - 28px);
   margin: 16px auto 36px;
 }
@@ -89,6 +89,7 @@ pre {
 .docs-sidebar {
   position: sticky;
   top: 14px;
+  align-self: start;
   height: fit-content;
   display: grid;
   gap: 18px;

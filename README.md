@@ -365,15 +365,15 @@ Method:
 - Metrics: mount wall time, update wall time, React Profiler update duration, bundle gzip
 - Harness: `scripts/benchmark.mjs`
 
-Results (generated on 2026-02-23 UTC):
+Results (generated on 2026-02-24 UTC):
 
 | Metric | chessiro-canvas | react-chessboard | Delta |
 | --- | ---: | ---: | ---: |
-| Mount wall time (mean) | 8.11 ms | 76.76 ms | 89.4% faster |
-| Update wall time (mean, 300 renders) | 652.34 ms | 2938.67 ms | 77.8% faster |
-| Update wall per render (mean) | 2.17 ms | 9.80 ms | 77.8% faster |
-| React Profiler update duration (mean) | 0.56 ms | 6.33 ms | 91.1% faster |
-| Bundle ESM gzip | 14.78 KB | 37.38 KB | 60.5% smaller |
+| Mount wall time (mean) | 3.13 ms | 14.23 ms | 78.0% faster |
+| Update wall time (mean, 300 renders) | 277.42 ms | 733.11 ms | 62.2% faster |
+| Update wall per render (mean) | 0.92 ms | 2.44 ms | 62.2% faster |
+| React Profiler update duration (mean) | 0.22 ms | 1.33 ms | 83.4% faster |
+| Bundle ESM gzip | 31.41 KB | 37.38 KB | 16.0% smaller |
 
 Notes:
 
