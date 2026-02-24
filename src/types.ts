@@ -82,6 +82,19 @@ export interface BoardTheme {
   selectedPiece?: string;
 }
 
+export interface SquareVisuals {
+  markOverlay?: string;
+  markOutline?: string;
+  selectedOutline?: string;
+  legalDot?: string;
+  legalDotOutline?: string;
+  legalCaptureRing?: string;
+  premoveDot?: string;
+  premoveCaptureRing?: string;
+  premoveCurrent?: string;
+  checkGradient?: string;
+}
+
 // ── Piece Set ──────────────────────────────────────────────────────
 
 export interface PieceSet {
@@ -205,6 +218,7 @@ export interface ChessiroCanvasProps {
   marginThickness?: number;
   showNotation?: boolean;
   highlightedSquares?: Record<string, string>; // square → color
+  squareVisuals?: Partial<SquareVisuals>;
   check?: string | null; // square of the king in check (e.g. 'e1')
   moveQualityBadge?: MoveQualityBadge | null;
 

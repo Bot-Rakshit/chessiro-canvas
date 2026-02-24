@@ -62,6 +62,27 @@ Use `pieceSet.path` only when you want to override with your own hosted piece se
 
 If pieces appear as broken images, upgrade to the latest package version.
 
+### Customize Legal Move UI
+
+Use `squareVisuals` to customize legal dots, capture rings, premove hints, marks, and check overlay.
+
+```tsx
+<ChessiroCanvas
+  position={fen}
+  dests={dests}
+  squareVisuals={{
+    legalDot: 'rgba(30, 144, 255, 0.55)',
+    legalDotOutline: 'rgba(255, 255, 255, 0.95)',
+    legalCaptureRing: 'rgba(30, 144, 255, 0.8)',
+    premoveDot: 'rgba(155, 89, 182, 0.55)',
+    premoveCaptureRing: 'rgba(155, 89, 182, 0.75)',
+    selectedOutline: 'rgba(255, 255, 255, 1)',
+    markOverlay: 'rgba(244, 67, 54, 0.6)',
+    markOutline: 'rgba(244, 67, 54, 0.9)',
+  }}
+/>
+```
+
 ## Integration With `chess.js`
 
 ```bash
@@ -194,6 +215,7 @@ export function ChessopsBoard() {
 | `marginThickness` | `number` | `24` | Margin px |
 | `showNotation` | `boolean` | `true` | Coordinate labels |
 | `highlightedSquares` | `Record<string, string>` | `{}` | Arbitrary square background colors |
+| `squareVisuals` | `Partial<SquareVisuals>` | `undefined` | Customize legal/premove indicators, marks, selected outline, and check overlay |
 | `moveQualityBadge` | `MoveQualityBadge \| null` | `undefined` | Badge icon on square |
 | `allowDragging` | `boolean` | `true` | Drag interaction toggle |
 | `allowDrawingArrows` | `boolean` | `true` | Right-click arrows/marks toggle |

@@ -1,5 +1,5 @@
 import { memo, useMemo } from 'react';
-import type { Orientation, BoardTheme, Square } from '../types';
+import type { Orientation, BoardTheme, Square, SquareVisuals } from '../types';
 import { FILES, RANKS } from '../types';
 import { hexToRgba } from '../utils/colors';
 
@@ -14,19 +14,24 @@ interface SquaresProps {
   occupiedSquares?: Set<string>;
   markedSquares?: Record<string, boolean>;
   highlightedSquares?: Record<string, string>;
+  squareVisuals?: Partial<SquareVisuals>;
   check?: string | null;
   lastMoveColor?: string;
 }
 
-const MARK_OVERLAY = 'rgba(235, 64, 52, 0.65)';
-const MARK_OUTLINE = 'rgba(235, 64, 52, 0.9)';
-const SELECTED_OUTLINE = 'rgba(255, 255, 255, 0.95)';
-const LEGAL_DOT_BG = 'rgba(80, 37, 19, 0.65)';
-const LEGAL_DOT_BORDER = 'rgba(255, 255, 255, 0.9)';
-const LEGAL_CAPTURE = 'rgba(80, 37, 19, 0.8)';
-const PREMOVE_DOT = 'rgba(20, 85, 30, 0.5)';
-const PREMOVE_CAPTURE = 'rgba(20, 85, 30, 0.6)';
-const PREMOVE_HIGHLIGHT = 'rgba(20, 30, 85, 0.4)';
+const DEFAULT_SQUARE_VISUALS: Required<SquareVisuals> = {
+  markOverlay: 'rgba(235, 64, 52, 0.65)',
+  markOutline: 'rgba(235, 64, 52, 0.9)',
+  selectedOutline: 'rgba(255, 255, 255, 0.95)',
+  legalDot: 'rgba(80, 37, 19, 0.65)',
+  legalDotOutline: 'rgba(255, 255, 255, 0.9)',
+  legalCaptureRing: 'rgba(80, 37, 19, 0.8)',
+  premoveDot: 'rgba(20, 85, 30, 0.5)',
+  premoveCaptureRing: 'rgba(20, 85, 30, 0.6)',
+  premoveCurrent: 'rgba(20, 30, 85, 0.4)',
+  checkGradient:
+    'radial-gradient(ellipse at center, rgba(255, 0, 0, 1) 0%, rgba(231, 0, 0, 1) 25%, rgba(169, 0, 0, 0) 89%, rgba(158, 0, 0, 0) 100%)',
+};
 
 export const Squares = memo(function Squares({
   theme,
@@ -39,9 +44,12 @@ export const Squares = memo(function Squares({
   premoveCurrent,
   markedSquares = {},
   highlightedSquares = {},
+  squareVisuals = {},
   check,
   lastMoveColor,
 }: SquaresProps) {
+  const visuals = { ...DEFAULT_SQUARE_VISUALS, ...squareVisuals };
+
   const highlightColor = lastMoveColor
     || hexToRgba(theme.lastMoveHighlight || '#DFAA4E', 0.5)
     || 'rgba(223, 170, 78, 0.5)';
@@ -118,44 +126,44 @@ export const Squares = memo(function Squares({
 
         // Check highlight (radial red glow, like lichess/chessground)
         if (isCheck) {
-          backgroundImage = 'radial-gradient(ellipse at center, rgba(255, 0, 0, 1) 0%, rgba(231, 0, 0, 1) 25%, rgba(169, 0, 0, 0) 89%, rgba(158, 0, 0, 0) 100%)';
+          backgroundImage = visuals.checkGradient;
         }
 
         // Marked squares (right-click)
         if (isMarked) {
-          bg = MARK_OVERLAY;
-          outline = `2px solid ${MARK_OUTLINE}`;
+          bg = visuals.markOverlay;
+          outline = `2px solid ${visuals.markOutline}`;
           outlineOffset = '-2px';
         }
 
         // Selected square
         if (isSelected) {
           bg = selectedColor;
-          boxShadow = `inset 0 0 0 4px ${SELECTED_OUTLINE}`;
+          boxShadow = `inset 0 0 0 4px ${visuals.selectedOutline}`;
         }
 
         // Current premove highlight
         if (isPremoveCurrent) {
-          bg = PREMOVE_HIGHLIGHT;
+          bg = visuals.premoveCurrent;
         }
 
         // Legal move indicators
         if (isLegal) {
           if (isOccupied) {
-            boxShadow = `inset 0 0 0 5px ${LEGAL_CAPTURE}`;
+            boxShadow = `inset 0 0 0 5px ${visuals.legalCaptureRing}`;
             borderRadius = '50%';
           } else {
-            backgroundImage = `radial-gradient(circle at center, ${LEGAL_DOT_BG} 0%, ${LEGAL_DOT_BG} 10%, ${LEGAL_DOT_BORDER} 10%, ${LEGAL_DOT_BORDER} 14%, transparent 14%)`;
+            backgroundImage = `radial-gradient(circle at center, ${visuals.legalDot} 0%, ${visuals.legalDot} 10%, ${visuals.legalDotOutline} 10%, ${visuals.legalDotOutline} 14%, transparent 14%)`;
           }
         }
 
         // Premove destination indicators (similar to legal dots but different color)
         if (isPremoveDest && !isLegal) {
           if (isOccupied) {
-            boxShadow = `inset 0 0 0 5px ${PREMOVE_CAPTURE}`;
+            boxShadow = `inset 0 0 0 5px ${visuals.premoveCaptureRing}`;
             borderRadius = '50%';
           } else {
-            backgroundImage = `radial-gradient(circle at center, ${PREMOVE_DOT} 0%, ${PREMOVE_DOT} 10%, ${PREMOVE_DOT} 14%, transparent 14%)`;
+            backgroundImage = `radial-gradient(circle at center, ${visuals.premoveDot} 0%, ${visuals.premoveDot} 10%, ${visuals.premoveDot} 14%, transparent 14%)`;
           }
         }
 

@@ -52,6 +52,7 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
       marginThickness = 24,
       showNotation = true,
       highlightedSquares = {},
+      squareVisuals,
       check,
       moveQualityBadge,
       allowDragging = true,
@@ -224,6 +225,7 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
                 occupiedSquares={occupiedSquares}
                 markedSquares={interaction.activeMarkedSquares}
                 highlightedSquares={highlightedSquares}
+                squareVisuals={squareVisuals}
                 check={check}
               />
 

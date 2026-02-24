@@ -63,6 +63,21 @@ const CUSTOM_PIECES_CODE = `<ChessiroCanvas
   }}
 />`;
 
+const SQUARE_VISUALS_CODE = `<ChessiroCanvas
+  position={fen}
+  dests={dests}
+  squareVisuals={{
+    legalDot: 'rgba(30, 144, 255, 0.55)',
+    legalDotOutline: 'rgba(255, 255, 255, 0.95)',
+    legalCaptureRing: 'rgba(30, 144, 255, 0.8)',
+    premoveDot: 'rgba(155, 89, 182, 0.55)',
+    premoveCaptureRing: 'rgba(155, 89, 182, 0.75)',
+    selectedOutline: 'rgba(255, 255, 255, 1)',
+    markOverlay: 'rgba(244, 67, 54, 0.6)',
+    markOutline: 'rgba(244, 67, 54, 0.9)',
+  }}
+/>`;
+
 const CHESS_JS_CODE = `import { useMemo, useState } from 'react';
 import { Chess } from 'chess.js';
 import { ChessiroCanvas, type Dests, type Square } from 'chessiro-canvas';
@@ -134,6 +149,59 @@ export function ChessopsBoard() {
   );
 }`;
 
+type PropRow = {
+  prop: string;
+  type: string;
+  defaultValue: string;
+  notes: string;
+};
+
+const PROPS: PropRow[] = [
+  { prop: 'position', type: 'string', defaultValue: 'INITIAL_FEN', notes: 'FEN string (piece placement or full FEN).' },
+  { prop: 'orientation', type: "'white' | 'black'", defaultValue: "'white'", notes: 'Board orientation.' },
+  { prop: 'interactive', type: 'boolean', defaultValue: 'true', notes: 'Disables move interactions when false.' },
+  { prop: 'turnColor', type: "'w' | 'b'", defaultValue: 'undefined', notes: 'Current side to move (for turn-aware behavior).' },
+  { prop: 'movableColor', type: "'w' | 'b' | 'both'", defaultValue: 'undefined', notes: 'Restricts which side is movable.' },
+  { prop: 'onMove', type: '(from, to, promotion?) => boolean', defaultValue: 'undefined', notes: 'Return true to accept a move.' },
+  { prop: 'dests', type: 'Map<Square, Square[]>', defaultValue: 'undefined', notes: 'Legal destinations for move hints and validation.' },
+  { prop: 'lastMove', type: '{ from; to } | null', defaultValue: 'undefined', notes: 'Last move highlight.' },
+  { prop: 'check', type: 'string | null', defaultValue: 'undefined', notes: 'Square to highlight as king in check.' },
+  { prop: 'premovable', type: 'PremoveConfig', defaultValue: 'undefined', notes: 'Enable/store premoves and callbacks.' },
+  { prop: 'arrows', type: 'Arrow[]', defaultValue: '[]', notes: 'Controlled arrow list.' },
+  { prop: 'onArrowsChange', type: '(arrows) => void', defaultValue: 'undefined', notes: 'Arrow update callback.' },
+  { prop: 'markedSquares', type: 'string[]', defaultValue: 'internal', notes: 'Controlled right-click marks.' },
+  { prop: 'onMarkedSquaresChange', type: '(squares) => void', defaultValue: 'undefined', notes: 'Mark update callback.' },
+  { prop: 'plyIndex', type: 'number', defaultValue: 'undefined', notes: 'Optional ply index for per-ply overlays.' },
+  { prop: 'plyArrows', type: 'Map<number, Arrow[]>', defaultValue: 'undefined', notes: 'Controlled per-ply arrows.' },
+  { prop: 'onPlyArrowsChange', type: '(ply, arrows) => void', defaultValue: 'undefined', notes: 'Per-ply arrow update callback.' },
+  { prop: 'plyMarks', type: 'Map<number, string[]>', defaultValue: 'undefined', notes: 'Controlled per-ply marks.' },
+  { prop: 'onPlyMarksChange', type: '(ply, marks) => void', defaultValue: 'undefined', notes: 'Per-ply mark update callback.' },
+  { prop: 'arrowBrushes', type: 'Partial<ArrowBrushes>', defaultValue: 'default set', notes: 'Brush color overrides.' },
+  { prop: 'snapArrowsToValidMoves', type: 'boolean', defaultValue: 'true', notes: 'Snap arrows to queen/knight vectors.' },
+  { prop: 'theme', type: 'BoardTheme', defaultValue: 'built-in', notes: 'Board palette and highlight colors.' },
+  { prop: 'pieceSet', type: 'PieceSet', defaultValue: 'embedded Chessiro', notes: 'Hosted piece set path override.' },
+  { prop: 'pieces', type: 'Record<string, () => ReactNode>', defaultValue: 'undefined', notes: 'Custom piece renderer map.' },
+  { prop: 'squareVisuals', type: 'Partial<SquareVisuals>', defaultValue: 'undefined', notes: 'Customize legal/premove dots, rings, marks, check overlay.' },
+  { prop: 'showMargin', type: 'boolean', defaultValue: 'true', notes: 'Show outer board margin frame.' },
+  { prop: 'marginThickness', type: 'number', defaultValue: '24', notes: 'Margin thickness in pixels.' },
+  { prop: 'showNotation', type: 'boolean', defaultValue: 'true', notes: 'Show file/rank labels.' },
+  { prop: 'highlightedSquares', type: 'Record<string, string>', defaultValue: '{}', notes: 'Custom square background colors.' },
+  { prop: 'moveQualityBadge', type: 'MoveQualityBadge | null', defaultValue: 'undefined', notes: 'Badge icon/label on a square.' },
+  { prop: 'allowDragging', type: 'boolean', defaultValue: 'true', notes: 'Enable drag interaction.' },
+  { prop: 'allowDrawingArrows', type: 'boolean', defaultValue: 'true', notes: 'Enable right-click arrows/marks.' },
+  { prop: 'showAnimations', type: 'boolean', defaultValue: 'true', notes: 'Toggle piece animations.' },
+  { prop: 'animationDurationMs', type: 'number', defaultValue: '200', notes: 'Animation duration in ms.' },
+  { prop: 'blockTouchScroll', type: 'boolean', defaultValue: 'false', notes: 'Prevent page scroll during touch interaction.' },
+  { prop: 'overlays', type: 'TextOverlay[]', defaultValue: '[]', notes: 'Custom text overlays.' },
+  { prop: 'overlayRenderer', type: '(overlay) => ReactNode', defaultValue: 'undefined', notes: 'Render overlays with your own component.' },
+  { prop: 'onSquareClick', type: '(square) => void', defaultValue: 'undefined', notes: 'Square click callback.' },
+  { prop: 'onClearOverlays', type: '() => void', defaultValue: 'undefined', notes: 'Called when overlays are cleared for current ply.' },
+  { prop: 'onPrevious / onNext / onFirst / onLast', type: '() => void', defaultValue: 'undefined', notes: 'Keyboard navigation callbacks.' },
+  { prop: 'onFlipBoard / onShowThreat / onDeselect', type: '() => void', defaultValue: 'undefined', notes: 'Additional keyboard callback hooks.' },
+  { prop: 'className', type: 'string', defaultValue: 'undefined', notes: 'Wrapper class name.' },
+  { prop: 'style', type: 'CSSProperties', defaultValue: 'undefined', notes: 'Wrapper inline style.' },
+];
+
 export function App() {
   const [fen, setFen] = useState(STARTING_FEN);
   const [lastMove, setLastMove] = useState<{ from: string; to: string } | null>(null);
@@ -195,6 +263,7 @@ export function App() {
           <a className="btn btn-ghost" href="#quick-start">Quick Start</a>
           <a className="btn btn-ghost" href="#playground">Live Playground</a>
           <a className="btn btn-ghost" href="#integrations">Engine Integrations</a>
+          <a className="btn btn-ghost" href="#props">Props</a>
         </div>
         <div className="stat-strip">
           <span>14.8 KB gzip</span>
@@ -291,6 +360,44 @@ export function App() {
 
         <section className="panel reveal delay-4">
           <div className="section-head">
+            <h2>Customize Legal Move UI</h2>
+            <p>Style legal dots, capture rings, premove hints, marks, and check overlay.</p>
+          </div>
+          <CodeBlock code={SQUARE_VISUALS_CODE} language="tsx" />
+        </section>
+
+        <section id="props" className="panel reveal delay-5">
+          <div className="section-head">
+            <h2>Props Reference</h2>
+            <p>Complete `ChessiroCanvas` prop list for integration and customization.</p>
+          </div>
+
+          <div className="props-table-wrap">
+            <table className="props-table">
+              <thead>
+                <tr>
+                  <th>Prop</th>
+                  <th>Type</th>
+                  <th>Default</th>
+                  <th>Notes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {PROPS.map((row) => (
+                  <tr key={row.prop}>
+                    <td><code>{row.prop}</code></td>
+                    <td><code>{row.type}</code></td>
+                    <td><code>{row.defaultValue}</code></td>
+                    <td>{row.notes}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section className="panel reveal delay-6">
+          <div className="section-head">
             <h2>Core Capabilities</h2>
             <p>What ships out of the box.</p>
           </div>
@@ -311,7 +418,7 @@ export function App() {
           </div>
         </section>
 
-        <section id="integrations" className="panel reveal delay-5">
+        <section id="integrations" className="panel reveal delay-7">
           <div className="section-head">
             <h2>Engine Integrations</h2>
             <p>Use your preferred rules engine and keep the board fully controlled.</p>

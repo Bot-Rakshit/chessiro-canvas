@@ -10,6 +10,7 @@ export type {
   ArrowBrush,
   ArrowBrushes,
   BoardTheme,
+  SquareVisuals,
   PieceSet,
   Orientation,
   PromotionPiece,

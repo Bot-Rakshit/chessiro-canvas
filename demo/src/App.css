@@ -349,6 +349,49 @@ pre {
   letter-spacing: 0.03em;
 }
 
+.props-table-wrap {
+  overflow: auto;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+}
+
+.props-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 860px;
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.props-table th,
+.props-table td {
+  text-align: left;
+  vertical-align: top;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
+.props-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: rgba(7, 14, 27, 0.96);
+  color: #dbe5f5;
+  font-size: 0.8rem;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.props-table td {
+  color: #c9d4e7;
+}
+
+.props-table td code {
+  color: #f4cb95;
+  white-space: nowrap;
+}
+
 .feature-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -398,6 +441,14 @@ pre {
 
 .delay-5 {
   animation-delay: 0.3s;
+}
+
+.delay-6 {
+  animation-delay: 0.36s;
+}
+
+.delay-7 {
+  animation-delay: 0.42s;
 }
 
 @keyframes section-in {
