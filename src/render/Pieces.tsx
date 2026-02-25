@@ -84,8 +84,9 @@ export const PiecesLayer = memo(function PiecesLayer({
       if (currentAnim) {
         const vec = currentAnim.plan.anims.get(sq as Square);
         if (vec) {
-          x += (vec.fromPos[0] - vec.toPos[0]) * ease * sqW;
-          y -= (vec.fromPos[1] - vec.toPos[1]) * ease * sqH;
+          const mult = asWhite ? 1 : -1;
+          x += mult * (vec.fromPos[0] - vec.toPos[0]) * ease * sqW;
+          y -= mult * (vec.fromPos[1] - vec.toPos[1]) * ease * sqH;
           el.style.zIndex = '8';
           el.style.willChange = 'transform';
         } else {
