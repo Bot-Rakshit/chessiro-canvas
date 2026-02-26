@@ -7,12 +7,6 @@ export interface BoardBounds {
   top: number;
 }
 
-// Snap to device pixel grid (from chessground) to prevent subpixel blurriness
-function snapToGrid(value: number): number {
-  const dpr = typeof window !== 'undefined' ? window.devicePixelRatio : 1;
-  return (Math.floor((value * dpr) / 8) * 8) / dpr;
-}
-
 export function useBoardSize(boardRef: React.RefObject<HTMLDivElement | null>) {
   const [bounds, setBounds] = useState<BoardBounds | null>(null);
   const cachedBounds = useRef<BoardBounds | null>(null);
@@ -23,10 +17,9 @@ export function useBoardSize(boardRef: React.RefObject<HTMLDivElement | null>) {
     const rect = el.getBoundingClientRect();
     if (rect.width === 0 || rect.height === 0) return;
 
-    const snapped = snapToGrid(rect.width);
     const newBounds: BoardBounds = {
-      width: snapped,
-      height: snapped,
+      width: rect.width,
+      height: rect.height,
       left: rect.left,
       top: rect.top,
     };

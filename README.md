@@ -19,26 +19,19 @@ npm install chessiro-canvas
 Your container must define width, and board height follows width (square board).
 
 ```tsx
-import { useState } from 'react';
 import { ChessiroCanvas, INITIAL_FEN } from 'chessiro-canvas';
 
 export default function App() {
-  const [fen, setFen] = useState(INITIAL_FEN);
-
   return (
     <div style={{ width: 520 }}>
-      <ChessiroCanvas
-        position={fen}
-        onMove={(from, to) => {
-          // validate + update your game state here
-          // return true to accept move, false to reject
-          return true;
-        }}
-      />
+      <ChessiroCanvas position={INITIAL_FEN} />
     </div>
   );
 }
 ```
+
+`ChessiroCanvas` is a controlled component. For playable boards, your `onMove` must update
+`position` after validating the move (typically via `chess.js` or `chessops`).
 
 ### Piece Rendering (Default + Custom)
 
@@ -147,7 +140,7 @@ export function ChessJsBoard() {
       else map.set(from, [to]);
     }
     return map;
-  }, [chess, fen]);
+  }, [fen]);
 
   return (
     <ChessiroCanvas
@@ -164,6 +157,28 @@ export function ChessJsBoard() {
     />
   );
 }
+```
+
+Important for `chess.js` users:
+- `chess.js` mutates the same `Chess` instance in place.
+- Do not key `useMemo`/`useEffect` off the `chess` object reference for legal moves, check square, turn state, etc.
+- Key derived UI state from `fen` (or move history), because `fen` changes on every accepted move.
+
+Correct dependency pattern:
+
+```tsx
+const [chess] = useState(() => new Chess());
+const [fen, setFen] = useState(() => chess.fen());
+
+const dests = useMemo(() => {
+  const map = new Map();
+  for (const move of chess.moves({ verbose: true })) {
+    const list = map.get(move.from) ?? [];
+    list.push(move.to);
+    map.set(move.from, list);
+  }
+  return map;
+}, [fen]); // <- use fen, not [chess]
 ```
 
 ## Integration With `chessops`
