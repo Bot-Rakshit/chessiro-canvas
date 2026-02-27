@@ -10,6 +10,7 @@ import { getSquareFromEvent, getClientPos, isRightButton } from './pointer';
 import type { DragState } from './pointer';
 
 const DRAG_THRESHOLD = 4;
+const TOUCH_MOUSE_SUPPRESS_MS = 500;
 const EMPTY_SQUARES: string[] = [];
 const EMPTY_ARROWS: Arrow[] = [];
 
@@ -117,6 +118,7 @@ export function useInteraction(opts: UseInteractionOptions): InteractionState {
   const arrowPosRef = useRef<[number, number] | null>(null); // track mouse pos during arrow draw
   const justDrewArrowRef = useRef(false);
   const dragKeyChangedRef = useRef(false);
+  const lastTouchTsRef = useRef(0);
 
   const selectedRef = useRef(selectedSquare);
   const legalRef = useRef(legalSquares);
@@ -459,10 +461,19 @@ export function useInteraction(opts: UseInteractionOptions): InteractionState {
   // ── Pointer down handler ──
 
   const handlePointerDown = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    const nativeEvent = e.nativeEvent;
+    if ('touches' in nativeEvent) {
+      lastTouchTsRef.current = Date.now();
+    } else if (Date.now() - lastTouchTsRef.current < TOUCH_MOUSE_SUPPRESS_MS) {
+      // Mobile browsers can emit a synthetic mouse sequence after touch.
+      // Ignore it to avoid select->immediate-deselect flicker on tap.
+      return;
+    }
+
     if (!boardBounds) return;
     // Promotion chooser is modal: ignore board pointer handling until resolved.
     if (pendingPromotion) return;
-    const sq = getSquareFromEvent(e.nativeEvent, asWhite, boardBounds);
+    const sq = getSquareFromEvent(nativeEvent, asWhite, boardBounds);
     if (!sq) return;
 
     // Right-click: arrow drawing
@@ -470,8 +481,8 @@ export function useInteraction(opts: UseInteractionOptions): InteractionState {
       if (allowDrawingArrows) {
         e.preventDefault();
         arrowStartRef.current = sq;
-        arrowColorRef.current = eventBrushColor(e.nativeEvent as MouseEvent, brushes);
-        const pos = getClientPos(e.nativeEvent);
+        arrowColorRef.current = eventBrushColor(nativeEvent as MouseEvent, brushes);
+        const pos = getClientPos(nativeEvent);
         arrowPosRef.current = pos ?? null;
       }
       return;
@@ -479,7 +490,7 @@ export function useInteraction(opts: UseInteractionOptions): InteractionState {
 
     // Left click: clear arrows/marks
     const piece = piecesRef.current.get(sq);
-    const pos = getClientPos(e.nativeEvent);
+    const pos = getClientPos(nativeEvent);
     if (!pos) return;
 
     // Initiate drag if there's a piece and dragging is allowed
