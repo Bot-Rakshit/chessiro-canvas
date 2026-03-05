@@ -26,6 +26,15 @@ const DEFAULT_THEME: BoardTheme = {
 const EMPTY_ARRAY: any[] = [];
 const EMPTY_OBJECT: any = {};
 
+function hasActiveRadius(radius: string | number): boolean {
+  if (typeof radius === 'number') return radius > 0;
+  const trimmed = radius.trim();
+  if (trimmed.length === 0) return false;
+  const parsed = Number.parseFloat(trimmed);
+  if (Number.isFinite(parsed)) return parsed > 0;
+  return true;
+}
+
 export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>(
   function ChessiroCanvas(props, ref) {
     const {
@@ -53,6 +62,7 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
       pieceSet,
       showMargin = true,
       marginThickness = 24,
+      boardRadius = 0,
       showNotation = true,
       highlightedSquares = EMPTY_OBJECT,
       squareVisuals,
@@ -181,6 +191,7 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
     const cursor = !interactive ? 'default' : isDragging ? 'grabbing' : allowDragging ? 'grab' : 'pointer';
 
     const marginPx = showMargin ? marginThickness : 0;
+    const clipBoardContent = hasActiveRadius(boardRadius);
 
     return (
       <div
@@ -215,6 +226,7 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
               position: 'relative',
               width: '100%',
               paddingBottom: '100%',
+              borderRadius: boardRadius,
               overflow: 'visible',
               cursor,
               userSelect: 'none',
@@ -225,51 +237,81 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
             onTouchStart={interaction.handlePointerDown as any}
           >
             {hasValidSize && (
-              <div style={{ position: 'absolute', inset: 0 }}>
-                <Squares
-                  theme={theme}
-                  orientation={orientation}
-                  lastMove={lastMove}
-                  selectedSquare={interaction.selectedSquare}
-                  draggingSquare={interaction.drag?.origSquare}
-                  legalSquares={interaction.legalSquares}
-                  premoveSquares={interaction.premoveSquares}
-                  premoveCurrent={interaction.premoveCurrent}
-                  occupiedSquares={occupiedSquares}
-                  markedSquares={interaction.activeMarkedSquares}
-                  highlightedSquares={highlightedSquares}
-                  squareVisuals={squareVisuals}
-                  check={check}
-                />
-
-                <PiecesLayer
-                  position={position}
-                  pieces={piecesMap}
-                  orientation={orientation}
-                  pieceSet={pieceSet}
-                  customPieces={customPieces}
-                  boardWidth={boardWidth}
-                  boardHeight={boardHeight}
-                  animationDurationMs={showAnimations ? animationDurationMs : 0}
-                  showAnimations={showAnimations}
-                  draggingSquare={interaction.drag?.origSquare}
-                />
-
-                <ArrowsLayer
-                  arrows={interaction.renderedArrows}
-                  orientation={orientation}
-                  boardWidth={boardWidth}
-                  boardHeight={boardHeight}
-                  visuals={arrowVisuals}
-                />
-
-                {moveQualityBadge && (
-                  <Badge
-                    badge={moveQualityBadge}
+              <>
+                <div
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    borderRadius: boardRadius,
+                    overflow: clipBoardContent ? 'hidden' : 'visible',
+                  }}
+                >
+                  <Squares
+                    theme={theme}
                     orientation={orientation}
-                    squareSize={squareSize}
+                    lastMove={lastMove}
+                    selectedSquare={interaction.selectedSquare}
+                    draggingSquare={interaction.drag?.origSquare}
+                    legalSquares={interaction.legalSquares}
+                    premoveSquares={interaction.premoveSquares}
+                    premoveCurrent={interaction.premoveCurrent}
+                    occupiedSquares={occupiedSquares}
+                    markedSquares={interaction.activeMarkedSquares}
+                    highlightedSquares={highlightedSquares}
+                    squareVisuals={squareVisuals}
+                    check={check}
                   />
-                )}
+
+                  <PiecesLayer
+                    position={position}
+                    pieces={piecesMap}
+                    orientation={orientation}
+                    pieceSet={pieceSet}
+                    customPieces={customPieces}
+                    boardWidth={boardWidth}
+                    boardHeight={boardHeight}
+                    animationDurationMs={showAnimations ? animationDurationMs : 0}
+                    showAnimations={showAnimations}
+                    draggingSquare={interaction.drag?.origSquare}
+                  />
+
+                  <ArrowsLayer
+                    arrows={interaction.renderedArrows}
+                    orientation={orientation}
+                    boardWidth={boardWidth}
+                    boardHeight={boardHeight}
+                    visuals={arrowVisuals}
+                  />
+
+                  {moveQualityBadge && (
+                    <Badge
+                      badge={moveQualityBadge}
+                      orientation={orientation}
+                      squareSize={squareSize}
+                    />
+                  )}
+
+                  {overlays.length > 0 && (
+                    <OverlaysLayer
+                      overlays={overlays}
+                      orientation={orientation}
+                      boardWidth={boardWidth}
+                      boardHeight={boardHeight}
+                      renderer={overlayRenderer}
+                      visuals={overlayVisuals}
+                    />
+                  )}
+
+                  {interaction.pendingPromotion && (
+                    <PromotionDialog
+                      promotion={interaction.pendingPromotion}
+                      pieceSet={pieceSet}
+                      visuals={promotionVisuals}
+                      onSelect={interaction.handlePromotionSelect}
+                      onDismiss={interaction.handlePromotionDismiss}
+                    />
+                  )}
+                </div>
 
                 {showNotation && (
                   <Notation
@@ -280,28 +322,7 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
                     visuals={notationVisuals}
                   />
                 )}
-
-                {overlays.length > 0 && (
-                  <OverlaysLayer
-                    overlays={overlays}
-                    orientation={orientation}
-                    boardWidth={boardWidth}
-                    boardHeight={boardHeight}
-                    renderer={overlayRenderer}
-                    visuals={overlayVisuals}
-                  />
-                )}
-
-                {interaction.pendingPromotion && (
-                  <PromotionDialog
-                    promotion={interaction.pendingPromotion}
-                    pieceSet={pieceSet}
-                    visuals={promotionVisuals}
-                    onSelect={interaction.handlePromotionSelect}
-                    onDismiss={interaction.handlePromotionDismiss}
-                  />
-                )}
-              </div>
+              </>
             )}
           </div>
         </div>

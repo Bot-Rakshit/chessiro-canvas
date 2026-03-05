@@ -86,6 +86,8 @@ Use `squareVisuals` to customize legal dots, capture rings, premove hints, marks
 ```tsx
 <ChessiroCanvas
   position={fen}
+  showMargin={false}
+  boardRadius={14}
   arrowVisuals={{
     lineWidth: 0.2,
     opacity: 1,
@@ -94,8 +96,8 @@ Use `squareVisuals` to customize legal dots, capture rings, premove hints, marks
   }}
   notationVisuals={{
     fontFamily: 'JetBrains Mono, monospace',
-    fontSize: '11px',
-    onBoardFontSize: '11px',
+    fontSize: 11,
+    onBoardFontSize: 11,
     opacity: 0.95,
   }}
   promotionVisuals={{
@@ -113,6 +115,9 @@ Use `squareVisuals` to customize legal dots, capture rings, premove hints, marks
   }}
 />
 ```
+
+`boardRadius` works independently of `showMargin` (useful for rounded corners when `showMargin={false}`).
+For notation sizing, `notationVisuals.fontSize` and `notationVisuals.onBoardFontSize` accept either `number` or CSS string.
 
 ## Integration With `chess.js`
 
@@ -269,6 +274,7 @@ export function ChessopsBoard() {
 | `pieces` | `Record<string, () => ReactNode>` | `undefined` | Custom piece renderer map |
 | `showMargin` | `boolean` | `true` | Margin frame for notation |
 | `marginThickness` | `number` | `24` | Margin px |
+| `boardRadius` | `number \| string` | `0` | Board corner radius (works with or without margin) |
 | `showNotation` | `boolean` | `true` | Coordinate labels |
 | `notationVisuals` | `Partial<NotationVisuals>` | `undefined` | Customize notation font family, size, weight, color, and offsets |
 | `highlightedSquares` | `Record<string, string>` | `{}` | Arbitrary square background colors |

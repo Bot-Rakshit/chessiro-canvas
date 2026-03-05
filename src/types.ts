@@ -107,13 +107,13 @@ export interface ArrowVisuals {
 
 export interface NotationVisuals {
   fontFamily?: string;
-  fontSize?: string;
+  fontSize?: string | number;
   fontWeight?: number | string;
   color?: string;
   opacity?: number;
-  onBoardFontSize?: string;
-  onBoardLeftOffset?: string;
-  onBoardBottomOffset?: string;
+  onBoardFontSize?: string | number;
+  onBoardLeftOffset?: string | number;
+  onBoardBottomOffset?: string | number;
 }
 
 export interface PromotionVisuals {
@@ -260,6 +260,7 @@ export interface ChessiroCanvasProps {
   pieceSet?: PieceSet;
   showMargin?: boolean;
   marginThickness?: number;
+  boardRadius?: string | number;
   showNotation?: boolean;
   highlightedSquares?: Record<string, string>; // square → color
   squareVisuals?: Partial<SquareVisuals>;
