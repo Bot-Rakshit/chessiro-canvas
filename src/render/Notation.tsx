@@ -7,6 +7,7 @@ interface NotationProps {
   theme: BoardTheme;
   showOnMargin: boolean;
   marginThickness: number;
+  marginRadius: string | number;
   visuals?: Partial<NotationVisuals>;
 }
 
@@ -15,6 +16,7 @@ export const Notation = memo(function Notation({
   theme,
   showOnMargin,
   marginThickness,
+  marginRadius,
   visuals = {},
 }: NotationProps) {
   const asWhite = orientation === 'white';
@@ -22,7 +24,16 @@ export const Notation = memo(function Notation({
   const ranks = asWhite ? [...RANKS].reverse() : RANKS;
 
   if (showOnMargin) {
-    return <MarginNotation files={files} ranks={ranks} theme={theme} thickness={marginThickness} visuals={visuals} />;
+    return (
+      <MarginNotation
+        files={files}
+        ranks={ranks}
+        theme={theme}
+        thickness={marginThickness}
+        radius={marginRadius}
+        visuals={visuals}
+      />
+    );
   }
 
   return <OnBoardNotation files={files} ranks={ranks} theme={theme} orientation={orientation} visuals={visuals} />;
@@ -55,12 +66,14 @@ function MarginNotation({
   ranks,
   theme,
   thickness,
+  radius,
   visuals,
 }: {
   files: readonly string[];
   ranks: readonly string[];
   theme: BoardTheme;
   thickness: number;
+  radius: string | number;
   visuals: Partial<NotationVisuals>;
 }) {
   const notationVisuals = { ...DEFAULT_NOTATION_VISUALS, ...visuals };
@@ -78,8 +91,8 @@ function MarginNotation({
           right: -thickness,
           height: thickness,
           backgroundColor: bg,
-          borderTopLeftRadius: 4,
-          borderTopRightRadius: 4,
+          borderTopLeftRadius: radius,
+          borderTopRightRadius: radius,
         }}
       />
       {/* Bottom margin with file labels */}
@@ -92,8 +105,8 @@ function MarginNotation({
           height: thickness,
           display: 'flex',
           backgroundColor: bg,
-          borderBottomLeftRadius: 4,
-          borderBottomRightRadius: 4,
+          borderBottomLeftRadius: radius,
+          borderBottomRightRadius: radius,
         }}
       >
         <div style={{ width: thickness, flexShrink: 0 }} />

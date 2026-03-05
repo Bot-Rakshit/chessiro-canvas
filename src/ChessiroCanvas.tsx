@@ -62,6 +62,7 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
       pieceSet,
       showMargin = true,
       marginThickness = 24,
+      marginRadius = 4,
       boardRadius = 0,
       showNotation = true,
       highlightedSquares = EMPTY_OBJECT,
@@ -209,7 +210,7 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
               position: 'absolute',
               inset: 0,
               background: theme.margin || theme.darkSquare,
-              borderRadius: 4,
+              borderRadius: marginRadius,
               pointerEvents: 'none',
             }}
           />
@@ -319,6 +320,7 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
                     theme={theme}
                     showOnMargin={showMargin}
                     marginThickness={marginThickness}
+                    marginRadius={marginRadius}
                     visuals={notationVisuals}
                   />
                 )}

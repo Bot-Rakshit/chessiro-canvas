@@ -260,6 +260,7 @@ export interface ChessiroCanvasProps {
   pieceSet?: PieceSet;
   showMargin?: boolean;
   marginThickness?: number;
+  marginRadius?: string | number;
   boardRadius?: string | number;
   showNotation?: boolean;
   highlightedSquares?: Record<string, string>; // square → color

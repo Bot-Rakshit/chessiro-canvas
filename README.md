@@ -86,7 +86,8 @@ Use `squareVisuals` to customize legal dots, capture rings, premove hints, marks
 ```tsx
 <ChessiroCanvas
   position={fen}
-  showMargin={false}
+  showMargin={true}
+  marginRadius={16}
   boardRadius={14}
   arrowVisuals={{
     lineWidth: 0.2,
@@ -116,7 +117,8 @@ Use `squareVisuals` to customize legal dots, capture rings, premove hints, marks
 />
 ```
 
-`boardRadius` works independently of `showMargin` (useful for rounded corners when `showMargin={false}`).
+`boardRadius` controls inner board corners, and `marginRadius` controls outer margin corners.
+Both work independently, so you can style rounded inner + outer frames together.
 For notation sizing, `notationVisuals.fontSize` and `notationVisuals.onBoardFontSize` accept either `number` or CSS string.
 
 ## Integration With `chess.js`
@@ -274,6 +276,7 @@ export function ChessopsBoard() {
 | `pieces` | `Record<string, () => ReactNode>` | `undefined` | Custom piece renderer map |
 | `showMargin` | `boolean` | `true` | Margin frame for notation |
 | `marginThickness` | `number` | `24` | Margin px |
+| `marginRadius` | `number \| string` | `4` | Outer margin frame corner radius |
 | `boardRadius` | `number \| string` | `0` | Board corner radius (works with or without margin) |
 | `showNotation` | `boolean` | `true` | Coordinate labels |
 | `notationVisuals` | `Partial<NotationVisuals>` | `undefined` | Customize notation font family, size, weight, color, and offsets |
