@@ -101,6 +101,20 @@ function useBoardSize(boardRef) {
     cachedBounds.current = newBounds;
     setBounds(newBounds);
   }, [boardRef]);
+  const getFreshBounds = useCallback(() => {
+    const el = boardRef.current;
+    if (!el) return cachedBounds.current;
+    const rect = el.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return cachedBounds.current;
+    const fresh = {
+      width: rect.width,
+      height: rect.height,
+      left: rect.left,
+      top: rect.top
+    };
+    cachedBounds.current = fresh;
+    return fresh;
+  }, [boardRef]);
   useEffect(() => {
     updateBounds();
     const el = boardRef.current;
@@ -113,7 +127,7 @@ function useBoardSize(boardRef) {
       window.removeEventListener("scroll", updateBounds, { capture: true });
     };
   }, [boardRef, updateBounds]);
-  return { bounds, updateBounds };
+  return { bounds, updateBounds, getFreshBounds };
 }
 
 // src/utils/coords.ts
@@ -268,7 +282,8 @@ function isRightButton(e) {
 }
 
 // src/interaction/useInteraction.ts
-var DRAG_THRESHOLD = 4;
+var DRAG_THRESHOLD_MOUSE = 4;
+var DRAG_THRESHOLD_TOUCH = 10;
 var TOUCH_MOUSE_SUPPRESS_MS = 500;
 var EMPTY_SQUARES = [];
 var EMPTY_ARROWS = [];
@@ -280,10 +295,11 @@ function sameSquares(a, b) {
   }
   return true;
 }
-function hasDragStarted(drag) {
+function hasDragStarted(drag, isTouch) {
   const dx = drag.currentPos[0] - drag.startPos[0];
   const dy = drag.currentPos[1] - drag.startPos[1];
-  return Math.sqrt(dx * dx + dy * dy) >= DRAG_THRESHOLD;
+  const threshold = isTouch ? DRAG_THRESHOLD_TOUCH : DRAG_THRESHOLD_MOUSE;
+  return Math.sqrt(dx * dx + dy * dy) >= threshold;
 }
 function eventBrushColor(e, brushes) {
   if (!("shiftKey" in e)) return brushes.green;
@@ -303,6 +319,7 @@ function useInteraction(opts) {
     allowDrawingArrows,
     boardRef,
     boardBounds,
+    getFreshBounds,
     onMove,
     dests,
     turnColor,
@@ -342,6 +359,7 @@ function useInteraction(opts) {
   const arrowPosRef = useRef(null);
   const justDrewArrowRef = useRef(false);
   const dragKeyChangedRef = useRef(false);
+  const isTouchRef = useRef(false);
   const lastTouchTsRef = useRef(0);
   const selectedRef = useRef(selectedSquare);
   const legalRef = useRef(legalSquares);
@@ -638,14 +656,17 @@ function useInteraction(opts) {
   }, [boardBounds, asWhite]);
   const handlePointerDown = useCallback((e) => {
     const nativeEvent = e.nativeEvent;
-    if ("touches" in nativeEvent) {
+    const isTouch = "touches" in nativeEvent;
+    isTouchRef.current = isTouch;
+    if (isTouch) {
       lastTouchTsRef.current = Date.now();
     } else if (Date.now() - lastTouchTsRef.current < TOUCH_MOUSE_SUPPRESS_MS) {
       return;
     }
-    if (!boardBounds) return;
+    const activeBounds = isTouch && getFreshBounds ? getFreshBounds() : boardBounds;
+    if (!activeBounds) return;
     if (pendingPromotion) return;
-    const sq2 = getSquareFromEvent(nativeEvent, asWhite, boardBounds);
+    const sq2 = getSquareFromEvent(nativeEvent, asWhite, activeBounds);
     if (!sq2) return;
     if ("button" in e && isRightButton(e)) {
       if (allowDrawingArrows) {
@@ -686,6 +707,7 @@ function useInteraction(opts) {
     }
   }, [
     boardBounds,
+    getFreshBounds,
     pendingPromotion,
     asWhite,
     interactive,
@@ -710,7 +732,7 @@ function useInteraction(opts) {
       let dragStartedSquare = null;
       if (dragRef.current) {
         dragRef.current.currentPos = pos;
-        if (!dragRef.current.started && hasDragStarted(dragRef.current)) {
+        if (!dragRef.current.started && hasDragStarted(dragRef.current, isTouchRef.current)) {
           dragRef.current.started = true;
           dragStartedSquare = dragRef.current.origSquare;
           setDrag({ ...dragRef.current });
@@ -788,9 +810,10 @@ function useInteraction(opts) {
       }
       queueMicrotask(() => {
         if (!capturedDrag) return;
-        if (!boardBounds || !interactive) return;
+        const freshBounds = getFreshBounds ? getFreshBounds() : boardBounds;
+        if (!freshBounds || !interactive) return;
         const pos = getClientPos(e);
-        const target = pos ? screenPos2square(pos[0], pos[1], asWhite, boardBounds) : void 0;
+        const target = pos ? screenPos2square(pos[0], pos[1], asWhite, freshBounds) : void 0;
         if (target && target !== capturedDrag.origSquare) {
           const piece = piecesRef.current.get(capturedDrag.origSquare);
           if (piece) {
@@ -827,6 +850,7 @@ function useInteraction(opts) {
     };
   }, [
     boardBounds,
+    getFreshBounds,
     asWhite,
     interactive,
     attemptMove,
@@ -2104,22 +2128,29 @@ var ChessiroCanvas = forwardRef(
       style
     } = props;
     const boardRef = useRef(null);
-    const { bounds } = useBoardSize(boardRef);
+    const { bounds, getFreshBounds } = useBoardSize(boardRef);
     const piecesMap = useMemo(() => readFen(position || INITIAL_FEN), [position]);
-    const boardDomRect = useMemo(() => {
-      if (!bounds) return null;
+    const boundsToDomRect = useCallback((b) => {
       return {
-        left: bounds.left,
-        top: bounds.top,
-        width: bounds.width,
-        height: bounds.height,
-        right: bounds.left + bounds.width,
-        bottom: bounds.top + bounds.height,
-        x: bounds.left,
-        y: bounds.top,
+        left: b.left,
+        top: b.top,
+        width: b.width,
+        height: b.height,
+        right: b.left + b.width,
+        bottom: b.top + b.height,
+        x: b.left,
+        y: b.top,
         toJSON: () => ({})
       };
-    }, [bounds]);
+    }, []);
+    const boardDomRect = useMemo(() => {
+      if (!bounds) return null;
+      return boundsToDomRect(bounds);
+    }, [bounds, boundsToDomRect]);
+    const getFreshDomRect = useCallback(() => {
+      const fresh = getFreshBounds();
+      return fresh ? boundsToDomRect(fresh) : null;
+    }, [getFreshBounds, boundsToDomRect]);
     const interaction = useInteraction({
       position,
       pieces: piecesMap,
@@ -2147,7 +2178,8 @@ var ChessiroCanvas = forwardRef(
       onPlyMarksChange,
       onSquareClick,
       onClearOverlays,
-      blockTouchScroll
+      blockTouchScroll,
+      getFreshBounds: getFreshDomRect
     });
     const occupiedSquares = useMemo(() => {
       if (interaction.legalSquares.length === 0 && interaction.premoveSquares.length === 0) {

@@ -9,7 +9,8 @@ import { premoveDests } from '../utils/premove';
 import { getSquareFromEvent, getClientPos, isRightButton } from './pointer';
 import type { DragState } from './pointer';
 
-const DRAG_THRESHOLD = 4;
+const DRAG_THRESHOLD_MOUSE = 4;
+const DRAG_THRESHOLD_TOUCH = 10;
 const TOUCH_MOUSE_SUPPRESS_MS = 500;
 const EMPTY_SQUARES: string[] = [];
 const EMPTY_ARROWS: Arrow[] = [];
@@ -23,10 +24,11 @@ function sameSquares(a: string[], b: string[]): boolean {
   return true;
 }
 
-function hasDragStarted(drag: DragState): boolean {
+function hasDragStarted(drag: DragState, isTouch: boolean): boolean {
   const dx = drag.currentPos[0] - drag.startPos[0];
   const dy = drag.currentPos[1] - drag.startPos[1];
-  return Math.sqrt(dx * dx + dy * dy) >= DRAG_THRESHOLD;
+  const threshold = isTouch ? DRAG_THRESHOLD_TOUCH : DRAG_THRESHOLD_MOUSE;
+  return Math.sqrt(dx * dx + dy * dy) >= threshold;
 }
 
 // Determine arrow brush color from modifier keys (matches chessground)
@@ -48,6 +50,7 @@ interface UseInteractionOptions {
   allowDrawingArrows: boolean;
   boardRef: React.RefObject<HTMLDivElement | null>;
   boardBounds: DOMRect | null;
+  getFreshBounds?: () => DOMRect | null;
   onMove?: (from: string, to: string, promotion?: PromotionPiece) => boolean;
   dests?: Dests;
   turnColor?: PieceColor;
@@ -88,7 +91,7 @@ export interface InteractionState {
 export function useInteraction(opts: UseInteractionOptions): InteractionState {
   const {
     position, pieces, orientation, interactive, allowDragging, allowDrawingArrows,
-    boardRef, boardBounds, onMove, dests,
+    boardRef, boardBounds, getFreshBounds, onMove, dests,
     turnColor, movableColor, premovable,
     arrows, onArrowsChange,
     arrowBrushes: customBrushes, snapArrowsToValidMoves = true,
@@ -118,6 +121,7 @@ export function useInteraction(opts: UseInteractionOptions): InteractionState {
   const arrowPosRef = useRef<[number, number] | null>(null); // track mouse pos during arrow draw
   const justDrewArrowRef = useRef(false);
   const dragKeyChangedRef = useRef(false);
+  const isTouchRef = useRef(false);
   const lastTouchTsRef = useRef(0);
 
   const selectedRef = useRef(selectedSquare);
@@ -462,7 +466,9 @@ export function useInteraction(opts: UseInteractionOptions): InteractionState {
 
   const handlePointerDown = useCallback((e: React.MouseEvent | React.TouchEvent) => {
     const nativeEvent = e.nativeEvent;
-    if ('touches' in nativeEvent) {
+    const isTouch = 'touches' in nativeEvent;
+    isTouchRef.current = isTouch;
+    if (isTouch) {
       lastTouchTsRef.current = Date.now();
     } else if (Date.now() - lastTouchTsRef.current < TOUCH_MOUSE_SUPPRESS_MS) {
       // Mobile browsers can emit a synthetic mouse sequence after touch.
@@ -470,10 +476,12 @@ export function useInteraction(opts: UseInteractionOptions): InteractionState {
       return;
     }
 
-    if (!boardBounds) return;
+    // Use fresh bounds on touch to avoid stale coordinates after scroll/layout shifts
+    const activeBounds = (isTouch && getFreshBounds ? getFreshBounds() : boardBounds) as DOMRect | null;
+    if (!activeBounds) return;
     // Promotion chooser is modal: ignore board pointer handling until resolved.
     if (pendingPromotion) return;
-    const sq = getSquareFromEvent(nativeEvent, asWhite, boardBounds);
+    const sq = getSquareFromEvent(nativeEvent, asWhite, activeBounds);
     if (!sq) return;
 
     // Right-click: arrow drawing
@@ -521,7 +529,7 @@ export function useInteraction(opts: UseInteractionOptions): InteractionState {
     if (!startedDragCandidate) {
       handleSquareInteraction(sq);
     }
-  }, [boardBounds, pendingPromotion, asWhite, interactive, allowDragging, allowDrawingArrows,
+  }, [boardBounds, getFreshBounds, pendingPromotion, asWhite, interactive, allowDragging, allowDrawingArrows,
     handleSquareInteraction, brushes, canMoveColor, canPremoveColor, blockTouchScroll]);
 
   // ── Document-level move/up for drag and arrow drawing ──
@@ -540,7 +548,7 @@ export function useInteraction(opts: UseInteractionOptions): InteractionState {
       let dragStartedSquare: string | null = null;
       if (dragRef.current) {
         dragRef.current.currentPos = pos;
-        if (!dragRef.current.started && hasDragStarted(dragRef.current)) {
+        if (!dragRef.current.started && hasDragStarted(dragRef.current, isTouchRef.current)) {
           dragRef.current.started = true;
           dragStartedSquare = dragRef.current.origSquare;
           // React state only needs to know that drag has formally started,
@@ -630,10 +638,11 @@ export function useInteraction(opts: UseInteractionOptions): InteractionState {
 
       queueMicrotask(() => {
         if (!capturedDrag) return;
-        if (!boardBounds || !interactive) return;
+        const freshBounds = getFreshBounds ? getFreshBounds() : boardBounds;
+        if (!freshBounds || !interactive) return;
 
         const pos = getClientPos(e);
-        const target = pos ? screenPos2square(pos[0], pos[1], asWhite, boardBounds) : undefined;
+        const target = pos ? screenPos2square(pos[0], pos[1], asWhite, freshBounds) : undefined;
 
         if (target && target !== capturedDrag.origSquare) {
           const piece = piecesRef.current.get(capturedDrag.origSquare);
@@ -672,7 +681,7 @@ export function useInteraction(opts: UseInteractionOptions): InteractionState {
       document.removeEventListener('mouseup', handleUp);
       document.removeEventListener('touchend', handleUp);
     };
-  }, [boardBounds, asWhite, interactive, attemptMove, attemptPremove,
+  }, [boardBounds, getFreshBounds, asWhite, interactive, attemptMove, attemptPremove,
     toggleArrow, toggleMark, getSnappedSquare, snapArrowsToValidMoves,
     canMoveColor, canPremoveColor, blockTouchScroll, getDestsForSquare, dests, handleSquareInteraction]);
 

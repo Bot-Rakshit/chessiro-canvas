@@ -39,6 +39,23 @@ export function useBoardSize(boardRef: React.RefObject<HTMLDivElement | null>) {
     setBounds(newBounds);
   }, [boardRef]);
 
+  // Returns fresh bounds directly from the DOM — use this for pointer events
+  // to avoid stale cached bounds after scroll/layout shifts on mobile.
+  const getFreshBounds = useCallback((): BoardBounds | null => {
+    const el = boardRef.current;
+    if (!el) return cachedBounds.current;
+    const rect = el.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return cachedBounds.current;
+    const fresh: BoardBounds = {
+      width: rect.width,
+      height: rect.height,
+      left: rect.left,
+      top: rect.top,
+    };
+    cachedBounds.current = fresh;
+    return fresh;
+  }, [boardRef]);
+
   useEffect(() => {
     updateBounds();
     const el = boardRef.current;
@@ -55,5 +72,5 @@ export function useBoardSize(boardRef: React.RefObject<HTMLDivElement | null>) {
     };
   }, [boardRef, updateBounds]);
 
-  return { bounds, updateBounds };
+  return { bounds, updateBounds, getFreshBounds };
 }

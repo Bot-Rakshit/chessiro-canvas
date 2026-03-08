@@ -95,21 +95,30 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
     } = props;
 
     const boardRef = useRef<HTMLDivElement>(null);
-    const { bounds } = useBoardSize(boardRef);
+    const { bounds, getFreshBounds } = useBoardSize(boardRef);
 
     const piecesMap = useMemo(() => readFen(position || INITIAL_FEN), [position]);
 
-    const boardDomRect = useMemo(() => {
-      if (!bounds) return null;
+    const boundsToDomRect = useCallback((b: { left: number; top: number; width: number; height: number }): DOMRect => {
       return {
-        left: bounds.left, top: bounds.top,
-        width: bounds.width, height: bounds.height,
-        right: bounds.left + bounds.width,
-        bottom: bounds.top + bounds.height,
-        x: bounds.left, y: bounds.top,
+        left: b.left, top: b.top,
+        width: b.width, height: b.height,
+        right: b.left + b.width,
+        bottom: b.top + b.height,
+        x: b.left, y: b.top,
         toJSON: () => ({}),
       } as DOMRect;
-    }, [bounds]);
+    }, []);
+
+    const boardDomRect = useMemo(() => {
+      if (!bounds) return null;
+      return boundsToDomRect(bounds);
+    }, [bounds, boundsToDomRect]);
+
+    const getFreshDomRect = useCallback((): DOMRect | null => {
+      const fresh = getFreshBounds();
+      return fresh ? boundsToDomRect(fresh) : null;
+    }, [getFreshBounds, boundsToDomRect]);
 
     const interaction = useInteraction({
       position,
@@ -139,6 +148,7 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
       onSquareClick,
       onClearOverlays,
       blockTouchScroll,
+      getFreshBounds: getFreshDomRect,
     });
 
     const occupiedSquares = useMemo(() => {
