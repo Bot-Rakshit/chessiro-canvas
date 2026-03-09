@@ -32,6 +32,12 @@ const DEFAULT_SQUARE_VISUALS: Required<SquareVisuals> = {
   premoveCurrent: 'rgba(20, 30, 85, 0.4)',
   checkGradient:
     'radial-gradient(ellipse at center, rgba(255, 0, 0, 1) 0%, rgba(231, 0, 0, 1) 25%, rgba(169, 0, 0, 0) 89%, rgba(158, 0, 0, 0) 100%)',
+  selectedStyle: 'fill',
+  selectedBorderWidth: 4,
+  legalMoveStyle: 'ring',
+  legalRingOuterRadius: 24,
+  legalRingInnerRadius: 17,
+  legalCaptureRingWidth: 7,
 };
 const EMPTY_SQUARES: string[] = [];
 const EMPTY_MARKS: Record<string, boolean> = {};
@@ -147,8 +153,13 @@ export const Squares = memo(function Squares({
 
         // Selected square
         if (isSelected) {
-          bg = selectedColor;
-          boxShadow = `inset 0 0 0 4px ${visuals.selectedOutline}`;
+          const style = visuals.selectedStyle;
+          if (style === 'fill' || style === 'both') {
+            bg = selectedColor;
+          }
+          if (style === 'border' || style === 'both') {
+            boxShadow = `inset 0 0 0 ${visuals.selectedBorderWidth}px ${visuals.selectedOutline}`;
+          }
         }
 
         // Current premove highlight
@@ -159,18 +170,26 @@ export const Squares = memo(function Squares({
         // Legal move indicators
         if (isLegal) {
           if (isOccupied) {
-            boxShadow = `inset 0 0 0 5px ${visuals.legalCaptureRing}`;
+            boxShadow = `inset 0 0 0 ${visuals.legalCaptureRingWidth}px ${visuals.legalCaptureRing}`;
             borderRadius = '50%';
+          } else if (visuals.legalMoveStyle === 'ring') {
+            const inner = visuals.legalRingInnerRadius;
+            const outer = visuals.legalRingOuterRadius;
+            backgroundImage = `radial-gradient(circle at center, transparent 0%, transparent ${inner}%, ${visuals.legalDot} ${inner}%, ${visuals.legalDot} ${outer}%, transparent ${outer}%)`;
           } else {
             backgroundImage = `radial-gradient(circle at center, ${visuals.legalDot} 0%, ${visuals.legalDot} 10%, ${visuals.legalDotOutline} 10%, ${visuals.legalDotOutline} 14%, transparent 14%)`;
           }
         }
 
-        // Premove destination indicators (similar to legal dots but different color)
+        // Premove destination indicators (same style, different color)
         if (isPremoveDest && !isLegal) {
           if (isOccupied) {
-            boxShadow = `inset 0 0 0 5px ${visuals.premoveCaptureRing}`;
+            boxShadow = `inset 0 0 0 ${visuals.legalCaptureRingWidth}px ${visuals.premoveCaptureRing}`;
             borderRadius = '50%';
+          } else if (visuals.legalMoveStyle === 'ring') {
+            const inner = visuals.legalRingInnerRadius;
+            const outer = visuals.legalRingOuterRadius;
+            backgroundImage = `radial-gradient(circle at center, transparent 0%, transparent ${inner}%, ${visuals.premoveDot} ${inner}%, ${visuals.premoveDot} ${outer}%, transparent ${outer}%)`;
           } else {
             backgroundImage = `radial-gradient(circle at center, ${visuals.premoveDot} 0%, ${visuals.premoveDot} 10%, ${visuals.premoveDot} 14%, transparent 14%)`;
           }

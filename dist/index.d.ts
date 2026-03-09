@@ -56,6 +56,18 @@ interface SquareVisuals {
     premoveCaptureRing?: string;
     premoveCurrent?: string;
     checkGradient?: string;
+    /** How to highlight the selected piece square: background color only, border only, or both. Default: 'fill' */
+    selectedStyle?: 'fill' | 'border' | 'both';
+    /** Border width in px when selectedStyle includes a border. Default: 4 */
+    selectedBorderWidth?: number;
+    /** Legal move indicator: filled 'dot' or hollow 'ring'. Default: 'ring' */
+    legalMoveStyle?: 'dot' | 'ring';
+    /** Outer radius of the hollow ring as % of square size. Default: 24 */
+    legalRingOuterRadius?: number;
+    /** Inner radius of the hollow ring as % of square size. Default: 17 */
+    legalRingInnerRadius?: number;
+    /** Inset border width in px for capture-move rings. Default: 7 */
+    legalCaptureRingWidth?: number;
 }
 interface ArrowVisuals {
     lineWidth?: number;
