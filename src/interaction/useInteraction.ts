@@ -79,6 +79,7 @@ export interface InteractionState {
   premoveCurrent: [string, string] | null;
   pendingPromotion: PromotionContext | null;
   drag: DragState | null;
+  dragHoverSquare: string | null;
   dragGhostRef: React.RefObject<HTMLDivElement | null>;
   activeMarkedSquares: Record<string, boolean>;
   renderedArrows: Arrow[];
@@ -111,6 +112,7 @@ export function useInteraction(opts: UseInteractionOptions): InteractionState {
   const [premoveSquares, setPremoveSquares] = useState<string[]>([]);
   const [premoveCurrent, setPremoveCurrent] = useState<[string, string] | null>(null);
   const [pendingPromotion, setPendingPromotion] = useState<PromotionContext | null>(null);
+  const [dragHoverSquare, setDragHoverSquare] = useState<string | null>(null);
   const [drag, setDrag] = useState<DragState | null>(null);
   const dragGhostRef = useRef<HTMLDivElement>(null);
 
@@ -560,6 +562,10 @@ export function useInteraction(opts: UseInteractionOptions): InteractionState {
           if (currentSq && currentSq !== dragRef.current.origSquare) {
             dragKeyChangedRef.current = true;
           }
+          setDragHoverSquare(prev => {
+            const next = (currentSq && currentSq !== dragRef.current!.origSquare) ? currentSq : null;
+            return prev === next ? prev : next;
+          });
           if (dragGhostRef.current) {
             const squareSize = boardBounds.width / 8;
             const offset = squareSize / 2;
@@ -630,6 +636,7 @@ export function useInteraction(opts: UseInteractionOptions): InteractionState {
       const capturedDrag = dragRef.current;
       setDrag(null);
       dragRef.current = null;
+      setDragHoverSquare(null);
 
       if (capturedDrag && !capturedDrag.started) {
         handleSquareInteraction(capturedDrag.origSquare);
@@ -749,6 +756,7 @@ export function useInteraction(opts: UseInteractionOptions): InteractionState {
     premoveCurrent,
     pendingPromotion,
     drag: drag?.started ? drag : null,
+    dragHoverSquare,
     dragGhostRef,
     activeMarkedSquares,
     renderedArrows,

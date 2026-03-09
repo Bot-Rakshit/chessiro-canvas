@@ -263,6 +263,7 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
                     lastMove={lastMove}
                     selectedSquare={interaction.selectedSquare}
                     draggingSquare={interaction.drag?.origSquare}
+                    dragHoverSquare={interaction.dragHoverSquare}
                     legalSquares={interaction.legalSquares}
                     premoveSquares={interaction.premoveSquares}
                     premoveCurrent={interaction.premoveCurrent}

@@ -9,6 +9,7 @@ interface SquaresProps {
   lastMove?: { from: string; to: string } | null;
   selectedSquare?: string | null;
   draggingSquare?: string | null;
+  dragHoverSquare?: string | null;
   legalSquares?: string[];
   premoveSquares?: string[];
   premoveCurrent?: [string, string] | null;
@@ -38,6 +39,7 @@ const DEFAULT_SQUARE_VISUALS: Required<SquareVisuals> = {
   legalRingOuterRadius: 24,
   legalRingInnerRadius: 17,
   legalCaptureRingWidth: 7,
+  dragOverHighlight: '',
 };
 const EMPTY_SQUARES: string[] = [];
 const EMPTY_MARKS: Record<string, boolean> = {};
@@ -49,7 +51,8 @@ export const Squares = memo(function Squares({
   orientation,
   lastMove,
   selectedSquare,
-  draggingSquare,
+  draggingSquare: _draggingSquare,
+  dragHoverSquare,
   legalSquares = EMPTY_SQUARES,
   occupiedSquares,
   premoveSquares = EMPTY_SQUARES,
@@ -71,6 +74,10 @@ export const Squares = memo(function Squares({
 
   const selectedColor = hexToRgba(theme.selectedPiece || '#B57340', 0.5)
     || 'rgba(181, 115, 64, 0.5)';
+
+  const dragOverColor = visuals.dragOverHighlight
+    || hexToRgba(theme.selectedPiece || '#B57340', 0.35)
+    || 'rgba(181, 115, 64, 0.35)';
 
   const asWhite = orientation === 'white';
   const legalSet = useMemo(() => new Set(legalSquares), [legalSquares]);
@@ -113,7 +120,8 @@ export const Squares = memo(function Squares({
       {squares.map(({ sq, isLight }) => {
         const isLastMoveFrom = lastMove?.from === sq;
         const isLastMoveTo = lastMove?.to === sq;
-        const isSelected = selectedSquare === sq && draggingSquare !== sq;
+        const isSelected = selectedSquare === sq;
+        const isDragHover = dragHoverSquare === sq;
         const isLegal = legalSet.has(sq);
         const isPremoveDest = premoveSet.has(sq);
         const isPremoveCurrent = premoveCurrentSet.has(sq);
@@ -151,7 +159,7 @@ export const Squares = memo(function Squares({
           outlineOffset = '-2px';
         }
 
-        // Selected square
+        // Selected square (stays highlighted during drag too)
         if (isSelected) {
           const style = visuals.selectedStyle;
           if (style === 'fill' || style === 'both') {
@@ -160,6 +168,11 @@ export const Squares = memo(function Squares({
           if (style === 'border' || style === 'both') {
             boxShadow = `inset 0 0 0 ${visuals.selectedBorderWidth}px ${visuals.selectedOutline}`;
           }
+        }
+
+        // Drag hover highlight (square the piece is currently over)
+        if (isDragHover) {
+          bg = dragOverColor;
         }
 
         // Current premove highlight

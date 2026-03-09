@@ -350,6 +350,7 @@ function useInteraction(opts) {
   const [premoveSquares, setPremoveSquares] = useState([]);
   const [premoveCurrent, setPremoveCurrent] = useState(null);
   const [pendingPromotion, setPendingPromotion] = useState(null);
+  const [dragHoverSquare, setDragHoverSquare] = useState(null);
   const [drag, setDrag] = useState(null);
   const dragGhostRef = useRef(null);
   const [internalArrowsMap, setInternalArrowsMap] = useState(/* @__PURE__ */ new Map());
@@ -742,6 +743,10 @@ function useInteraction(opts) {
           if (currentSq && currentSq !== dragRef.current.origSquare) {
             dragKeyChangedRef.current = true;
           }
+          setDragHoverSquare((prev) => {
+            const next = currentSq && currentSq !== dragRef.current.origSquare ? currentSq : null;
+            return prev === next ? prev : next;
+          });
           if (dragGhostRef.current) {
             const squareSize = boardBounds.width / 8;
             const offset = squareSize / 2;
@@ -804,6 +809,7 @@ function useInteraction(opts) {
       const capturedDrag = dragRef.current;
       setDrag(null);
       dragRef.current = null;
+      setDragHoverSquare(null);
       if (capturedDrag && !capturedDrag.started) {
         handleSquareInteraction(capturedDrag.origSquare);
         return;
@@ -921,6 +927,7 @@ function useInteraction(opts) {
     premoveCurrent,
     pendingPromotion,
     drag: drag?.started ? drag : null,
+    dragHoverSquare,
     dragGhostRef,
     activeMarkedSquares,
     renderedArrows,
@@ -1006,7 +1013,8 @@ var DEFAULT_SQUARE_VISUALS = {
   legalMoveStyle: "ring",
   legalRingOuterRadius: 24,
   legalRingInnerRadius: 17,
-  legalCaptureRingWidth: 7
+  legalCaptureRingWidth: 7,
+  dragOverHighlight: ""
 };
 var EMPTY_SQUARES2 = [];
 var EMPTY_MARKS = {};
@@ -1017,7 +1025,8 @@ var Squares = memo(function Squares2({
   orientation,
   lastMove,
   selectedSquare,
-  draggingSquare,
+  draggingSquare: _draggingSquare,
+  dragHoverSquare,
   legalSquares = EMPTY_SQUARES2,
   occupiedSquares,
   premoveSquares = EMPTY_SQUARES2,
@@ -1034,6 +1043,7 @@ var Squares = memo(function Squares2({
   );
   const highlightColor = lastMoveColor || hexToRgba(theme.lastMoveHighlight || "#DFAA4E", 0.5) || "rgba(223, 170, 78, 0.5)";
   const selectedColor = hexToRgba(theme.selectedPiece || "#B57340", 0.5) || "rgba(181, 115, 64, 0.5)";
+  const dragOverColor = visuals.dragOverHighlight || hexToRgba(theme.selectedPiece || "#B57340", 0.35) || "rgba(181, 115, 64, 0.35)";
   const asWhite = orientation === "white";
   const legalSet = useMemo(() => new Set(legalSquares), [legalSquares]);
   const premoveSet = useMemo(() => new Set(premoveSquares), [premoveSquares]);
@@ -1067,7 +1077,8 @@ var Squares = memo(function Squares2({
       children: squares.map(({ sq: sq2, isLight }) => {
         const isLastMoveFrom = lastMove?.from === sq2;
         const isLastMoveTo = lastMove?.to === sq2;
-        const isSelected = selectedSquare === sq2 && draggingSquare !== sq2;
+        const isSelected = selectedSquare === sq2;
+        const isDragHover = dragHoverSquare === sq2;
         const isLegal = legalSet.has(sq2);
         const isPremoveDest = premoveSet.has(sq2);
         const isPremoveCurrent = premoveCurrentSet.has(sq2);
@@ -1103,6 +1114,9 @@ var Squares = memo(function Squares2({
           if (style === "border" || style === "both") {
             boxShadow = `inset 0 0 0 ${visuals.selectedBorderWidth}px ${visuals.selectedOutline}`;
           }
+        }
+        if (isDragHover) {
+          bg = dragOverColor;
         }
         if (isPremoveCurrent) {
           bg = visuals.premoveCurrent;
@@ -2310,6 +2324,7 @@ var ChessiroCanvas = forwardRef(
                               lastMove,
                               selectedSquare: interaction.selectedSquare,
                               draggingSquare: interaction.drag?.origSquare,
+                              dragHoverSquare: interaction.dragHoverSquare,
                               legalSquares: interaction.legalSquares,
                               premoveSquares: interaction.premoveSquares,
                               premoveCurrent: interaction.premoveCurrent,

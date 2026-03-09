@@ -109,6 +109,10 @@ export interface SquareVisuals {
   legalRingInnerRadius?: number;
   /** Inset border width in px for capture-move rings. Default: 7 */
   legalCaptureRingWidth?: number;
+
+  // Drag hover
+  /** Color overlay for the square the piece is hovering over during drag. Default: selectedPiece color at 0.3 opacity */
+  dragOverHighlight?: string;
 }
 
 export interface ArrowVisuals {
