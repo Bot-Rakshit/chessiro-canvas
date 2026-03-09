@@ -743,8 +743,9 @@ function useInteraction(opts) {
           if (currentSq && currentSq !== dragRef.current.origSquare) {
             dragKeyChangedRef.current = true;
           }
+          const origSq = dragRef.current.origSquare;
           setDragHoverSquare((prev) => {
-            const next = currentSq && currentSq !== dragRef.current.origSquare ? currentSq : null;
+            const next = currentSq && currentSq !== origSq ? currentSq : null;
             return prev === next ? prev : next;
           });
           if (dragGhostRef.current) {
