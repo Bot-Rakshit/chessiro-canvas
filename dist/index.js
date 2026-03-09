@@ -1116,7 +1116,7 @@ var Squares = memo(function Squares2({
             const outer = visuals.legalRingOuterRadius;
             backgroundImage = `radial-gradient(circle at center, transparent 0%, transparent ${inner}%, ${visuals.legalDot} ${inner}%, ${visuals.legalDot} ${outer}%, transparent ${outer}%)`;
           } else {
-            backgroundImage = `radial-gradient(circle at center, ${visuals.legalDot} 0%, ${visuals.legalDot} 10%, ${visuals.legalDotOutline} 10%, ${visuals.legalDotOutline} 14%, transparent 14%)`;
+            backgroundImage = `radial-gradient(circle at center, ${visuals.legalDot} 0%, ${visuals.legalDot} 15%, ${visuals.legalDotOutline} 15%, ${visuals.legalDotOutline} 19%, transparent 19%)`;
           }
         }
         if (isPremoveDest && !isLegal) {
@@ -1128,7 +1128,7 @@ var Squares = memo(function Squares2({
             const outer = visuals.legalRingOuterRadius;
             backgroundImage = `radial-gradient(circle at center, transparent 0%, transparent ${inner}%, ${visuals.premoveDot} ${inner}%, ${visuals.premoveDot} ${outer}%, transparent ${outer}%)`;
           } else {
-            backgroundImage = `radial-gradient(circle at center, ${visuals.premoveDot} 0%, ${visuals.premoveDot} 10%, ${visuals.premoveDot} 14%, transparent 14%)`;
+            backgroundImage = `radial-gradient(circle at center, ${visuals.premoveDot} 0%, ${visuals.premoveDot} 15%, ${visuals.premoveDot} 19%, transparent 19%)`;
           }
         }
         return /* @__PURE__ */ jsx(
