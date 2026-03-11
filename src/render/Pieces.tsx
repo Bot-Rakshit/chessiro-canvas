@@ -17,6 +17,8 @@ interface PiecesLayerProps {
   animationDurationMs: number;
   showAnimations: boolean;
   draggingSquare?: string | null;
+  selectedSquare?: string | null;
+  selectedPieceScale?: number;
 }
 
 function easing(t: number): number {
@@ -34,6 +36,8 @@ export const PiecesLayer = memo(function PiecesLayer({
   animationDurationMs,
   showAnimations,
   draggingSquare,
+  selectedSquare,
+  selectedPieceScale,
 }: PiecesLayerProps) {
   const asWhite = orientation === 'white';
   const piecePath = pieceSet?.path;
@@ -181,6 +185,7 @@ export const PiecesLayer = memo(function PiecesLayer({
       square: Square;
       piece: Piece;
       dragging: boolean;
+      selected: boolean;
     }> = [];
 
     for (const [square, piece] of pieces) {
@@ -188,10 +193,11 @@ export const PiecesLayer = memo(function PiecesLayer({
         square,
         piece,
         dragging: draggingSquare === square,
+        selected: selectedSquare === square,
       });
     }
     return states;
-  }, [pieces, draggingSquare]);
+  }, [pieces, draggingSquare, selectedSquare]);
 
   const setRef = useCallback((square: string) => (el: HTMLDivElement | null) => {
     if (el) {
@@ -232,7 +238,13 @@ export const PiecesLayer = memo(function PiecesLayer({
             pointerEvents: 'none',
           }}
         >
-          {renderPiece(ps.piece)}
+          <div style={
+            ps.selected && selectedPieceScale
+              ? { transition: 'transform 0.15s ease-out', transform: `scale(${selectedPieceScale})`, width: '100%', height: '100%' }
+              : { transition: 'transform 0.15s ease-out', width: '100%', height: '100%' }
+          }>
+            {renderPiece(ps.piece)}
+          </div>
         </div>
       ))}
     </div>

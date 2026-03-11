@@ -78,6 +78,7 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
       animationDurationMs = 200,
       showAnimations = true,
       blockTouchScroll = false,
+      selectedPieceScale,
       onPrevious,
       onNext,
       onFirst,
@@ -285,6 +286,8 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
                     animationDurationMs={showAnimations ? animationDurationMs : 0}
                     showAnimations={showAnimations}
                     draggingSquare={interaction.drag?.origSquare}
+                    selectedSquare={interaction.selectedSquare}
+                    selectedPieceScale={selectedPieceScale}
                   />
 
                   <ArrowsLayer

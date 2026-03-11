@@ -189,6 +189,7 @@ interface ChessiroCanvasProps {
     animationDurationMs?: number;
     showAnimations?: boolean;
     blockTouchScroll?: boolean;
+    selectedPieceScale?: number;
     onPrevious?: () => void;
     onNext?: () => void;
     onFirst?: () => void;

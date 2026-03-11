@@ -1333,7 +1333,9 @@ var PiecesLayer = memo(function PiecesLayer2({
   boardHeight,
   animationDurationMs,
   showAnimations,
-  draggingSquare
+  draggingSquare,
+  selectedSquare,
+  selectedPieceScale
 }) {
   const asWhite = orientation === "white";
   const piecePath = pieceSet?.path;
@@ -1457,11 +1459,12 @@ var PiecesLayer = memo(function PiecesLayer2({
       states.push({
         square,
         piece,
-        dragging: draggingSquare === square
+        dragging: draggingSquare === square,
+        selected: selectedSquare === square
       });
     }
     return states;
-  }, [pieces, draggingSquare]);
+  }, [pieces, draggingSquare, selectedSquare]);
   const setRef = useCallback((square) => (el) => {
     if (el) {
       pieceElsRef.current.set(square, el);
@@ -1495,7 +1498,7 @@ var PiecesLayer = memo(function PiecesLayer2({
         zIndex: ps.dragging ? 1 : 2,
         pointerEvents: "none"
       },
-      children: renderPiece(ps.piece)
+      children: /* @__PURE__ */ jsx("div", { style: ps.selected && selectedPieceScale ? { transition: "transform 0.15s ease-out", transform: `scale(${selectedPieceScale})`, width: "100%", height: "100%" } : { transition: "transform 0.15s ease-out", width: "100%", height: "100%" }, children: renderPiece(ps.piece) })
     },
     `${ps.square}-${ps.piece.color}${ps.piece.role}`
   )) });
@@ -2146,6 +2149,7 @@ var ChessiroCanvas = forwardRef(
       animationDurationMs = 200,
       showAnimations = true,
       blockTouchScroll = false,
+      selectedPieceScale,
       onPrevious,
       onNext,
       onFirst,
@@ -2348,7 +2352,9 @@ var ChessiroCanvas = forwardRef(
                               boardHeight,
                               animationDurationMs: showAnimations ? animationDurationMs : 0,
                               showAnimations,
-                              draggingSquare: interaction.drag?.origSquare
+                              draggingSquare: interaction.drag?.origSquare,
+                              selectedSquare: interaction.selectedSquare,
+                              selectedPieceScale
                             }
                           ),
                           /* @__PURE__ */ jsx(

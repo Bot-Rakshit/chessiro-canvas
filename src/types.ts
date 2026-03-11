@@ -298,6 +298,7 @@ export interface ChessiroCanvasProps {
   animationDurationMs?: number;
   showAnimations?: boolean;
   blockTouchScroll?: boolean; // prevent scrolling when touching the board (default: false)
+  selectedPieceScale?: number; // scale factor for the selected piece (e.g. 1.1 for 10% larger)
 
   // Keyboard nav callbacks
   onPrevious?: () => void;
