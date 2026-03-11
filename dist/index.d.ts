@@ -84,7 +84,12 @@ interface NotationVisuals {
     fontFamily?: string;
     fontSize?: string | number;
     fontWeight?: number | string;
+    /** Single color for all notation (margin mode). Overrides per-square colors in on-board mode. */
     color?: string;
+    /** Color for notation rendered on light squares (on-board mode only). Defaults to theme.darkSquare. */
+    onLightSquareColor?: string;
+    /** Color for notation rendered on dark squares (on-board mode only). Defaults to theme.lightSquare. */
+    onDarkSquareColor?: string;
     opacity?: number;
     onBoardFontSize?: string | number;
     onBoardLeftOffset?: string | number;

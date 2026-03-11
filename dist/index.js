@@ -1634,6 +1634,8 @@ var DEFAULT_NOTATION_VISUALS = {
   fontSize: "12px",
   fontWeight: 500,
   color: "",
+  onLightSquareColor: "",
+  onDarkSquareColor: "",
   opacity: 0.85,
   onBoardFontSize: "10px",
   onBoardLeftOffset: "2px",
@@ -1737,6 +1739,8 @@ function OnBoardNotation({
 }) {
   const asWhite = orientation === "white";
   const notationVisuals = { ...DEFAULT_NOTATION_VISUALS, ...visuals };
+  const lightSqColor = notationVisuals.color || notationVisuals.onLightSquareColor || theme.darkSquare;
+  const darkSqColor = notationVisuals.color || notationVisuals.onDarkSquareColor || theme.lightSquare;
   return /* @__PURE__ */ jsxs("div", { style: {
     position: "absolute",
     inset: 0,
@@ -1756,7 +1760,7 @@ function OnBoardNotation({
             fontSize: notationVisuals.onBoardFontSize,
             fontWeight: notationVisuals.fontWeight,
             fontFamily: notationVisuals.fontFamily,
-            color: notationVisuals.color || (isLight ? theme.darkSquare : theme.lightSquare),
+            color: isLight ? lightSqColor : darkSqColor,
             opacity: notationVisuals.opacity,
             userSelect: "none",
             lineHeight: 1
@@ -1780,7 +1784,7 @@ function OnBoardNotation({
             fontSize: notationVisuals.onBoardFontSize,
             fontWeight: notationVisuals.fontWeight,
             fontFamily: notationVisuals.fontFamily,
-            color: notationVisuals.color || (isLight ? theme.darkSquare : theme.lightSquare),
+            color: isLight ? lightSqColor : darkSqColor,
             opacity: notationVisuals.opacity,
             userSelect: "none",
             lineHeight: 1

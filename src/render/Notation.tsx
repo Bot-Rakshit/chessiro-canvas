@@ -44,6 +44,8 @@ const DEFAULT_NOTATION_VISUALS: Required<NotationVisuals> = {
   fontSize: '12px',
   fontWeight: 500,
   color: '',
+  onLightSquareColor: '',
+  onDarkSquareColor: '',
   opacity: 0.85,
   onBoardFontSize: '10px',
   onBoardLeftOffset: '2px',
@@ -167,6 +169,11 @@ function OnBoardNotation({
   const asWhite = orientation === 'white';
   const notationVisuals = { ...DEFAULT_NOTATION_VISUALS, ...visuals };
 
+  // Resolve color for a notation label based on the square it sits on.
+  // Priority: color (uniform override) > onLightSquareColor/onDarkSquareColor > theme defaults.
+  const lightSqColor = notationVisuals.color || notationVisuals.onLightSquareColor || theme.darkSquare;
+  const darkSqColor = notationVisuals.color || notationVisuals.onDarkSquareColor || theme.lightSquare;
+
   return (
     <div style={{
       position: 'absolute',
@@ -176,10 +183,6 @@ function OnBoardNotation({
     }}>
       {/* File letters - bottom-right corner of each square in the bottom row */}
       {files.map((f, i) => {
-        // Bottom row: for white, rank 1 squares are at bottom. For black, rank 8 squares.
-        // The square color alternates. file index 0 = a-file.
-        // For bottom-right placement, the text sits in the last row.
-        // Square is light if (file + rank) is odd (0-indexed).
         const bottomRank = asWhite ? 0 : 7;
         const isLight = (i + bottomRank) % 2 !== 0;
         return (
@@ -192,7 +195,7 @@ function OnBoardNotation({
               fontSize: notationVisuals.onBoardFontSize,
               fontWeight: notationVisuals.fontWeight,
               fontFamily: notationVisuals.fontFamily,
-              color: notationVisuals.color || (isLight ? theme.darkSquare : theme.lightSquare),
+              color: isLight ? lightSqColor : darkSqColor,
               opacity: notationVisuals.opacity,
               userSelect: 'none',
               lineHeight: 1,
@@ -204,9 +207,8 @@ function OnBoardNotation({
       })}
       {/* Rank numbers - top-left corner of each square in the left column */}
       {ranks.map((r, i) => {
-        // Left column: for white, a-file is at left. For black, h-file is at left.
         const leftFile = asWhite ? 0 : 7;
-        const rankIdx = asWhite ? 7 - i : i; // row index to rank index
+        const rankIdx = asWhite ? 7 - i : i;
         const isLight = (leftFile + rankIdx) % 2 !== 0;
         return (
           <div
@@ -218,7 +220,7 @@ function OnBoardNotation({
               fontSize: notationVisuals.onBoardFontSize,
               fontWeight: notationVisuals.fontWeight,
               fontFamily: notationVisuals.fontFamily,
-              color: notationVisuals.color || (isLight ? theme.darkSquare : theme.lightSquare),
+              color: isLight ? lightSqColor : darkSqColor,
               opacity: notationVisuals.opacity,
               userSelect: 'none',
               lineHeight: 1,
