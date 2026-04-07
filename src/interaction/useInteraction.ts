@@ -135,6 +135,7 @@ export function useInteraction(opts: UseInteractionOptions): InteractionState {
   const arrowsRef = useRef(arrows);
   const internalMarksMapRef = useRef(internalMarksMap);
   const internalArrowsMapRef = useRef(internalArrowsMap);
+  const activeBoundsRef = useRef<DOMRect | null>(null);
   selectedRef.current = selectedSquare;
   legalRef.current = legalSquares;
   premoveRef.current = premoveSquares;
@@ -211,6 +212,10 @@ export function useInteraction(opts: UseInteractionOptions): InteractionState {
     if (dests) return dests.get(sq as Square) || [];
     return [];
   }, [dests]);
+
+  const getCurrentBounds = useCallback((): DOMRect | null => {
+    return getFreshBounds?.() ?? boardBounds;
+  }, [boardBounds, getFreshBounds]);
 
   const attemptMove = useCallback((from: string, to: string, promotion?: PromotionPiece): 'pending' | boolean => {
     if (!onMove || !interactive) return false;
@@ -430,7 +435,8 @@ export function useInteraction(opts: UseInteractionOptions): InteractionState {
   // This matches chessground's getSnappedKeyAtDomPos approach
 
   const getSnappedSquare = useCallback((origSq: string, clientX: number, clientY: number): string | undefined => {
-    if (!boardBounds) return undefined;
+    const activeBounds = activeBoundsRef.current ?? getCurrentBounds();
+    if (!activeBounds) return undefined;
     const origF = origSq.charCodeAt(0) - 97;
     const origR = parseInt(origSq[1]) - 1;
 
@@ -450,8 +456,8 @@ export function useInteraction(opts: UseInteractionOptions): InteractionState {
         // Compute pixel center of this square
         const col = asWhite ? f : 7 - f;
         const row = asWhite ? 7 - r : r;
-        const cx = boardBounds.left + (col + 0.5) * boardBounds.width / 8;
-        const cy = boardBounds.top + (row + 0.5) * boardBounds.height / 8;
+        const cx = activeBounds.left + (col + 0.5) * activeBounds.width / 8;
+        const cy = activeBounds.top + (row + 0.5) * activeBounds.height / 8;
         const dx = clientX - cx;
         const dy = clientY - cy;
         const dist = dx * dx + dy * dy;
@@ -462,7 +468,7 @@ export function useInteraction(opts: UseInteractionOptions): InteractionState {
       }
     }
     return bestSq;
-  }, [boardBounds, asWhite]);
+  }, [asWhite, getCurrentBounds]);
 
   // ── Pointer down handler ──
 
@@ -478,11 +484,13 @@ export function useInteraction(opts: UseInteractionOptions): InteractionState {
       return;
     }
 
-    // Use fresh bounds on touch to avoid stale coordinates after scroll/layout shifts
-    const activeBounds = (isTouch && getFreshBounds ? getFreshBounds() : boardBounds) as DOMRect | null;
+    // Capture fresh geometry for the full pointer sequence. ResizeObserver can lag
+    // behind a user resize, but pointer hit-testing must use the current DOM rect.
+    const activeBounds = getCurrentBounds();
     if (!activeBounds) return;
     // Promotion chooser is modal: ignore board pointer handling until resolved.
     if (pendingPromotion) return;
+    activeBoundsRef.current = activeBounds;
     const sq = getSquareFromEvent(nativeEvent, asWhite, activeBounds);
     if (!sq) return;
 
@@ -531,7 +539,7 @@ export function useInteraction(opts: UseInteractionOptions): InteractionState {
     if (!startedDragCandidate) {
       handleSquareInteraction(sq);
     }
-  }, [boardBounds, getFreshBounds, pendingPromotion, asWhite, interactive, allowDragging, allowDrawingArrows,
+  }, [getCurrentBounds, pendingPromotion, asWhite, interactive, allowDragging, allowDrawingArrows,
     handleSquareInteraction, brushes, canMoveColor, canPremoveColor, blockTouchScroll]);
 
   // ── Document-level move/up for drag and arrow drawing ──
@@ -557,8 +565,9 @@ export function useInteraction(opts: UseInteractionOptions): InteractionState {
           // so it mounts the DragGhost. Subsequent moves are purely DOM-managed.
           setDrag({ ...dragRef.current });
         }
-        if (dragRef.current.started && boardBounds) {
-          const currentSq = screenPos2square(pos[0], pos[1], asWhite, boardBounds);
+        const activeBounds = activeBoundsRef.current ?? getCurrentBounds();
+        if (dragRef.current.started && activeBounds) {
+          const currentSq = screenPos2square(pos[0], pos[1], asWhite, activeBounds);
           if (currentSq && currentSq !== dragRef.current.origSquare) {
             dragKeyChangedRef.current = true;
           }
@@ -568,7 +577,7 @@ export function useInteraction(opts: UseInteractionOptions): InteractionState {
             return prev === next ? prev : next;
           });
           if (dragGhostRef.current) {
-            const squareSize = boardBounds.width / 8;
+            const squareSize = activeBounds.width / 8;
             const offset = squareSize / 2;
             dragGhostRef.current.style.transform = `translate(${pos[0] - offset}px, ${pos[1] - offset}px)`;
           }
@@ -600,8 +609,9 @@ export function useInteraction(opts: UseInteractionOptions): InteractionState {
     };
 
     const handleUp = (e: MouseEvent | TouchEvent) => {
+      const releaseBounds = activeBoundsRef.current ?? getCurrentBounds();
       // Arrow drawing end
-      if ('button' in e && isRightButton(e as MouseEvent) && arrowStartRef.current && boardBounds) {
+      if ('button' in e && isRightButton(e as MouseEvent) && arrowStartRef.current && releaseBounds) {
         const startSq = arrowStartRef.current;
         const color = arrowColorRef.current;
         // Use the last tracked position (more reliable than event position for right-click)
@@ -611,7 +621,7 @@ export function useInteraction(opts: UseInteractionOptions): InteractionState {
 
         if (pos) {
           // Get the raw square under cursor
-          const rawSq = screenPos2square(pos[0], pos[1], asWhite, boardBounds);
+          const rawSq = screenPos2square(pos[0], pos[1], asWhite, releaseBounds);
 
           if (rawSq === startSq || !rawSq) {
             // Same square or no square: toggle mark
@@ -630,11 +640,13 @@ export function useInteraction(opts: UseInteractionOptions): InteractionState {
             setTimeout(() => { justDrewArrowRef.current = false; }, 150);
           }
         }
+        activeBoundsRef.current = null;
         return;
       }
 
       // Drag end
       const capturedDrag = dragRef.current;
+      activeBoundsRef.current = null;
       setDrag(null);
       dragRef.current = null;
       setDragHoverSquare(null);
@@ -646,7 +658,7 @@ export function useInteraction(opts: UseInteractionOptions): InteractionState {
 
       queueMicrotask(() => {
         if (!capturedDrag) return;
-        const freshBounds = getFreshBounds ? getFreshBounds() : boardBounds;
+        const freshBounds = getCurrentBounds() ?? releaseBounds;
         if (!freshBounds || !interactive) return;
 
         const pos = getClientPos(e);
@@ -689,7 +701,7 @@ export function useInteraction(opts: UseInteractionOptions): InteractionState {
       document.removeEventListener('mouseup', handleUp);
       document.removeEventListener('touchend', handleUp);
     };
-  }, [boardBounds, getFreshBounds, asWhite, interactive, attemptMove, attemptPremove,
+  }, [getCurrentBounds, asWhite, interactive, attemptMove, attemptPremove,
     toggleArrow, toggleMark, getSnappedSquare, snapArrowsToValidMoves,
     canMoveColor, canPremoveColor, blockTouchScroll, getDestsForSquare, dests, handleSquareInteraction]);
 

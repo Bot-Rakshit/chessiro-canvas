@@ -371,6 +371,7 @@ function useInteraction(opts) {
   const arrowsRef = useRef(arrows);
   const internalMarksMapRef = useRef(internalMarksMap);
   const internalArrowsMapRef = useRef(internalArrowsMap);
+  const activeBoundsRef = useRef(null);
   selectedRef.current = selectedSquare;
   legalRef.current = legalSquares;
   premoveRef.current = premoveSquares;
@@ -427,6 +428,9 @@ function useInteraction(opts) {
     if (dests) return dests.get(sq2) || [];
     return [];
   }, [dests]);
+  const getCurrentBounds = useCallback(() => {
+    return getFreshBounds?.() ?? boardBounds;
+  }, [boardBounds, getFreshBounds]);
   const attemptMove = useCallback((from, to, promotion) => {
     if (!onMove || !interactive) return false;
     const validDests = getDestsForSquare(from);
@@ -627,7 +631,8 @@ function useInteraction(opts) {
     }
   }, [plyIndex, externalMarkedSquares, onMarkedSquaresChange, plyMarks, onPlyMarksChange]);
   const getSnappedSquare = useCallback((origSq, clientX, clientY) => {
-    if (!boardBounds) return void 0;
+    const activeBounds = activeBoundsRef.current ?? getCurrentBounds();
+    if (!activeBounds) return void 0;
     const origF = origSq.charCodeAt(0) - 97;
     const origR = parseInt(origSq[1]) - 1;
     let bestSq;
@@ -642,8 +647,8 @@ function useInteraction(opts) {
         if (!isKnight && !isQueen) continue;
         const col = asWhite ? f : 7 - f;
         const row = asWhite ? 7 - r : r;
-        const cx = boardBounds.left + (col + 0.5) * boardBounds.width / 8;
-        const cy = boardBounds.top + (row + 0.5) * boardBounds.height / 8;
+        const cx = activeBounds.left + (col + 0.5) * activeBounds.width / 8;
+        const cy = activeBounds.top + (row + 0.5) * activeBounds.height / 8;
         const dx = clientX - cx;
         const dy = clientY - cy;
         const dist = dx * dx + dy * dy;
@@ -654,7 +659,7 @@ function useInteraction(opts) {
       }
     }
     return bestSq;
-  }, [boardBounds, asWhite]);
+  }, [asWhite, getCurrentBounds]);
   const handlePointerDown = useCallback((e) => {
     const nativeEvent = e.nativeEvent;
     const isTouch = "touches" in nativeEvent;
@@ -664,9 +669,10 @@ function useInteraction(opts) {
     } else if (Date.now() - lastTouchTsRef.current < TOUCH_MOUSE_SUPPRESS_MS) {
       return;
     }
-    const activeBounds = isTouch && getFreshBounds ? getFreshBounds() : boardBounds;
+    const activeBounds = getCurrentBounds();
     if (!activeBounds) return;
     if (pendingPromotion) return;
+    activeBoundsRef.current = activeBounds;
     const sq2 = getSquareFromEvent(nativeEvent, asWhite, activeBounds);
     if (!sq2) return;
     if ("button" in e && isRightButton(e)) {
@@ -707,8 +713,7 @@ function useInteraction(opts) {
       handleSquareInteraction(sq2);
     }
   }, [
-    boardBounds,
-    getFreshBounds,
+    getCurrentBounds,
     pendingPromotion,
     asWhite,
     interactive,
@@ -738,8 +743,9 @@ function useInteraction(opts) {
           dragStartedSquare = dragRef.current.origSquare;
           setDrag({ ...dragRef.current });
         }
-        if (dragRef.current.started && boardBounds) {
-          const currentSq = screenPos2square(pos[0], pos[1], asWhite, boardBounds);
+        const activeBounds = activeBoundsRef.current ?? getCurrentBounds();
+        if (dragRef.current.started && activeBounds) {
+          const currentSq = screenPos2square(pos[0], pos[1], asWhite, activeBounds);
           if (currentSq && currentSq !== dragRef.current.origSquare) {
             dragKeyChangedRef.current = true;
           }
@@ -749,7 +755,7 @@ function useInteraction(opts) {
             return prev === next ? prev : next;
           });
           if (dragGhostRef.current) {
-            const squareSize = boardBounds.width / 8;
+            const squareSize = activeBounds.width / 8;
             const offset = squareSize / 2;
             dragGhostRef.current.style.transform = `translate(${pos[0] - offset}px, ${pos[1] - offset}px)`;
           }
@@ -778,14 +784,15 @@ function useInteraction(opts) {
       }
     };
     const handleUp = (e) => {
-      if ("button" in e && isRightButton(e) && arrowStartRef.current && boardBounds) {
+      const releaseBounds = activeBoundsRef.current ?? getCurrentBounds();
+      if ("button" in e && isRightButton(e) && arrowStartRef.current && releaseBounds) {
         const startSq = arrowStartRef.current;
         const color = arrowColorRef.current;
         const pos = arrowPosRef.current || getClientPos(e);
         arrowStartRef.current = null;
         arrowPosRef.current = null;
         if (pos) {
-          const rawSq = screenPos2square(pos[0], pos[1], asWhite, boardBounds);
+          const rawSq = screenPos2square(pos[0], pos[1], asWhite, releaseBounds);
           if (rawSq === startSq || !rawSq) {
             toggleMark(startSq);
           } else if (snapArrowsToValidMoves) {
@@ -805,9 +812,11 @@ function useInteraction(opts) {
             }, 150);
           }
         }
+        activeBoundsRef.current = null;
         return;
       }
       const capturedDrag = dragRef.current;
+      activeBoundsRef.current = null;
       setDrag(null);
       dragRef.current = null;
       setDragHoverSquare(null);
@@ -817,7 +826,7 @@ function useInteraction(opts) {
       }
       queueMicrotask(() => {
         if (!capturedDrag) return;
-        const freshBounds = getFreshBounds ? getFreshBounds() : boardBounds;
+        const freshBounds = getCurrentBounds() ?? releaseBounds;
         if (!freshBounds || !interactive) return;
         const pos = getClientPos(e);
         const target = pos ? screenPos2square(pos[0], pos[1], asWhite, freshBounds) : void 0;
@@ -856,8 +865,7 @@ function useInteraction(opts) {
       document.removeEventListener("touchend", handleUp);
     };
   }, [
-    boardBounds,
-    getFreshBounds,
+    getCurrentBounds,
     asWhite,
     interactive,
     attemptMove,
