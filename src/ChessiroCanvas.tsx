@@ -79,6 +79,10 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
       showAnimations = true,
       blockTouchScroll = false,
       selectedPieceScale,
+      dragScale = 1,
+      touchDragScale = 1.9,
+      dragLiftSquares = 0,
+      touchDragLiftSquares = 0.6,
       onPrevious,
       onNext,
       onFirst,
@@ -352,6 +356,8 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
             squareSize={squareSize}
             pieceSet={pieceSet}
             customPieces={customPieces}
+            scale={interaction.drag.isTouch ? touchDragScale : dragScale}
+            liftSquares={interaction.drag.isTouch ? touchDragLiftSquares : dragLiftSquares}
           />
         )}
       </div>

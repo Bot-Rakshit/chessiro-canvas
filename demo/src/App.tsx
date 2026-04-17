@@ -1,6 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { ChessiroCanvas, type BoardTheme } from 'chessiro-canvas';
+import {
+  ChessiroCanvas,
+  DEFAULT_ARROW_BRUSHES,
+  type ArrowVisuals,
+  type ArrowHeadShape,
+  type ArrowBrushes,
+  type BoardTheme,
+  type Arrow,
+  type PieceColor,
+  type SquareVisuals,
+} from 'chessiro-canvas';
 import { Chess } from 'chessops/chess';
 import { chessgroundDests } from 'chessops/compat';
 import { parseFen, makeFen } from 'chessops/fen';
@@ -50,6 +60,7 @@ const THEMES: BoardTheme[] = [
 const SECTION_LINKS = [
   { id: 'overview', label: 'Overview' },
   { id: 'playground', label: 'Playground' },
+  { id: 'studio', label: 'Arrows & Premove Studio' },
   { id: 'quick-start', label: 'Quick Start' },
   { id: 'customization', label: 'Customization' },
   { id: 'props', label: 'Props' },
@@ -524,6 +535,17 @@ export function App() {
             </div>
           </section>
 
+          <section id="studio" className="mb-16">
+            <div className="mb-8">
+              <h2 className="text-2xl font-bold text-white mb-2">Arrows & Premove Studio</h2>
+              <p className="text-slate-400">
+                Tune the default arrow look, simulate touch-drag behaviour, and try premoves. Every prop shown here is a
+                first-class API — copy the JSON into your own app.
+              </p>
+            </div>
+            <ArrowPremoveStudio theme={theme} />
+          </section>
+
           <section id="quick-start" className="mb-16">
             <div className="mb-8">
               <h2 className="text-2xl font-bold text-white mb-2">Quick Start</h2>
@@ -633,6 +655,595 @@ export function App() {
       </div>
     </div>
   );
+}
+
+const STUDIO_FEN = 'r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 2 3';
+
+function createStudioPos() {
+  return Chess.fromSetup(parseFen(STUDIO_FEN).unwrap()).unwrap();
+}
+
+const DEFAULT_PRESET_ARROWS: Arrow[] = [
+  { startSquare: 'f3', endSquare: 'e5', color: DEFAULT_ARROW_BRUSHES.green, brush: 'green' },
+  { startSquare: 'c4', endSquare: 'f7', color: DEFAULT_ARROW_BRUSHES.red, brush: 'red' },
+  { startSquare: 'd1', endSquare: 'h5', color: DEFAULT_ARROW_BRUSHES.blue, brush: 'blue' },
+];
+
+type PremoveMode = 'off' | 'waiting';
+
+function ArrowPremoveStudio({ theme }: { theme: BoardTheme }) {
+  const [pos, setPos] = useState(createStudioPos);
+  const [lastMove, setLastMove] = useState<{ from: string; to: string } | null>(null);
+  const [userArrows, setUserArrows] = useState<Arrow[]>(DEFAULT_PRESET_ARROWS);
+
+  // Arrow visual controls
+  const [lineWidth, setLineWidth] = useState(0.086);
+  const [opacity, setOpacity] = useState(0.85);
+  const [headLength, setHeadLength] = useState(3.2);
+  const [headWidth, setHeadWidth] = useState(3.5);
+  const [margin, setMargin] = useState(0.18);
+  const [startOffset, setStartOffset] = useState(0);
+  const [lineCap, setLineCap] = useState<'round' | 'butt' | 'square'>('round');
+  const [lineJoin, setLineJoin] = useState<'round' | 'miter' | 'bevel'>('miter');
+  const [headShape, setHeadShape] = useState<ArrowHeadShape>('classic');
+  const [headCornerRadius, setHeadCornerRadius] = useState(0);
+  const [dashed, setDashed] = useState(false);
+  const [dashArray, setDashArray] = useState('0.22 0.16');
+  const [dashOffset, setDashOffset] = useState(0);
+  const [outlineWidth, setOutlineWidth] = useState(0);
+  const [outlineColor, setOutlineColor] = useState('rgba(0,0,0,0.45)');
+  const [brushes, setBrushes] = useState<ArrowBrushes>({ ...DEFAULT_ARROW_BRUSHES });
+
+  // Touch-drag controls
+  const [touchDragScale, setTouchDragScale] = useState(1.9);
+  const [touchDragLiftSquares, setTouchDragLiftSquares] = useState(0.6);
+  const [dragScale, setDragScale] = useState(1);
+  const [dragLiftSquares, setDragLiftSquares] = useState(0);
+
+  // Premove controls
+  const [premoveMode, setPremoveMode] = useState<PremoveMode>('off');
+  const [premoveColor, setPremoveColor] = useState('rgba(155, 89, 182, 0.55)');
+  const [premoveRingColor, setPremoveRingColor] = useState('rgba(155, 89, 182, 0.75)');
+  const [premoveCurrentColor, setPremoveCurrentColor] = useState('rgba(155, 89, 182, 0.35)');
+  const [showPremoveDests, setShowPremoveDests] = useState(true);
+  const [currentPremove, setCurrentPremove] = useState<[string, string] | null>(null);
+  const [premoveCurrentStyle, setPremoveCurrentStyle] = useState<'fill' | 'dashed' | 'both'>('fill');
+  const [premoveBorderWidth, setPremoveBorderWidth] = useState(3);
+  const [premoveBorderColor, setPremoveBorderColor] = useState('rgba(155, 89, 182, 0.9)');
+  const [captureRingShape, setCaptureRingShape] = useState<'circle' | 'square'>('square');
+  const [captureRingWidth, setCaptureRingWidth] = useState(3);
+  const [captureRingCornerRadius, setCaptureRingCornerRadius] = useState(14);
+
+  const fen = useMemo(() => makeFen(pos.toSetup()), [pos]);
+  const dests = useMemo(() => chessgroundDests(pos), [pos]);
+  const realTurn: PieceColor = pos.turn === 'white' ? 'w' : 'b';
+  // Premove mode pretends it's the opponent's turn so the user can queue a move.
+  const turnColor: PieceColor = premoveMode === 'waiting' ? (realTurn === 'w' ? 'b' : 'w') : realTurn;
+  const movableColor: PieceColor = realTurn;
+
+  const arrowVisuals = useMemo<Partial<ArrowVisuals>>(
+    () => ({
+      lineWidth,
+      opacity,
+      margin,
+      startOffset,
+      headLength,
+      headWidth,
+      headShape,
+      headCornerRadius,
+      lineCap,
+      lineJoin,
+      dashArray: dashed ? dashArray : undefined,
+      dashOffset: dashed ? dashOffset : undefined,
+      outlineWidth,
+      outlineColor,
+    }),
+    [lineWidth, opacity, margin, startOffset, headLength, headWidth, headShape, headCornerRadius, lineCap, lineJoin, dashed, dashArray, dashOffset, outlineWidth, outlineColor],
+  );
+
+  const squareVisuals = useMemo<Partial<SquareVisuals>>(
+    () => ({
+      premoveDot: premoveColor,
+      premoveCaptureRing: premoveRingColor,
+      premoveCurrent: premoveCurrentColor,
+      premoveCurrentStyle,
+      premoveCurrentBorderWidth: premoveBorderWidth,
+      premoveCurrentBorderColor: premoveBorderColor,
+      legalCaptureRingShape: captureRingShape,
+      legalCaptureRingWidth: captureRingWidth,
+      legalCaptureRingCornerRadius: captureRingCornerRadius,
+    }),
+    [premoveColor, premoveRingColor, premoveCurrentColor, premoveCurrentStyle, premoveBorderWidth, premoveBorderColor, captureRingShape, captureRingWidth, captureRingCornerRadius],
+  );
+
+  const handleMove = useCallback(
+    (from: string, to: string, promotion?: string) => {
+      const move = parseUci(`${from}${to}${promotion ?? ''}`);
+      if (!move || !pos.isLegal(move)) return false;
+      const next = pos.clone();
+      next.play(move);
+      setPos(next);
+      setLastMove({ from, to });
+      return true;
+    },
+    [pos],
+  );
+
+  const resetStudio = useCallback(() => {
+    setPos(createStudioPos());
+    setLastMove(null);
+    setUserArrows(DEFAULT_PRESET_ARROWS);
+    setCurrentPremove(null);
+  }, []);
+
+  const resetArrowDefaults = useCallback(() => {
+    setLineWidth(0.086);
+    setOpacity(0.85);
+    setHeadLength(3.2);
+    setHeadWidth(3.5);
+    setMargin(0.18);
+    setStartOffset(0);
+    setLineCap('round');
+    setLineJoin('miter');
+    setHeadShape('classic');
+    setHeadCornerRadius(0);
+    setDashed(false);
+    setDashArray('0.22 0.16');
+    setDashOffset(0);
+    setOutlineWidth(0);
+    setOutlineColor('rgba(0,0,0,0.45)');
+    setBrushes({ ...DEFAULT_ARROW_BRUSHES });
+  }, []);
+
+  const addPresetArrows = useCallback(() => {
+    setUserArrows(
+      DEFAULT_PRESET_ARROWS.map((a) => ({
+        ...a,
+        color: a.brush ? brushes[a.brush] : a.color,
+      })),
+    );
+  }, [brushes]);
+
+  const snippet = useMemo(() => {
+    const arrowObj: Record<string, unknown> = {
+      lineWidth: round(lineWidth, 3),
+      opacity: round(opacity, 2),
+      margin: round(margin, 2),
+      startOffset: round(startOffset, 2),
+      headLength: round(headLength, 2),
+      headWidth: round(headWidth, 2),
+      headShape,
+      lineCap,
+      lineJoin,
+    };
+    if (headCornerRadius > 0) arrowObj.headCornerRadius = round(headCornerRadius, 2);
+    if (dashed) {
+      arrowObj.dashArray = dashArray;
+      if (dashOffset) arrowObj.dashOffset = round(dashOffset, 2);
+    }
+    if (outlineWidth > 0) {
+      arrowObj.outlineWidth = round(outlineWidth, 3);
+      arrowObj.outlineColor = outlineColor;
+    }
+    return `<ChessiroCanvas
+  position={fen}
+  arrowVisuals={${JSON.stringify(arrowObj, null, 2).replace(/\n/g, '\n  ')}}
+  arrowBrushes={${JSON.stringify(brushes, null, 2).replace(/\n/g, '\n  ')}}
+  dragScale={${dragScale}}
+  touchDragScale={${touchDragScale}}
+  dragLiftSquares={${dragLiftSquares}}
+  touchDragLiftSquares={${touchDragLiftSquares}}
+/>`;
+  }, [lineWidth, opacity, margin, startOffset, headLength, headWidth, headShape, headCornerRadius, lineCap, lineJoin, dashed, dashArray, dashOffset, outlineWidth, outlineColor, brushes, dragScale, touchDragScale, dragLiftSquares, touchDragLiftSquares]);
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px] gap-6">
+      <div className="space-y-4">
+        <div className="aspect-square rounded-xl overflow-hidden border border-slate-800 bg-slate-900/50">
+          <ChessiroCanvas
+            position={fen}
+            lastMove={lastMove}
+            turnColor={turnColor}
+            movableColor={movableColor}
+            dests={dests}
+            onMove={handleMove}
+            interactive
+            theme={theme}
+            showNotation
+            showMargin
+            arrows={userArrows}
+            onArrowsChange={setUserArrows}
+            arrowVisuals={arrowVisuals}
+            arrowBrushes={brushes}
+            squareVisuals={squareVisuals}
+            dragScale={dragScale}
+            touchDragScale={touchDragScale}
+            dragLiftSquares={dragLiftSquares}
+            touchDragLiftSquares={touchDragLiftSquares}
+            premovable={{
+              enabled: true,
+              showDests: showPremoveDests,
+              current: currentPremove ?? undefined,
+              events: {
+                set: (from, to) => setCurrentPremove([from, to]),
+                unset: () => setCurrentPremove(null),
+              },
+            }}
+          />
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button onClick={resetStudio} className="px-3 py-1.5 rounded text-sm border border-slate-700 hover:bg-slate-800">
+            Reset board
+          </button>
+          <button onClick={addPresetArrows} className="px-3 py-1.5 rounded text-sm border border-slate-700 hover:bg-slate-800">
+            Re-add preset arrows
+          </button>
+          <button onClick={() => setUserArrows([])} className="px-3 py-1.5 rounded text-sm border border-slate-700 hover:bg-slate-800">
+            Clear arrows
+          </button>
+          <button onClick={resetArrowDefaults} className="px-3 py-1.5 rounded text-sm border border-slate-700 hover:bg-slate-800">
+            Reset arrow style
+          </button>
+        </div>
+        <div className="text-xs text-slate-500">
+          Tip: right-click-drag on the board to draw more arrows. Shift/Alt/Ctrl + right-drag picks a different brush.
+        </div>
+      </div>
+
+      <div className="space-y-4">
+        <ControlCard title="Arrow geometry">
+          <Slider label="Line width" value={lineWidth} min={0.02} max={0.25} step={0.005} onChange={setLineWidth} format={(v) => v.toFixed(3)} />
+          <Slider label="Opacity" value={opacity} min={0.1} max={1} step={0.05} onChange={setOpacity} format={(v) => v.toFixed(2)} />
+          <Slider label="Head length" value={headLength} min={1.5} max={6} step={0.1} onChange={setHeadLength} format={(v) => v.toFixed(1)} />
+          <Slider label="Head width" value={headWidth} min={1.5} max={6} step={0.1} onChange={setHeadWidth} format={(v) => v.toFixed(1)} />
+          <Slider label="Tip margin" value={margin} min={0} max={0.5} step={0.01} onChange={setMargin} format={(v) => v.toFixed(2)} />
+          <Slider label="Start offset" value={startOffset} min={0} max={0.5} step={0.01} onChange={setStartOffset} format={(v) => v.toFixed(2)} />
+        </ControlCard>
+
+        <ControlCard title="Head & line style">
+          <Slider
+            label="Head roundness"
+            value={headCornerRadius}
+            min={0}
+            max={1}
+            step={0.02}
+            onChange={setHeadCornerRadius}
+            format={(v) => (v === 0 ? 'triangle' : v === 1 ? 'circle' : v.toFixed(2))}
+          />
+          <p className="text-xs text-slate-500">
+            Morphs the arrowhead from a sharp triangle (0) into a rounded bullet/circle (1). The base edge where the shaft meets stays straight and untouched.
+          </p>
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-slate-300">Head shape</span>
+            <div className="flex gap-1 flex-wrap justify-end">
+              {(['classic', 'open', 'concave', 'diamond'] as const).map((s) => (
+                <button
+                  key={s}
+                  onClick={() => setHeadShape(s)}
+                  className={cn(
+                    'px-2 py-1 rounded text-xs border',
+                    headShape === s ? 'border-amber-500 bg-amber-500/10 text-amber-400' : 'border-slate-700 text-slate-400',
+                  )}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-slate-300">Line cap</span>
+            <div className="flex gap-1">
+              {(['round', 'butt', 'square'] as const).map((c) => (
+                <button
+                  key={c}
+                  onClick={() => setLineCap(c)}
+                  className={cn(
+                    'px-2 py-1 rounded text-xs border',
+                    lineCap === c ? 'border-amber-500 bg-amber-500/10 text-amber-400' : 'border-slate-700 text-slate-400',
+                  )}
+                >
+                  {c}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-slate-300">Line join</span>
+            <div className="flex gap-1">
+              {(['round', 'miter', 'bevel'] as const).map((j) => (
+                <button
+                  key={j}
+                  onClick={() => setLineJoin(j)}
+                  className={cn(
+                    'px-2 py-1 rounded text-xs border',
+                    lineJoin === j ? 'border-amber-500 bg-amber-500/10 text-amber-400' : 'border-slate-700 text-slate-400',
+                  )}
+                >
+                  {j}
+                </button>
+              ))}
+            </div>
+          </div>
+        </ControlCard>
+
+        <ControlCard title="Dashing">
+          <Toggle label="Dashed shaft" checked={dashed} onChange={setDashed} />
+          <label className="block">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-sm text-slate-300">Dash pattern</span>
+              <code className="text-xs text-amber-400">{dashArray}</code>
+            </div>
+            <input
+              type="text"
+              value={dashArray}
+              onChange={(e) => setDashArray(e.target.value)}
+              disabled={!dashed}
+              placeholder="0.22 0.16"
+              className="w-full px-2 py-1 rounded bg-slate-950 border border-slate-700 text-xs text-slate-200 font-mono disabled:opacity-40"
+            />
+          </label>
+          <Slider
+            label="Dash offset"
+            value={dashOffset}
+            min={0}
+            max={1}
+            step={0.02}
+            onChange={setDashOffset}
+            format={(v) => v.toFixed(2)}
+          />
+        </ControlCard>
+
+        <ControlCard title="Outline">
+          <Slider label="Outline width" value={outlineWidth} min={0} max={0.06} step={0.002} onChange={setOutlineWidth} format={(v) => v.toFixed(3)} />
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-slate-300">Outline color</span>
+            <input
+              type="color"
+              value={toHex(outlineColor)}
+              onChange={(e) => setOutlineColor(e.target.value)}
+              className="w-8 h-8 rounded border border-slate-700 bg-transparent cursor-pointer"
+            />
+          </div>
+          <p className="text-xs text-slate-500">
+            Wraps shaft and arrowhead with a crisp border for legibility on busy boards. Set to 0 to disable.
+          </p>
+        </ControlCard>
+
+        <ControlCard title="Brushes">
+          {(['green', 'red', 'blue', 'yellow'] as const).map((brush) => (
+            <div key={brush} className="flex items-center justify-between">
+              <span className="text-sm text-slate-300 capitalize">{brush}</span>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={toHex(brushes[brush])}
+                  onChange={(e) => setBrushes((prev) => ({ ...prev, [brush]: e.target.value }))}
+                  className="w-8 h-8 rounded border border-slate-700 bg-transparent cursor-pointer"
+                />
+                <code className="text-xs text-slate-500 w-20 text-right">{toHex(brushes[brush])}</code>
+              </div>
+            </div>
+          ))}
+        </ControlCard>
+
+        <ControlCard title="Touch-drag lift (mobile)">
+          <Slider label="Touch scale" value={touchDragScale} min={1} max={2.5} step={0.05} onChange={setTouchDragScale} format={(v) => `${v.toFixed(2)}×`} />
+          <Slider label="Touch lift (squares)" value={touchDragLiftSquares} min={0} max={1.5} step={0.05} onChange={setTouchDragLiftSquares} format={(v) => v.toFixed(2)} />
+          <div className="border-t border-slate-800 my-2" />
+          <Slider label="Mouse scale" value={dragScale} min={1} max={2} step={0.05} onChange={setDragScale} format={(v) => `${v.toFixed(2)}×`} />
+          <Slider label="Mouse lift (squares)" value={dragLiftSquares} min={0} max={1} step={0.05} onChange={setDragLiftSquares} format={(v) => v.toFixed(2)} />
+          <p className="text-xs text-slate-500">
+            Touch values only apply when dragging via touch events. Set <code className="text-amber-400">dragScale</code> &gt; 1 to preview on desktop.
+          </p>
+        </ControlCard>
+
+        <ControlCard title="Premove">
+          <div className="flex gap-2">
+            <button
+              onClick={() => setPremoveMode('off')}
+              className={cn('flex-1 px-3 py-1.5 rounded text-sm border', premoveMode === 'off' ? 'border-amber-500 bg-amber-500/10 text-amber-400' : 'border-slate-700 text-slate-400')}
+            >
+              Your turn
+            </button>
+            <button
+              onClick={() => setPremoveMode('waiting')}
+              className={cn('flex-1 px-3 py-1.5 rounded text-sm border', premoveMode === 'waiting' ? 'border-amber-500 bg-amber-500/10 text-amber-400' : 'border-slate-700 text-slate-400')}
+            >
+              Opponent thinking
+            </button>
+          </div>
+          <p className="text-xs text-slate-500">
+            Switch to &ldquo;Opponent thinking&rdquo; to queue a premove, then back to &ldquo;Your turn&rdquo; to see it fire.
+          </p>
+          <Toggle label="Show premove destinations" checked={showPremoveDests} onChange={setShowPremoveDests} />
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-slate-300">Dest dot</span>
+            <input
+              type="color"
+              value={toHex(premoveColor)}
+              onChange={(e) => setPremoveColor(e.target.value)}
+              className="w-8 h-8 rounded border border-slate-700 bg-transparent cursor-pointer"
+            />
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-slate-300">Capture ring</span>
+            <input
+              type="color"
+              value={toHex(premoveRingColor)}
+              onChange={(e) => setPremoveRingColor(e.target.value)}
+              className="w-8 h-8 rounded border border-slate-700 bg-transparent cursor-pointer"
+            />
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-slate-300">Queued highlight</span>
+            <input
+              type="color"
+              value={toHex(premoveCurrentColor)}
+              onChange={(e) => setPremoveCurrentColor(e.target.value)}
+              className="w-8 h-8 rounded border border-slate-700 bg-transparent cursor-pointer"
+            />
+          </div>
+          <div className="border-t border-slate-800 my-2" />
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-slate-300">Queued style</span>
+            <div className="flex gap-1">
+              {(['fill', 'dashed', 'both'] as const).map((s) => (
+                <button
+                  key={s}
+                  onClick={() => setPremoveCurrentStyle(s)}
+                  className={cn(
+                    'px-2 py-1 rounded text-xs border',
+                    premoveCurrentStyle === s ? 'border-amber-500 bg-amber-500/10 text-amber-400' : 'border-slate-700 text-slate-400',
+                  )}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          </div>
+          {(premoveCurrentStyle === 'dashed' || premoveCurrentStyle === 'both') && (
+            <>
+              <Slider
+                label="Dash border width"
+                value={premoveBorderWidth}
+                min={1}
+                max={8}
+                step={0.5}
+                onChange={setPremoveBorderWidth}
+                format={(v) => `${v}px`}
+              />
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-slate-300">Dash color</span>
+                <input
+                  type="color"
+                  value={toHex(premoveBorderColor)}
+                  onChange={(e) => setPremoveBorderColor(e.target.value)}
+                  className="w-8 h-8 rounded border border-slate-700 bg-transparent cursor-pointer"
+                />
+              </div>
+            </>
+          )}
+          <div className="text-xs text-slate-500">
+            Queued: <code className="text-amber-400">{currentPremove ? `${currentPremove[0]} → ${currentPremove[1]}` : 'none'}</code>
+          </div>
+        </ControlCard>
+
+        <ControlCard title="Capture ring (kill square)">
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-slate-300">Shape</span>
+            <div className="flex gap-1">
+              {(['square', 'circle'] as const).map((s) => (
+                <button
+                  key={s}
+                  onClick={() => setCaptureRingShape(s)}
+                  className={cn(
+                    'px-2 py-1 rounded text-xs border',
+                    captureRingShape === s ? 'border-amber-500 bg-amber-500/10 text-amber-400' : 'border-slate-700 text-slate-400',
+                  )}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          </div>
+          <Slider
+            label="Ring width"
+            value={captureRingWidth}
+            min={1}
+            max={10}
+            step={0.5}
+            onChange={setCaptureRingWidth}
+            format={(v) => `${v}px`}
+          />
+          {captureRingShape === 'square' && (
+            <Slider
+              label="Corner radius"
+              value={captureRingCornerRadius}
+              min={0}
+              max={50}
+              step={1}
+              onChange={setCaptureRingCornerRadius}
+              format={(v) => `${v}%`}
+            />
+          )}
+          <p className="text-xs text-slate-500">
+            The thin ring painted on squares you can capture on. Also applies to premove captures.
+          </p>
+        </ControlCard>
+      </div>
+
+      <div className="lg:col-span-2">
+        <h3 className="text-sm font-medium text-slate-400 mb-3">Copy-paste the current config</h3>
+        <CodeBlock code={snippet} language="tsx" />
+      </div>
+    </div>
+  );
+}
+
+function ControlCard({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div className="p-4 rounded-lg bg-slate-900/50 border border-slate-800 space-y-3">
+      <h3 className="text-sm font-medium text-slate-400">{title}</h3>
+      {children}
+    </div>
+  );
+}
+
+function Slider({
+  label,
+  value,
+  min,
+  max,
+  step,
+  onChange,
+  format,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  onChange: (v: number) => void;
+  format?: (v: number) => string;
+}) {
+  return (
+    <label className="block">
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-sm text-slate-300">{label}</span>
+        <code className="text-xs text-amber-400">{format ? format(value) : value}</code>
+      </div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(parseFloat(e.target.value))}
+        className="w-full accent-amber-500"
+      />
+    </label>
+  );
+}
+
+function round(v: number, digits: number) {
+  const f = Math.pow(10, digits);
+  return Math.round(v * f) / f;
+}
+
+function toHex(color: string): string {
+  // Accept either hex or rgba()/rgb(); return a 7-char hex for <input type="color">.
+  if (color.startsWith('#')) {
+    if (color.length === 7) return color;
+    if (color.length === 4) {
+      return '#' + color.slice(1).split('').map((c) => c + c).join('');
+    }
+  }
+  const m = color.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
+  if (m) {
+    const [r, g, b] = [parseInt(m[1]), parseInt(m[2]), parseInt(m[3])];
+    return '#' + [r, g, b].map((n) => n.toString(16).padStart(2, '0')).join('');
+  }
+  return '#000000';
 }
 
 function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {

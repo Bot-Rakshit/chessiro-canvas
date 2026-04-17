@@ -9,6 +9,7 @@ export interface DragState {
   startPos: ScreenPos;
   currentPos: ScreenPos;
   started: boolean; // true once moved past threshold
+  isTouch: boolean; // originated from a touch event (drives piece-lift on mobile)
 }
 
 export interface PointerState {

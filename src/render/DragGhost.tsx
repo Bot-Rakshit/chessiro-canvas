@@ -11,6 +11,10 @@ interface DragGhostProps {
   squareSize: number;
   pieceSet?: PieceSet;
   customPieces?: PieceRenderer;
+  /** Scale factor applied to the dragged piece. Default: 1. */
+  scale?: number;
+  /** Upward offset (in square-size units) so the piece floats above the finger/cursor. Default: 0. */
+  liftSquares?: number;
 }
 
 export const DragGhost = memo(forwardRef<HTMLDivElement, DragGhostProps>(function DragGhost({
@@ -20,6 +24,8 @@ export const DragGhost = memo(forwardRef<HTMLDivElement, DragGhostProps>(functio
   squareSize,
   pieceSet,
   customPieces,
+  scale = 1,
+  liftSquares = 0,
 }, ref) {
   const piecePath = pieceSet?.path;
   const key = `${piece.color}${piece.role.toUpperCase()}`;
@@ -32,8 +38,14 @@ export const DragGhost = memo(forwardRef<HTMLDivElement, DragGhostProps>(functio
     content = <CachedPieceImg src={src} alt={key} />;
   }
 
-  // Offset so piece is centered under the cursor
+  // Outer div: positioning only. useInteraction rewrites this `transform` on pointermove,
+  // so keep it a plain translate to avoid interference from scale/lift.
   const offset = squareSize / 2;
+  // Inner wrapper carries the visual transform (scale + lift).
+  const lift = liftSquares * squareSize;
+  const liftTransform = scale !== 1 || lift !== 0
+    ? `translate(0, ${-lift}px) scale(${scale})`
+    : undefined;
 
   const ghost = (
     <div
@@ -51,7 +63,17 @@ export const DragGhost = memo(forwardRef<HTMLDivElement, DragGhostProps>(functio
         cursor: 'grabbing',
       }}
     >
-      {content}
+      <div
+        style={{
+          width: '100%',
+          height: '100%',
+          transform: liftTransform,
+          transformOrigin: 'center center',
+          transition: 'transform 80ms ease-out',
+        }}
+      >
+        {content}
+      </div>
     </div>
   );
 

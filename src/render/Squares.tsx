@@ -31,6 +31,9 @@ const DEFAULT_SQUARE_VISUALS: Required<SquareVisuals> = {
   premoveDot: 'rgba(20, 85, 30, 0.5)',
   premoveCaptureRing: 'rgba(20, 85, 30, 0.6)',
   premoveCurrent: 'rgba(20, 30, 85, 0.4)',
+  premoveCurrentStyle: 'fill',
+  premoveCurrentBorderWidth: 3,
+  premoveCurrentBorderColor: '',
   checkGradient:
     'radial-gradient(ellipse at center, rgba(255, 0, 0, 1) 0%, rgba(231, 0, 0, 1) 25%, rgba(169, 0, 0, 0) 89%, rgba(158, 0, 0, 0) 100%)',
   selectedStyle: 'fill',
@@ -38,7 +41,9 @@ const DEFAULT_SQUARE_VISUALS: Required<SquareVisuals> = {
   legalMoveStyle: 'ring',
   legalRingOuterRadius: 24,
   legalRingInnerRadius: 17,
-  legalCaptureRingWidth: 7,
+  legalCaptureRingWidth: 3,
+  legalCaptureRingShape: 'square',
+  legalCaptureRingCornerRadius: 14,
   dragOverHighlight: '',
 };
 const EMPTY_SQUARES: string[] = [];
@@ -175,16 +180,28 @@ export const Squares = memo(function Squares({
           bg = dragOverColor;
         }
 
-        // Current premove highlight
+        // Current premove highlight. Style: 'fill' = solid bg (legacy behavior),
+        // 'dashed' = inset dashed border via CSS outline, 'both' = bg + dashed border.
         if (isPremoveCurrent) {
-          bg = visuals.premoveCurrent;
+          const style = visuals.premoveCurrentStyle;
+          if (style === 'fill' || style === 'both') {
+            bg = visuals.premoveCurrent;
+          }
+          if (style === 'dashed' || style === 'both') {
+            const w = visuals.premoveCurrentBorderWidth;
+            const borderColor = visuals.premoveCurrentBorderColor || visuals.premoveCurrent;
+            outline = `${w}px dashed ${borderColor}`;
+            outlineOffset = `-${w}px`;
+          }
         }
 
         // Legal move indicators
         if (isLegal) {
           if (isOccupied) {
             boxShadow = `inset 0 0 0 ${visuals.legalCaptureRingWidth}px ${visuals.legalCaptureRing}`;
-            borderRadius = '50%';
+            borderRadius = visuals.legalCaptureRingShape === 'circle'
+              ? '50%'
+              : `${visuals.legalCaptureRingCornerRadius}%`;
           } else if (visuals.legalMoveStyle === 'ring') {
             const inner = visuals.legalRingInnerRadius;
             const outer = visuals.legalRingOuterRadius;
@@ -198,7 +215,9 @@ export const Squares = memo(function Squares({
         if (isPremoveDest && !isLegal) {
           if (isOccupied) {
             boxShadow = `inset 0 0 0 ${visuals.legalCaptureRingWidth}px ${visuals.premoveCaptureRing}`;
-            borderRadius = '50%';
+            borderRadius = visuals.legalCaptureRingShape === 'circle'
+              ? '50%'
+              : `${visuals.legalCaptureRingCornerRadius}%`;
           } else if (visuals.legalMoveStyle === 'ring') {
             const inner = visuals.legalRingInnerRadius;
             const outer = visuals.legalRingOuterRadius;

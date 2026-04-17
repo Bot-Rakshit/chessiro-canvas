@@ -10,6 +10,7 @@ export type {
   ArrowBrush,
   ArrowBrushes,
   ArrowVisuals,
+  ArrowHeadShape,
   BoardTheme,
   NotationVisuals,
   OverlayVisuals,

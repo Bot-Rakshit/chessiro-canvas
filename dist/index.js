@@ -699,7 +699,8 @@ function useInteraction(opts) {
           piece,
           startPos: pos,
           currentPos: pos,
-          started: false
+          started: false,
+          isTouch
         };
         dragRef.current = newDrag;
         setDrag(newDrag);
@@ -1016,13 +1017,18 @@ var DEFAULT_SQUARE_VISUALS = {
   premoveDot: "rgba(20, 85, 30, 0.5)",
   premoveCaptureRing: "rgba(20, 85, 30, 0.6)",
   premoveCurrent: "rgba(20, 30, 85, 0.4)",
+  premoveCurrentStyle: "fill",
+  premoveCurrentBorderWidth: 3,
+  premoveCurrentBorderColor: "",
   checkGradient: "radial-gradient(ellipse at center, rgba(255, 0, 0, 1) 0%, rgba(231, 0, 0, 1) 25%, rgba(169, 0, 0, 0) 89%, rgba(158, 0, 0, 0) 100%)",
   selectedStyle: "fill",
   selectedBorderWidth: 4,
   legalMoveStyle: "ring",
   legalRingOuterRadius: 24,
   legalRingInnerRadius: 17,
-  legalCaptureRingWidth: 7,
+  legalCaptureRingWidth: 3,
+  legalCaptureRingShape: "square",
+  legalCaptureRingCornerRadius: 14,
   dragOverHighlight: ""
 };
 var EMPTY_SQUARES2 = [];
@@ -1128,12 +1134,21 @@ var Squares = memo(function Squares2({
           bg = dragOverColor;
         }
         if (isPremoveCurrent) {
-          bg = visuals.premoveCurrent;
+          const style = visuals.premoveCurrentStyle;
+          if (style === "fill" || style === "both") {
+            bg = visuals.premoveCurrent;
+          }
+          if (style === "dashed" || style === "both") {
+            const w = visuals.premoveCurrentBorderWidth;
+            const borderColor = visuals.premoveCurrentBorderColor || visuals.premoveCurrent;
+            outline = `${w}px dashed ${borderColor}`;
+            outlineOffset = `-${w}px`;
+          }
         }
         if (isLegal) {
           if (isOccupied) {
             boxShadow = `inset 0 0 0 ${visuals.legalCaptureRingWidth}px ${visuals.legalCaptureRing}`;
-            borderRadius = "50%";
+            borderRadius = visuals.legalCaptureRingShape === "circle" ? "50%" : `${visuals.legalCaptureRingCornerRadius}%`;
           } else if (visuals.legalMoveStyle === "ring") {
             const inner = visuals.legalRingInnerRadius;
             const outer = visuals.legalRingOuterRadius;
@@ -1145,7 +1160,7 @@ var Squares = memo(function Squares2({
         if (isPremoveDest && !isLegal) {
           if (isOccupied) {
             boxShadow = `inset 0 0 0 ${visuals.legalCaptureRingWidth}px ${visuals.premoveCaptureRing}`;
-            borderRadius = "50%";
+            borderRadius = visuals.legalCaptureRingShape === "circle" ? "50%" : `${visuals.legalCaptureRingCornerRadius}%`;
           } else if (visuals.legalMoveStyle === "ring") {
             const inner = visuals.legalRingInnerRadius;
             const outer = visuals.legalRingOuterRadius;
@@ -1525,6 +1540,86 @@ function squareToFileRank(sq2) {
   if (f < 0 || f > 7 || r < 0 || r > 7) return null;
   return [f, r];
 }
+function fmt(p) {
+  return `${p[0].toFixed(4)},${p[1].toFixed(4)}`;
+}
+function buildRoundedPolygon(V, roundness, skipIndex) {
+  const n = V.length;
+  const t = Math.max(0, Math.min(1, roundness));
+  const edgeLen = [];
+  for (let i = 0; i < n; i++) {
+    const a = V[i];
+    const b = V[(i + 1) % n];
+    edgeLen.push(Math.hypot(b[0] - a[0], b[1] - a[1]));
+  }
+  const offset = [];
+  for (let i = 0; i < n; i++) {
+    const prevLen = edgeLen[(i - 1 + n) % n];
+    const nextLen = edgeLen[i];
+    offset.push(Math.min(prevLen, nextLen) / 2 * t);
+  }
+  const entries = [];
+  const exits = [];
+  for (let i = 0; i < n; i++) {
+    const prev = V[(i - 1 + n) % n];
+    const curr = V[i];
+    const next = V[(i + 1) % n];
+    const r = offset[i];
+    const dxP = prev[0] - curr[0], dyP = prev[1] - curr[1];
+    const dxN = next[0] - curr[0], dyN = next[1] - curr[1];
+    const lP = Math.hypot(dxP, dyP) || 1;
+    const lN = Math.hypot(dxN, dyN) || 1;
+    entries.push([curr[0] + dxP / lP * r, curr[1] + dyP / lP * r]);
+    exits.push([curr[0] + dxN / lN * r, curr[1] + dyN / lN * r]);
+  }
+  const fillParts = [`M${fmt(exits[0])}`];
+  for (let i = 1; i <= n; i++) {
+    const idx = i % n;
+    fillParts.push(`L${fmt(entries[idx])}`);
+    if (offset[idx] > 1e-4) {
+      fillParts.push(`Q${fmt(V[idx])} ${fmt(exits[idx])}`);
+    } else {
+      fillParts.push(`L${fmt(V[idx])}`);
+    }
+  }
+  fillParts.push("Z");
+  let strokePath = "";
+  {
+    strokePath = fillParts.slice(0, -1).join(" ");
+  }
+  return { fill: fillParts.join(" "), stroke: strokePath };
+}
+function computeHeadPath(shape, hl, hw, roundness) {
+  const h = hw / 2;
+  switch (shape) {
+    case "classic":
+    default: {
+      const vertices = [[0, 0], [hl, h], [0, hw]];
+      const { fill, stroke } = buildRoundedPolygon(vertices, roundness);
+      return { fill, stroke, isOpen: false };
+    }
+    case "open": {
+      const d = `M0,0 L${hl},${h} L0,${hw}`;
+      return { fill: d, stroke: d, isOpen: true };
+    }
+    case "concave": {
+      const nx = hl * 0.28;
+      const vertices = [[0, 0], [hl, h], [0, hw], [nx, h]];
+      const { fill, stroke } = buildRoundedPolygon(vertices, roundness);
+      return { fill, stroke, isOpen: false };
+    }
+    case "diamond": {
+      const cx = hl / 2;
+      const vertices = [[0, h], [cx, 0], [hl, h], [cx, hw]];
+      const { fill, stroke } = buildRoundedPolygon(vertices, roundness);
+      return { fill, stroke, isOpen: false };
+    }
+  }
+}
+function markerKey(prefix, color, shape, variant) {
+  const safe = color.replace(/[^a-zA-Z0-9]/g, "");
+  return `cc-${prefix}-${shape}-${variant}-${safe}`;
+}
 var ArrowsLayer = memo(function ArrowsLayer2({
   arrows,
   orientation,
@@ -1533,14 +1628,51 @@ var ArrowsLayer = memo(function ArrowsLayer2({
   visuals = {}
 }) {
   const asWhite = orientation === "white";
-  const lineWidth = visuals.lineWidth ?? 10 / 64;
-  const margin = visuals.margin ?? 10 / 64;
-  const lineOpacity = visuals.opacity ?? 0.9;
-  const markerWidth = visuals.markerWidth ?? 4;
-  const markerHeight = visuals.markerHeight ?? 4;
-  const markerRefX = visuals.markerRefX ?? 2.05;
-  const markerRefY = visuals.markerRefY ?? 2;
-  const markerColors = useMemo(() => {
+  const lineWidth = visuals.lineWidth ?? 0.086;
+  const margin = visuals.margin ?? 0.18;
+  const startOffset = visuals.startOffset ?? 0;
+  const lineOpacity = visuals.opacity ?? 0.85;
+  const lineCap = visuals.lineCap ?? "round";
+  const lineJoin = visuals.lineJoin ?? "miter";
+  const dashArray = visuals.dashArray ?? visuals.dash;
+  const dashOffset = visuals.dashOffset ?? 0;
+  const headLength = visuals.headLength ?? visuals.markerWidth ?? 3.2;
+  const headWidth = visuals.headWidth ?? visuals.markerHeight ?? 3.5;
+  const headShape = visuals.headShape ?? "classic";
+  const headRoundness = Math.max(0, Math.min(1, visuals.headCornerRadius ?? 0));
+  const outlineColor = visuals.outlineColor ?? "rgba(0,0,0,0.45)";
+  const outlineWidth = visuals.outlineWidth ?? 0;
+  const hasOutline = outlineWidth > 0;
+  const markerOutlineWidth = hasOutline && lineWidth > 0 ? outlineWidth / lineWidth : 0;
+  const headPaths = useMemo(
+    () => computeHeadPath(headShape, headLength, headWidth, headRoundness),
+    [headShape, headLength, headWidth, headRoundness]
+  );
+  const { fill: headFillPath, stroke: headStrokePath, isOpen: isOpenHead } = headPaths;
+  const markerVariant = useMemo(
+    () => [
+      headLength.toFixed(2),
+      headWidth.toFixed(2),
+      headRoundness.toFixed(3),
+      hasOutline ? `o${outlineWidth.toFixed(3)}` : "0",
+      lineJoin
+    ].join("_"),
+    [headLength, headWidth, headRoundness, hasOutline, outlineWidth, lineJoin]
+  );
+  const markerRefX = visuals.markerRefX ?? (headShape === "diamond" ? headLength / 2 : 0);
+  const markerRefY = visuals.markerRefY ?? headWidth / 2;
+  const headForwardExtent = useMemo(() => {
+    switch (headShape) {
+      case "diamond":
+        return headLength / 2 * lineWidth;
+      case "open":
+      case "concave":
+      case "classic":
+      default:
+        return headLength * lineWidth;
+    }
+  }, [headShape, headLength, lineWidth]);
+  const uniqueColors = useMemo(() => {
     const set = /* @__PURE__ */ new Set();
     for (const a of arrows) set.add(a.color);
     return [...set];
@@ -1561,20 +1693,46 @@ var ArrowsLayer = memo(function ArrowsLayer2({
       viewBox: "-4 -4 8 8",
       preserveAspectRatio: "xMidYMid slice",
       children: [
-        /* @__PURE__ */ jsx("defs", { children: markerColors.map((color) => /* @__PURE__ */ jsx(
-          "marker",
-          {
-            id: markerKey(color),
-            orient: "auto",
-            overflow: "visible",
-            markerWidth,
-            markerHeight,
-            refX: markerRefX,
-            refY: markerRefY,
-            children: /* @__PURE__ */ jsx("path", { d: "M0,0 V4 L3,2 Z", fill: color })
-          },
-          markerKey(color)
-        )) }),
+        /* @__PURE__ */ jsx("defs", { children: uniqueColors.map((color) => {
+          const mainId = markerKey("h", color, headShape, markerVariant);
+          return /* @__PURE__ */ jsx(
+            "marker",
+            {
+              id: mainId,
+              orient: "auto",
+              overflow: "visible",
+              markerWidth: headLength,
+              markerHeight: headWidth,
+              refX: markerRefX,
+              refY: markerRefY,
+              children: isOpenHead ? /* @__PURE__ */ jsx(
+                "path",
+                {
+                  d: headStrokePath,
+                  fill: "none",
+                  stroke: color,
+                  strokeWidth: Math.max(0.45, headWidth * 0.2),
+                  strokeLinejoin: "round",
+                  strokeLinecap: "round"
+                }
+              ) : /* @__PURE__ */ jsxs(Fragment, { children: [
+                hasOutline && /* @__PURE__ */ jsx(
+                  "path",
+                  {
+                    d: headStrokePath,
+                    fill: "none",
+                    stroke: outlineColor,
+                    strokeWidth: markerOutlineWidth,
+                    strokeLinejoin: lineJoin,
+                    strokeLinecap: "butt"
+                  }
+                ),
+                /* @__PURE__ */ jsx("path", { d: headFillPath, fill: color })
+              ] })
+            },
+            mainId
+          );
+        }) }),
         arrows.map((arrow, i) => {
           const fromFR = squareToFileRank(arrow.startSquare);
           const toFR = squareToFileRank(arrow.endSquare);
@@ -1585,32 +1743,52 @@ var ArrowsLayer = memo(function ArrowsLayer2({
           const dy = to[1] - from[1];
           const dist = Math.sqrt(dx * dx + dy * dy);
           if (dist === 0) return null;
-          const angle = Math.atan2(dy, dx);
-          const endX = to[0] - Math.cos(angle) * margin;
-          const endY = to[1] - Math.sin(angle) * margin;
-          return /* @__PURE__ */ jsx(
-            "line",
-            {
-              x1: from[0],
-              y1: from[1],
-              x2: endX,
-              y2: endY,
-              stroke: arrow.color,
-              strokeWidth: lineWidth,
-              strokeLinecap: "round",
-              markerEnd: `url(#${markerKey(arrow.color)})`,
-              opacity: lineOpacity
-            },
-            `${arrow.startSquare}-${arrow.endSquare}-${arrow.color}-${i}`
-          );
+          const ux = dx / dist;
+          const uy = dy / dist;
+          const startX = from[0] + ux * startOffset;
+          const startY = from[1] + uy * startOffset;
+          const lineShorten = margin + headForwardExtent;
+          const endX = to[0] - ux * lineShorten;
+          const endY = to[1] - uy * lineShorten;
+          const markerUrl = `url(#${markerKey("h", arrow.color, headShape, markerVariant)})`;
+          const keyBase = `${arrow.startSquare}-${arrow.endSquare}-${arrow.color}-${i}`;
+          return /* @__PURE__ */ jsxs("g", { opacity: lineOpacity, children: [
+            hasOutline && /* @__PURE__ */ jsx(
+              "line",
+              {
+                x1: startX,
+                y1: startY,
+                x2: endX,
+                y2: endY,
+                stroke: outlineColor,
+                strokeWidth: lineWidth + outlineWidth * 2,
+                strokeLinecap: lineCap,
+                strokeDasharray: dashArray,
+                strokeDashoffset: dashOffset
+              }
+            ),
+            /* @__PURE__ */ jsx(
+              "line",
+              {
+                x1: startX,
+                y1: startY,
+                x2: endX,
+                y2: endY,
+                stroke: arrow.color,
+                strokeWidth: lineWidth,
+                strokeLinecap: lineCap,
+                strokeLinejoin: lineJoin,
+                strokeDasharray: dashArray,
+                strokeDashoffset: dashOffset,
+                markerEnd: markerUrl
+              }
+            )
+          ] }, keyBase);
         })
       ]
     }
   );
 });
-function markerKey(color) {
-  return `cc-ah-${color.replace(/[^a-zA-Z0-9]/g, "")}`;
-}
 var Notation = memo(function Notation2({
   orientation,
   theme,
@@ -1915,7 +2093,9 @@ var DragGhost = memo(forwardRef(function DragGhost2({
   y,
   squareSize,
   pieceSet,
-  customPieces
+  customPieces,
+  scale = 1,
+  liftSquares = 0
 }, ref) {
   const piecePath = pieceSet?.path;
   const key = `${piece.color}${piece.role.toUpperCase()}`;
@@ -1927,6 +2107,8 @@ var DragGhost = memo(forwardRef(function DragGhost2({
     content = /* @__PURE__ */ jsx(CachedPieceImg, { src, alt: key });
   }
   const offset = squareSize / 2;
+  const lift = liftSquares * squareSize;
+  const liftTransform = scale !== 1 || lift !== 0 ? `translate(0, ${-lift}px) scale(${scale})` : void 0;
   const ghost = /* @__PURE__ */ jsx(
     "div",
     {
@@ -1943,7 +2125,19 @@ var DragGhost = memo(forwardRef(function DragGhost2({
         willChange: "transform",
         cursor: "grabbing"
       },
-      children: content
+      children: /* @__PURE__ */ jsx(
+        "div",
+        {
+          style: {
+            width: "100%",
+            height: "100%",
+            transform: liftTransform,
+            transformOrigin: "center center",
+            transition: "transform 80ms ease-out"
+          },
+          children: content
+        }
+      )
     }
   );
   if (typeof document === "undefined") return ghost;
@@ -2162,6 +2356,10 @@ var ChessiroCanvas = forwardRef(
       showAnimations = true,
       blockTouchScroll = false,
       selectedPieceScale,
+      dragScale = 1,
+      touchDragScale = 1.9,
+      dragLiftSquares = 0,
+      touchDragLiftSquares = 0.6,
       onPrevious,
       onNext,
       onFirst,
@@ -2436,7 +2634,9 @@ var ChessiroCanvas = forwardRef(
               y: interaction.drag.startPos[1],
               squareSize,
               pieceSet,
-              customPieces
+              customPieces,
+              scale: interaction.drag.isTouch ? touchDragScale : dragScale,
+              liftSquares: interaction.drag.isTouch ? touchDragLiftSquares : dragLiftSquares
             }
           )
         ]

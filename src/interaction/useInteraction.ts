@@ -524,6 +524,7 @@ export function useInteraction(opts: UseInteractionOptions): InteractionState {
           startPos: pos,
           currentPos: pos,
           started: false,
+          isTouch,
         };
         dragRef.current = newDrag;
         setDrag(newDrag);

@@ -92,6 +92,12 @@ export interface SquareVisuals {
   premoveDot?: string;
   premoveCaptureRing?: string;
   premoveCurrent?: string;
+  /** Visual style for the currently-queued premove from/to squares. Default: 'fill'. */
+  premoveCurrentStyle?: 'fill' | 'dashed' | 'both';
+  /** Border width (px) when `premoveCurrentStyle` is 'dashed' or 'both'. Default: 3. */
+  premoveCurrentBorderWidth?: number;
+  /** Border color for the dashed box. Defaults to `premoveCurrent` when undefined. */
+  premoveCurrentBorderColor?: string;
   checkGradient?: string;
 
   // Selected piece style
@@ -107,21 +113,71 @@ export interface SquareVisuals {
   legalRingOuterRadius?: number;
   /** Inner radius of the hollow ring as % of square size. Default: 17 */
   legalRingInnerRadius?: number;
-  /** Inset border width in px for capture-move rings. Default: 7 */
+  /** Inset border width in px for capture-move rings. Default: 3 */
   legalCaptureRingWidth?: number;
+  /** Shape for capture-move rings (applies to both legal and premove captures). Default: 'square' */
+  legalCaptureRingShape?: 'circle' | 'square';
+  /** Corner radius (% of square size) when `legalCaptureRingShape` is 'square'. Default: 14 */
+  legalCaptureRingCornerRadius?: number;
 
   // Drag hover
   /** Color overlay for the square the piece is hovering over during drag. Default: selectedPiece color at 0.3 opacity */
   dragOverHighlight?: string;
 }
 
+export type ArrowHeadShape = 'classic' | 'open' | 'concave' | 'diamond';
+
 export interface ArrowVisuals {
+  // ── Geometry ──
+  /** Stroke width in board-units (1 = one square). Default: 0.086 (~5.5/64). */
   lineWidth?: number;
+  /** Line + arrowhead opacity. Default: 0.85. */
   opacity?: number;
+  /** Distance to pull back the arrow TIP from the target square center. Board-units. Default: 0.18. */
   margin?: number;
+  /** Distance to pull the arrow SHAFT forward from the source square center (gap at origin). Board-units. Default: 0. */
+  startOffset?: number;
+  /** Arrowhead length along the arrow direction (marker units; scales with lineWidth). Default: 3.2. */
+  headLength?: number;
+  /** Arrowhead width perpendicular to arrow direction (marker units). Default: 3.5. */
+  headWidth?: number;
+
+  // ── Line style ──
+  /** Stroke cap for the shaft ends. Default: 'round'. */
+  lineCap?: 'round' | 'butt' | 'square';
+  /** Stroke join for the arrowhead corners. Default: 'miter'. */
+  lineJoin?: 'round' | 'miter' | 'bevel';
+  /** SVG dash pattern for the shaft, e.g. '0.22 0.16'. Default: undefined (solid). */
+  dashArray?: string;
+  /** SVG dash offset, advances the dash pattern start. Default: 0. */
+  dashOffset?: number;
+  /** @deprecated alias for dashArray. */
+  dash?: string;
+
+  // ── Head style ──
+  /** Arrowhead shape. Default: 'classic'. */
+  headShape?: ArrowHeadShape;
+  /**
+   * Morphs the arrowhead from a sharp triangle (0) toward a fully rounded bullet/circle shape (1).
+   * The two slanted edges transition from straight lines into quarter-ellipse arcs; the base edge
+   * where the shaft meets stays perfectly straight and untouched. Default: 0 (sharp).
+   */
+  headCornerRadius?: number;
+
+  // ── Outline (optional, rendered only when outlineWidth > 0) ──
+  /** Outline color painted behind the shaft and around the arrowhead. Default: rgba(0,0,0,0.45). */
+  outlineColor?: string;
+  /** Outline thickness in board-units. 0 disables outline rendering. Default: 0. */
+  outlineWidth?: number;
+
+  // ── Deprecated legacy marker knobs (still honored) ──
+  /** @deprecated Use headLength. */
   markerWidth?: number;
+  /** @deprecated Use headWidth. */
   markerHeight?: number;
+  /** @deprecated Computed from shape. */
   markerRefX?: number;
+  /** @deprecated Computed from headWidth. */
   markerRefY?: number;
 }
 
@@ -304,6 +360,14 @@ export interface ChessiroCanvasProps {
   showAnimations?: boolean;
   blockTouchScroll?: boolean; // prevent scrolling when touching the board (default: false)
   selectedPieceScale?: number; // scale factor for the selected piece (e.g. 1.1 for 10% larger)
+  /** Scale factor applied to the piece while dragging with a mouse. Default: 1. */
+  dragScale?: number;
+  /** Scale factor applied to the piece while dragging via touch (chessground-style lift). Default: 1.9. */
+  touchDragScale?: number;
+  /** Vertical offset (in squares) applied to the piece while dragging with a mouse. Default: 0. */
+  dragLiftSquares?: number;
+  /** Vertical offset (in squares) applied to the piece while dragging via touch so it floats above the finger. Default: 0.6. */
+  touchDragLiftSquares?: number;
 
   // Keyboard nav callbacks
   onPrevious?: () => void;
