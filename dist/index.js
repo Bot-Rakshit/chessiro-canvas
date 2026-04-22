@@ -173,11 +173,6 @@ function premoveDests(square, pieces, color) {
   const f = square.charCodeAt(0) - 97;
   const r = parseInt(square[1]) - 1;
   const results = [];
-  const canTarget = (tf, tr) => {
-    const target = sq(tf, tr);
-    const occupant = pieces.get(target);
-    return !occupant || occupant.color !== color;
-  };
   switch (piece.role) {
     case "p": {
       const dir = color === "w" ? 1 : -1;
@@ -197,7 +192,7 @@ function premoveDests(square, pieces, color) {
     }
     case "n": {
       for (const [df, dr] of [[-2, -1], [-2, 1], [-1, -2], [-1, 2], [1, -2], [1, 2], [2, -1], [2, 1]]) {
-        if (isValid(f + df, r + dr) && canTarget(f + df, r + dr)) {
+        if (isValid(f + df, r + dr)) {
           results.push(sq(f + df, r + dr));
         }
       }
@@ -206,8 +201,10 @@ function premoveDests(square, pieces, color) {
     case "b": {
       for (const [df, dr] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {
         for (let i = 1; i < 8; i++) {
-          if (!isValid(f + df * i, r + dr * i)) break;
-          if (canTarget(f + df * i, r + dr * i)) results.push(sq(f + df * i, r + dr * i));
+          const tf = f + df * i, tr = r + dr * i;
+          if (!isValid(tf, tr)) break;
+          results.push(sq(tf, tr));
+          if (pieces.get(sq(tf, tr))) break;
         }
       }
       break;
@@ -215,8 +212,10 @@ function premoveDests(square, pieces, color) {
     case "r": {
       for (const [df, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
         for (let i = 1; i < 8; i++) {
-          if (!isValid(f + df * i, r + dr * i)) break;
-          if (canTarget(f + df * i, r + dr * i)) results.push(sq(f + df * i, r + dr * i));
+          const tf = f + df * i, tr = r + dr * i;
+          if (!isValid(tf, tr)) break;
+          results.push(sq(tf, tr));
+          if (pieces.get(sq(tf, tr))) break;
         }
       }
       break;
@@ -224,22 +223,28 @@ function premoveDests(square, pieces, color) {
     case "q": {
       for (const [df, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]) {
         for (let i = 1; i < 8; i++) {
-          if (!isValid(f + df * i, r + dr * i)) break;
-          if (canTarget(f + df * i, r + dr * i)) results.push(sq(f + df * i, r + dr * i));
+          const tf = f + df * i, tr = r + dr * i;
+          if (!isValid(tf, tr)) break;
+          results.push(sq(tf, tr));
+          if (pieces.get(sq(tf, tr))) break;
         }
       }
       break;
     }
     case "k": {
       for (const [df, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]) {
-        if (isValid(f + df, r + dr) && canTarget(f + df, r + dr)) {
+        if (isValid(f + df, r + dr)) {
           results.push(sq(f + df, r + dr));
         }
       }
       const homeRank = color === "w" ? 0 : 7;
       if (f === 4 && r === homeRank) {
-        if (canTarget(6, homeRank)) results.push(sq(6, homeRank));
-        if (canTarget(2, homeRank)) results.push(sq(2, homeRank));
+        const empty = (tf, tr) => {
+          const occ = pieces.get(sq(tf, tr));
+          return !occ || occ.color !== color;
+        };
+        if (empty(6, homeRank)) results.push(sq(6, homeRank));
+        if (empty(2, homeRank)) results.push(sq(2, homeRank));
       }
       break;
     }
@@ -395,6 +400,19 @@ function useInteraction(opts) {
     return _color === effective && turnColor !== void 0 && _color !== turnColor;
   }, [freeMode, movableColor, turnColor, premovable?.enabled]);
   useEffect(() => {
+    const sel = selectedRef.current;
+    if (sel !== null) {
+      const piece = piecesRef.current.get(sel);
+      if (piece && canMoveColor(piece.color)) {
+        const nextLegal = dests?.get(sel) ?? EMPTY_SQUARES;
+        if (!sameSquares(legalRef.current, nextLegal)) {
+          setLegalSquares(nextLegal.length === 0 ? EMPTY_SQUARES : [...nextLegal]);
+        }
+        if (premoveRef.current.length > 0) setPremoveSquares(EMPTY_SQUARES);
+        if (pendingPromotionRef.current !== null) setPendingPromotion(null);
+        return;
+      }
+    }
     if (selectedRef.current === null && legalRef.current.length === 0 && premoveRef.current.length === 0 && pendingPromotionRef.current === null) {
       return;
     }
@@ -402,7 +420,7 @@ function useInteraction(opts) {
     setLegalSquares(EMPTY_SQUARES);
     setPremoveSquares(EMPTY_SQUARES);
     setPendingPromotion(null);
-  }, [position]);
+  }, [position, dests, canMoveColor]);
   useEffect(() => {
     if (!premoveCurrent || !premovable?.enabled) return;
     const [from, to] = premoveCurrent;

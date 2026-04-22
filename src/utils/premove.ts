@@ -6,8 +6,13 @@ const sq = (f: number, r: number): Square => `${FILES[f]}${RANKS[r]}` as Square;
 
 /**
  * Compute all legal premove destinations for a piece on a given square.
- * Premoves allow any geometrically valid move regardless of check/pin.
- * Pieces cannot premove onto own pieces.
+ *
+ * Premoves allow any geometrically reachable square — including squares
+ * currently occupied by one of *our own* pieces, because by the time the
+ * premove fires the opponent may well have captured that piece (the classic
+ * "premove a recapture" case). Sliding pieces still stop AT the first
+ * occupied square (they can't jump through pieces mid-premove), but they
+ * may target it.
  */
 export function premoveDests(
   square: Square,
@@ -20,12 +25,6 @@ export function premoveDests(
   const f = square.charCodeAt(0) - 97;
   const r = parseInt(square[1]) - 1;
   const results: Square[] = [];
-
-  const canTarget = (tf: number, tr: number): boolean => {
-    const target = sq(tf, tr);
-    const occupant = pieces.get(target);
-    return !occupant || occupant.color !== color;
-  };
 
   switch (piece.role) {
     case 'p': {
@@ -48,7 +47,7 @@ export function premoveDests(
     }
     case 'n': {
       for (const [df, dr] of [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]]) {
-        if (isValid(f + df, r + dr) && canTarget(f + df, r + dr)) {
+        if (isValid(f + df, r + dr)) {
           results.push(sq(f + df, r + dr));
         }
       }
@@ -57,8 +56,10 @@ export function premoveDests(
     case 'b': {
       for (const [df, dr] of [[1,1],[1,-1],[-1,1],[-1,-1]]) {
         for (let i = 1; i < 8; i++) {
-          if (!isValid(f + df*i, r + dr*i)) break;
-          if (canTarget(f + df*i, r + dr*i)) results.push(sq(f + df*i, r + dr*i));
+          const tf = f + df*i, tr = r + dr*i;
+          if (!isValid(tf, tr)) break;
+          results.push(sq(tf, tr));
+          if (pieces.get(sq(tf, tr))) break; // stop AT any occupant
         }
       }
       break;
@@ -66,8 +67,10 @@ export function premoveDests(
     case 'r': {
       for (const [df, dr] of [[1,0],[-1,0],[0,1],[0,-1]]) {
         for (let i = 1; i < 8; i++) {
-          if (!isValid(f + df*i, r + dr*i)) break;
-          if (canTarget(f + df*i, r + dr*i)) results.push(sq(f + df*i, r + dr*i));
+          const tf = f + df*i, tr = r + dr*i;
+          if (!isValid(tf, tr)) break;
+          results.push(sq(tf, tr));
+          if (pieces.get(sq(tf, tr))) break;
         }
       }
       break;
@@ -75,8 +78,10 @@ export function premoveDests(
     case 'q': {
       for (const [df, dr] of [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]]) {
         for (let i = 1; i < 8; i++) {
-          if (!isValid(f + df*i, r + dr*i)) break;
-          if (canTarget(f + df*i, r + dr*i)) results.push(sq(f + df*i, r + dr*i));
+          const tf = f + df*i, tr = r + dr*i;
+          if (!isValid(tf, tr)) break;
+          results.push(sq(tf, tr));
+          if (pieces.get(sq(tf, tr))) break;
         }
       }
       break;
@@ -84,17 +89,21 @@ export function premoveDests(
     case 'k': {
       // Normal king moves
       for (const [df, dr] of [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]]) {
-        if (isValid(f + df, r + dr) && canTarget(f + df, r + dr)) {
+        if (isValid(f + df, r + dr)) {
           results.push(sq(f + df, r + dr));
         }
       }
-      // Castling premoves: king on e-file, target rook files
+      // Castling premoves: king on e-file. Require that the target king
+      // square is empty or an enemy — otherwise castling can't possibly be
+      // legal by the time the premove fires.
       const homeRank = color === 'w' ? 0 : 7;
       if (f === 4 && r === homeRank) {
-        // Kingside
-        if (canTarget(6, homeRank)) results.push(sq(6, homeRank));
-        // Queenside
-        if (canTarget(2, homeRank)) results.push(sq(2, homeRank));
+        const empty = (tf: number, tr: number) => {
+          const occ = pieces.get(sq(tf, tr));
+          return !occ || occ.color !== color;
+        };
+        if (empty(6, homeRank)) results.push(sq(6, homeRank));
+        if (empty(2, homeRank)) results.push(sq(2, homeRank));
       }
       break;
     }

@@ -165,8 +165,27 @@ export function useInteraction(opts: UseInteractionOptions): InteractionState {
     return _color === effective && turnColor !== undefined && _color !== turnColor;
   }, [freeMode, movableColor, turnColor, premovable?.enabled]);
 
-  // Reset selection on position change
+  // Reset selection on position change.
+  //
+  // Exception: if the user had a piece selected and that same piece is still
+  // on the same square (i.e. the position change was the opponent's move, not
+  // ours), AND it is now our turn, keep the selection alive and just refresh
+  // the legal-move dots from the new `dests`. Without this, tapping a piece
+  // while the opponent is thinking would "flash off" the moment they moved.
   useEffect(() => {
+    const sel = selectedRef.current;
+    if (sel !== null) {
+      const piece = piecesRef.current.get(sel as Square);
+      if (piece && canMoveColor(piece.color)) {
+        const nextLegal = dests?.get(sel as Square) ?? EMPTY_SQUARES;
+        if (!sameSquares(legalRef.current, nextLegal)) {
+          setLegalSquares(nextLegal.length === 0 ? EMPTY_SQUARES : [...nextLegal]);
+        }
+        if (premoveRef.current.length > 0) setPremoveSquares(EMPTY_SQUARES);
+        if (pendingPromotionRef.current !== null) setPendingPromotion(null);
+        return;
+      }
+    }
     if (
       selectedRef.current === null &&
       legalRef.current.length === 0 &&
@@ -179,7 +198,7 @@ export function useInteraction(opts: UseInteractionOptions): InteractionState {
     setLegalSquares(EMPTY_SQUARES);
     setPremoveSquares(EMPTY_SQUARES);
     setPendingPromotion(null);
-  }, [position]);
+  }, [position, dests, canMoveColor]);
 
   // Apply premove when turn changes (if there's a stored premove)
   useEffect(() => {

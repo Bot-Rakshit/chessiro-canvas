@@ -281,8 +281,13 @@ declare function preloadPieceSet(path: string): void;
 
 /**
  * Compute all legal premove destinations for a piece on a given square.
- * Premoves allow any geometrically valid move regardless of check/pin.
- * Pieces cannot premove onto own pieces.
+ *
+ * Premoves allow any geometrically reachable square — including squares
+ * currently occupied by one of *our own* pieces, because by the time the
+ * premove fires the opponent may well have captured that piece (the classic
+ * "premove a recapture" case). Sliding pieces still stop AT the first
+ * occupied square (they can't jump through pieces mid-premove), but they
+ * may target it.
  */
 declare function premoveDests(square: Square, pieces: Pieces, color: PieceColor): Square[];
 
