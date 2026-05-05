@@ -263,7 +263,7 @@ export function ChessopsBoard() {
 | `dests` | `Map<Square, Square[]>` | `undefined` | Legal destinations per square |
 | `lastMove` | `{ from: string; to: string } \| null` | `undefined` | Last move highlight |
 | `check` | `string \| null` | `undefined` | King-in-check square |
-| `premovable` | `PremoveConfig` | `undefined` | Enables premove and callbacks |
+| `premovable` | `PremoveConfig` | `undefined` | Enables premove; pass `current` to control/clear the queued premove |
 | `arrows` | `Arrow[]` | `[]` | Controlled arrows |
 | `onArrowsChange` | `(arrows) => void` | `undefined` | Arrow updates |
 | `markedSquares` | `string[]` | internal | Controlled marks |

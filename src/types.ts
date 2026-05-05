@@ -59,7 +59,7 @@ export const DEFAULT_ARROW_BRUSHES: ArrowBrushes = {
 export interface PremoveConfig {
   enabled: boolean;
   showDests?: boolean;         // show premove destination dots
-  current?: [string, string];  // current premove [from, to]
+  current?: [string, string] | null;  // controlled premove [from, to]; null/undefined clears when present
   events?: {
     set?: (from: string, to: string) => void;
     unset?: () => void;

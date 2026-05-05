@@ -292,6 +292,7 @@ var DRAG_THRESHOLD_TOUCH = 10;
 var TOUCH_MOUSE_SUPPRESS_MS = 500;
 var EMPTY_SQUARES = [];
 var EMPTY_ARROWS = [];
+var useIsomorphicLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
 function sameSquares(a, b) {
   if (a === b) return true;
   if (a.length !== b.length) return false;
@@ -305,6 +306,15 @@ function hasDragStarted(drag, isTouch) {
   const dy = drag.currentPos[1] - drag.startPos[1];
   const threshold = isTouch ? DRAG_THRESHOLD_TOUCH : DRAG_THRESHOLD_MOUSE;
   return Math.sqrt(dx * dx + dy * dy) >= threshold;
+}
+function samePremove(a, b) {
+  return a === b || a !== null && b !== null && a[0] === b[0] && a[1] === b[1];
+}
+function getControlledPremoveCurrent(premovable) {
+  if (!premovable || !Object.prototype.hasOwnProperty.call(premovable, "current")) {
+    return void 0;
+  }
+  return premovable.current ?? null;
 }
 function eventBrushColor(e, brushes) {
   if (!("shiftKey" in e)) return brushes.green;
@@ -421,7 +431,7 @@ function useInteraction(opts) {
     setPremoveSquares(EMPTY_SQUARES);
     setPendingPromotion(null);
   }, [position, dests, canMoveColor]);
-  useEffect(() => {
+  useIsomorphicLayoutEffect(() => {
     if (!premoveCurrent || !premovable?.enabled) return;
     const [from, to] = premoveCurrent;
     const piece = piecesRef.current.get(from);
@@ -438,10 +448,18 @@ function useInteraction(opts) {
     }
   }, [turnColor, premoveCurrent, premovable, dests, onMove]);
   useEffect(() => {
-    if (premovable?.current) {
-      setPremoveCurrent(premovable.current);
+    const controlledCurrent = getControlledPremoveCurrent(premovable);
+    if (controlledCurrent === void 0) return;
+    setPremoveCurrent((prev) => samePremove(prev, controlledCurrent) ? prev : controlledCurrent);
+    if (controlledCurrent === null) {
+      setPremoveSquares((prev) => prev.length === 0 ? prev : EMPTY_SQUARES);
     }
-  }, [premovable?.current]);
+  }, [premovable]);
+  useEffect(() => {
+    if (premovable?.enabled) return;
+    setPremoveCurrent((prev) => prev === null ? prev : null);
+    setPremoveSquares((prev) => prev.length === 0 ? prev : EMPTY_SQUARES);
+  }, [premovable?.enabled]);
   const getDestsForSquare = useCallback((sq2) => {
     if (dests) return dests.get(sq2) || [];
     return [];

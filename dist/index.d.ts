@@ -29,7 +29,7 @@ declare const DEFAULT_ARROW_BRUSHES: ArrowBrushes;
 interface PremoveConfig {
     enabled: boolean;
     showDests?: boolean;
-    current?: [string, string];
+    current?: [string, string] | null;
     events?: {
         set?: (from: string, to: string) => void;
         unset?: () => void;

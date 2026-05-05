@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState, useEffect, useMemo } from 'react';
+import { useCallback, useRef, useState, useEffect, useLayoutEffect, useMemo } from 'react';
 import type {
   Pieces, Square, Orientation, Arrow, ArrowBrushes, PieceColor,
   PromotionPiece, PromotionContext, Dests, PremoveConfig,
@@ -14,6 +14,7 @@ const DRAG_THRESHOLD_TOUCH = 10;
 const TOUCH_MOUSE_SUPPRESS_MS = 500;
 const EMPTY_SQUARES: string[] = [];
 const EMPTY_ARROWS: Arrow[] = [];
+const useIsomorphicLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
 function sameSquares(a: string[], b: string[]): boolean {
   if (a === b) return true;
@@ -29,6 +30,17 @@ function hasDragStarted(drag: DragState, isTouch: boolean): boolean {
   const dy = drag.currentPos[1] - drag.startPos[1];
   const threshold = isTouch ? DRAG_THRESHOLD_TOUCH : DRAG_THRESHOLD_MOUSE;
   return Math.sqrt(dx * dx + dy * dy) >= threshold;
+}
+
+function samePremove(a: [string, string] | null, b: [string, string] | null): boolean {
+  return a === b || (a !== null && b !== null && a[0] === b[0] && a[1] === b[1]);
+}
+
+function getControlledPremoveCurrent(premovable?: PremoveConfig): [string, string] | null | undefined {
+  if (!premovable || !Object.prototype.hasOwnProperty.call(premovable, 'current')) {
+    return undefined;
+  }
+  return premovable.current ?? null;
 }
 
 // Determine arrow brush color from modifier keys (matches chessground)
@@ -200,8 +212,10 @@ export function useInteraction(opts: UseInteractionOptions): InteractionState {
     setPendingPromotion(null);
   }, [position, dests, canMoveColor]);
 
-  // Apply premove when turn changes (if there's a stored premove)
-  useEffect(() => {
+  // Apply premove when turn changes (if there's a stored premove). Use a layout
+  // effect so the opponent's move and the immediate premove response do not
+  // paint as two separate board states.
+  useIsomorphicLayoutEffect(() => {
     if (!premoveCurrent || !premovable?.enabled) return;
     const [from, to] = premoveCurrent;
     const piece = piecesRef.current.get(from as Square);
@@ -220,12 +234,25 @@ export function useInteraction(opts: UseInteractionOptions): InteractionState {
     }
   }, [turnColor, premoveCurrent, premovable, dests, onMove]);
 
-  // Sync external premove.current
+  // Sync external premove.current. The presence of the `current` key means the
+  // premove is controlled, and null/undefined intentionally clears it.
   useEffect(() => {
-    if (premovable?.current) {
-      setPremoveCurrent(premovable.current);
+    const controlledCurrent = getControlledPremoveCurrent(premovable);
+    if (controlledCurrent === undefined) return;
+
+    setPremoveCurrent(prev => (
+      samePremove(prev, controlledCurrent) ? prev : controlledCurrent
+    ));
+    if (controlledCurrent === null) {
+      setPremoveSquares(prev => (prev.length === 0 ? prev : EMPTY_SQUARES));
     }
-  }, [premovable?.current]);
+  }, [premovable]);
+
+  useEffect(() => {
+    if (premovable?.enabled) return;
+    setPremoveCurrent(prev => (prev === null ? prev : null));
+    setPremoveSquares(prev => (prev.length === 0 ? prev : EMPTY_SQUARES));
+  }, [premovable?.enabled]);
 
   const getDestsForSquare = useCallback((sq: string): string[] => {
     if (dests) return dests.get(sq as Square) || [];
