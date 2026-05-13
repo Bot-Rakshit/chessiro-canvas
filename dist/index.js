@@ -83,38 +83,38 @@ function writeFen(pieces) {
 function useBoardSize(boardRef) {
   const [bounds, setBounds] = useState(null);
   const cachedBounds = useRef(null);
-  const updateBounds = useCallback(() => {
-    const el = boardRef.current;
-    if (!el) return;
+  const readMetrics = useCallback((el) => {
     const rect = el.getBoundingClientRect();
-    if (rect.width === 0 || rect.height === 0) return;
-    const newBounds = {
-      width: rect.width,
-      height: rect.height,
+    const width = el.offsetWidth || rect.width;
+    const height = el.offsetHeight || rect.height;
+    if (width === 0 || height === 0) return null;
+    return {
+      width,
+      height,
       left: rect.left,
       top: rect.top
     };
+  }, []);
+  const updateBounds = useCallback(() => {
+    const el = boardRef.current;
+    if (!el) return;
+    const newBounds = readMetrics(el);
+    if (!newBounds) return;
     const prev = cachedBounds.current;
     if (prev && prev.width === newBounds.width && prev.height === newBounds.height && prev.left === newBounds.left && prev.top === newBounds.top) {
       return;
     }
     cachedBounds.current = newBounds;
     setBounds(newBounds);
-  }, [boardRef]);
+  }, [boardRef, readMetrics]);
   const getFreshBounds = useCallback(() => {
     const el = boardRef.current;
     if (!el) return cachedBounds.current;
-    const rect = el.getBoundingClientRect();
-    if (rect.width === 0 || rect.height === 0) return cachedBounds.current;
-    const fresh = {
-      width: rect.width,
-      height: rect.height,
-      left: rect.left,
-      top: rect.top
-    };
+    const fresh = readMetrics(el);
+    if (!fresh) return cachedBounds.current;
     cachedBounds.current = fresh;
     return fresh;
-  }, [boardRef]);
+  }, [boardRef, readMetrics]);
   useEffect(() => {
     updateBounds();
     const el = boardRef.current;
