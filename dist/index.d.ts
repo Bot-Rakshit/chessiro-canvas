@@ -113,6 +113,13 @@ interface ArrowVisuals {
      * where the shaft meets stays perfectly straight and untouched. Default: 0 (sharp).
      */
     headCornerRadius?: number;
+    /**
+     * How to draw an arrow whose start/end form a knight's move (a 1×2 / 2×1 leap).
+     * 'l-shaped' bends the shaft into an L — the 2-square leg first, then a right-angle
+     * turn into the 1-square leg toward the target, like lichess. 'straight' draws a
+     * direct line. Default: 'l-shaped'.
+     */
+    knightArrowShape?: 'l-shaped' | 'straight';
     /** Outline color painted behind the shaft and around the arrowhead. Default: rgba(0,0,0,0.45). */
     outlineColor?: string;
     /** Outline thickness in board-units. 0 disables outline rendering. Default: 0. */

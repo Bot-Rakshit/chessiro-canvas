@@ -208,6 +208,7 @@ export const ArrowsLayer = memo(function ArrowsLayer({
   const lineJoin = visuals.lineJoin ?? 'miter';
   const dashArray = visuals.dashArray ?? visuals.dash;
   const dashOffset = visuals.dashOffset ?? 0;
+  const knightArrowShape = visuals.knightArrowShape ?? 'l-shaped';
 
   const headLength = visuals.headLength ?? visuals.markerWidth ?? 3.2;
   const headWidth = visuals.headWidth ?? visuals.markerHeight ?? 3.5;
@@ -342,6 +343,72 @@ export const ArrowsLayer = memo(function ArrowsLayer({
         const dist = Math.sqrt(dx * dx + dy * dy);
         if (dist === 0) return null;
 
+        const markerUrl = `url(#${markerKey('h', arrow.color, headShape, markerVariant)})`;
+        const keyBase = `${arrow.startSquare}-${arrow.endSquare}-${arrow.color}-${i}`;
+
+        // Shaft end: triangle sits in front of the line, so the head tip lands at (to - margin * dir).
+        const lineShorten = margin + headForwardExtent;
+
+        // ── Knight move: bend the shaft into an L (long leg first), like lichess. ──
+        const df = toFR[0] - fromFR[0];
+        const dr = toFR[1] - fromFR[1];
+        const isKnight =
+          (Math.abs(df) === 1 && Math.abs(dr) === 2) ||
+          (Math.abs(df) === 2 && Math.abs(dr) === 1);
+
+        if (isKnight && knightArrowShape === 'l-shaped') {
+          // Corner = start's short-axis coord + end's long-axis coord: travel the 2-square
+          // leg first, then turn 90° into the 1-square leg toward the target. Computed in
+          // board coords so pos2user applies the orientation flip and aspect scaling for us.
+          const cornerFR: [number, number] =
+            Math.abs(dr) === 2 ? [fromFR[0], toFR[1]] : [toFR[0], fromFR[1]];
+          const corner = pos2user(cornerFR[0], cornerFR[1], asWhite, boardWidth, boardHeight);
+
+          const l1x = corner[0] - from[0];
+          const l1y = corner[1] - from[1];
+          const l1 = Math.hypot(l1x, l1y) || 1;
+          const l2x = to[0] - corner[0];
+          const l2y = to[1] - corner[1];
+          const l2 = Math.hypot(l2x, l2y) || 1;
+
+          // Shaft origin pushed forward by startOffset along the first leg; shaft end pulled
+          // back along the second leg so the head tip lands at (to - margin) like a straight arrow.
+          const sX = from[0] + (l1x / l1) * startOffset;
+          const sY = from[1] + (l1y / l1) * startOffset;
+          const eX = to[0] - (l2x / l2) * lineShorten;
+          const eY = to[1] - (l2y / l2) * lineShorten;
+
+          const d = `M${sX.toFixed(4)},${sY.toFixed(4)} L${corner[0].toFixed(4)},${corner[1].toFixed(4)} L${eX.toFixed(4)},${eY.toFixed(4)}`;
+
+          return (
+            <g key={keyBase} opacity={lineOpacity}>
+              {hasOutline && (
+                <path
+                  d={d}
+                  fill="none"
+                  stroke={outlineColor}
+                  strokeWidth={lineWidth + outlineWidth * 2}
+                  strokeLinecap={lineCap}
+                  strokeLinejoin={lineJoin}
+                  strokeDasharray={dashArray}
+                  strokeDashoffset={dashOffset}
+                />
+              )}
+              <path
+                d={d}
+                fill="none"
+                stroke={arrow.color}
+                strokeWidth={lineWidth}
+                strokeLinecap={lineCap}
+                strokeLinejoin={lineJoin}
+                strokeDasharray={dashArray}
+                strokeDashoffset={dashOffset}
+                markerEnd={markerUrl}
+              />
+            </g>
+          );
+        }
+
         const ux = dx / dist;
         const uy = dy / dist;
 
@@ -349,13 +416,8 @@ export const ArrowsLayer = memo(function ArrowsLayer({
         const startX = from[0] + ux * startOffset;
         const startY = from[1] + uy * startOffset;
 
-        // Shaft end: triangle sits in front of the line, so the head tip lands at (to - margin * dir).
-        const lineShorten = margin + headForwardExtent;
         const endX = to[0] - ux * lineShorten;
         const endY = to[1] - uy * lineShorten;
-
-        const markerUrl = `url(#${markerKey('h', arrow.color, headShape, markerVariant)})`;
-        const keyBase = `${arrow.startSquare}-${arrow.endSquare}-${arrow.color}-${i}`;
 
         return (
           <g key={keyBase} opacity={lineOpacity}>

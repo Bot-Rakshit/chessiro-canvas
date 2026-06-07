@@ -126,6 +126,9 @@ export function useInteraction(opts: UseInteractionOptions): InteractionState {
   const [pendingPromotion, setPendingPromotion] = useState<PromotionContext | null>(null);
   const [dragHoverSquare, setDragHoverSquare] = useState<string | null>(null);
   const [drag, setDrag] = useState<DragState | null>(null);
+  // Live arrow being drawn (right-drag in progress). Rendered as a preview so the
+  // arrow follows the cursor instead of only appearing once the drag is released.
+  const [drawingArrow, setDrawingArrow] = useState<Arrow | null>(null);
   const dragGhostRef = useRef<HTMLDivElement>(null);
 
   const [internalArrowsMap, setInternalArrowsMap] = useState<Map<number, Arrow[]>>(new Map());
@@ -133,6 +136,7 @@ export function useInteraction(opts: UseInteractionOptions): InteractionState {
   const arrowStartRef = useRef<string | null>(null);
   const arrowColorRef = useRef<string>(brushes.green);
   const arrowPosRef = useRef<[number, number] | null>(null); // track mouse pos during arrow draw
+  const drawingArrowRef = useRef<Arrow | null>(null); // last previewed arrow, for cheap change detection
   const justDrewArrowRef = useRef(false);
   const dragKeyChangedRef = useRef(false);
   const isTouchRef = useRef(false);
@@ -595,9 +599,36 @@ export function useInteraction(opts: UseInteractionOptions): InteractionState {
     const handleMove = (e: MouseEvent | TouchEvent) => {
       const pos = getClientPos(e);
       if (!pos) return;
-      // Track mouse position for arrow drawing
+      // Track mouse position + update the live arrow preview while drawing.
       if (arrowStartRef.current) {
         arrowPosRef.current = pos;
+        const arrowBounds = activeBoundsRef.current ?? getCurrentBounds();
+        if (arrowBounds) {
+          const startSq = arrowStartRef.current;
+          const rawSq = screenPos2square(pos[0], pos[1], asWhite, arrowBounds);
+          let endSq: string | undefined;
+          if (!rawSq || rawSq === startSq) {
+            // Hovering the origin square draws nothing (that gesture toggles a mark).
+            endSq = undefined;
+          } else if (snapArrowsToValidMoves) {
+            endSq = getSnappedSquare(startSq, pos[0], pos[1]);
+          } else {
+            endSq = rawSq;
+          }
+          const next: Arrow | null = (endSq && endSq !== startSq)
+            ? { startSquare: startSq, endSquare: endSq, color: arrowColorRef.current }
+            : null;
+          const prev = drawingArrowRef.current;
+          // Only re-render when the previewed arrow actually changes (square granularity).
+          if (
+            prev?.startSquare !== next?.startSquare ||
+            prev?.endSquare !== next?.endSquare ||
+            prev?.color !== next?.color
+          ) {
+            drawingArrowRef.current = next;
+            setDrawingArrow(next);
+          }
+        }
       }
       if (blockTouchScroll && 'touches' in e && (arrowStartRef.current || dragRef.current)) {
         e.preventDefault();
@@ -665,6 +696,11 @@ export function useInteraction(opts: UseInteractionOptions): InteractionState {
         const pos = arrowPosRef.current || getClientPos(e);
         arrowStartRef.current = null;
         arrowPosRef.current = null;
+        // Tear down the live preview; the committed arrow (if any) renders below.
+        if (drawingArrowRef.current) {
+          drawingArrowRef.current = null;
+          setDrawingArrow(null);
+        }
 
         if (pos) {
           // Get the raw square under cursor
@@ -796,8 +832,14 @@ export function useInteraction(opts: UseInteractionOptions): InteractionState {
         }
       }
     }
+
+    // Live preview of the arrow currently being drawn, on top of committed arrows.
+    if (drawingArrow) {
+      const k = `${drawingArrow.startSquare}-${drawingArrow.endSquare}`;
+      if (!seen.has(k)) final.push(drawingArrow);
+    }
     return final;
-  }, [arrows, plyIndex, plyArrows, internalArrowsMap, onArrowsChange]);
+  }, [arrows, plyIndex, plyArrows, internalArrowsMap, onArrowsChange, drawingArrow]);
 
   const handlePromotionSelect = useCallback((piece: PromotionPiece) => {
     if (!pendingPromotion) return;

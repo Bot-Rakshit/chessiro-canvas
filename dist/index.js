@@ -367,12 +367,14 @@ function useInteraction(opts) {
   const [pendingPromotion, setPendingPromotion] = useState(null);
   const [dragHoverSquare, setDragHoverSquare] = useState(null);
   const [drag, setDrag] = useState(null);
+  const [drawingArrow, setDrawingArrow] = useState(null);
   const dragGhostRef = useRef(null);
   const [internalArrowsMap, setInternalArrowsMap] = useState(/* @__PURE__ */ new Map());
   const [internalMarksMap, setInternalMarksMap] = useState(/* @__PURE__ */ new Map());
   const arrowStartRef = useRef(null);
   const arrowColorRef = useRef(brushes.green);
   const arrowPosRef = useRef(null);
+  const drawingArrowRef = useRef(null);
   const justDrewArrowRef = useRef(false);
   const dragKeyChangedRef = useRef(false);
   const isTouchRef = useRef(false);
@@ -768,6 +770,25 @@ function useInteraction(opts) {
       if (!pos) return;
       if (arrowStartRef.current) {
         arrowPosRef.current = pos;
+        const arrowBounds = activeBoundsRef.current ?? getCurrentBounds();
+        if (arrowBounds) {
+          const startSq = arrowStartRef.current;
+          const rawSq = screenPos2square(pos[0], pos[1], asWhite, arrowBounds);
+          let endSq;
+          if (!rawSq || rawSq === startSq) {
+            endSq = void 0;
+          } else if (snapArrowsToValidMoves) {
+            endSq = getSnappedSquare(startSq, pos[0], pos[1]);
+          } else {
+            endSq = rawSq;
+          }
+          const next = endSq && endSq !== startSq ? { startSquare: startSq, endSquare: endSq, color: arrowColorRef.current } : null;
+          const prev = drawingArrowRef.current;
+          if (prev?.startSquare !== next?.startSquare || prev?.endSquare !== next?.endSquare || prev?.color !== next?.color) {
+            drawingArrowRef.current = next;
+            setDrawingArrow(next);
+          }
+        }
       }
       if (blockTouchScroll && "touches" in e && (arrowStartRef.current || dragRef.current)) {
         e.preventDefault();
@@ -828,6 +849,10 @@ function useInteraction(opts) {
         const pos = arrowPosRef.current || getClientPos(e);
         arrowStartRef.current = null;
         arrowPosRef.current = null;
+        if (drawingArrowRef.current) {
+          drawingArrowRef.current = null;
+          setDrawingArrow(null);
+        }
         if (pos) {
           const rawSq = screenPos2square(pos[0], pos[1], asWhite, releaseBounds);
           if (rawSq === startSq || !rawSq) {
@@ -956,8 +981,12 @@ function useInteraction(opts) {
         }
       }
     }
+    if (drawingArrow) {
+      const k = `${drawingArrow.startSquare}-${drawingArrow.endSquare}`;
+      if (!seen.has(k)) final.push(drawingArrow);
+    }
     return final;
-  }, [arrows, plyIndex, plyArrows, internalArrowsMap, onArrowsChange]);
+  }, [arrows, plyIndex, plyArrows, internalArrowsMap, onArrowsChange, drawingArrow]);
   const handlePromotionSelect = useCallback((piece) => {
     if (!pendingPromotion) return;
     setPendingPromotion(null);
@@ -1071,6 +1100,108 @@ var EMPTY_SQUARES2 = [];
 var EMPTY_MARKS = {};
 var EMPTY_HIGHLIGHTS = {};
 var EMPTY_SQUARE_VISUALS = {};
+var SquareCell = memo(function SquareCell2({
+  sq: sq2,
+  baseBg,
+  isLastMove,
+  isSelected,
+  isDragHover,
+  isLegal,
+  isPremoveDest,
+  isPremoveCurrent,
+  isMarked,
+  isCheck,
+  isOccupied,
+  customHighlight,
+  highlightColor,
+  selectedColor,
+  dragOverColor,
+  visuals
+}) {
+  let bg = baseBg;
+  let boxShadow;
+  let outline;
+  let outlineOffset;
+  let backgroundImage;
+  let borderRadius;
+  if (isLastMove) {
+    bg = highlightColor;
+  }
+  if (customHighlight) {
+    bg = customHighlight;
+  }
+  if (isCheck) {
+    backgroundImage = visuals.checkGradient;
+  }
+  if (isMarked) {
+    bg = visuals.markOverlay;
+    outline = `2px solid ${visuals.markOutline}`;
+    outlineOffset = "-2px";
+  }
+  if (isSelected) {
+    const style = visuals.selectedStyle;
+    if (style === "fill" || style === "both") {
+      bg = selectedColor;
+    }
+    if (style === "border" || style === "both") {
+      boxShadow = `inset 0 0 0 ${visuals.selectedBorderWidth}px ${visuals.selectedOutline}`;
+    }
+  }
+  if (isDragHover) {
+    bg = dragOverColor;
+  }
+  if (isPremoveCurrent) {
+    const style = visuals.premoveCurrentStyle;
+    if (style === "fill" || style === "both") {
+      bg = visuals.premoveCurrent;
+    }
+    if (style === "dashed" || style === "both") {
+      const w = visuals.premoveCurrentBorderWidth;
+      const borderColor = visuals.premoveCurrentBorderColor || visuals.premoveCurrent;
+      outline = `${w}px dashed ${borderColor}`;
+      outlineOffset = `-${w}px`;
+    }
+  }
+  if (isLegal) {
+    if (isOccupied) {
+      boxShadow = `inset 0 0 0 ${visuals.legalCaptureRingWidth}px ${visuals.legalCaptureRing}`;
+      borderRadius = visuals.legalCaptureRingShape === "circle" ? "50%" : `${visuals.legalCaptureRingCornerRadius}%`;
+    } else if (visuals.legalMoveStyle === "ring") {
+      const inner = visuals.legalRingInnerRadius;
+      const outer = visuals.legalRingOuterRadius;
+      backgroundImage = `radial-gradient(circle at center, transparent 0%, transparent ${inner}%, ${visuals.legalDot} ${inner}%, ${visuals.legalDot} ${outer}%, transparent ${outer}%)`;
+    } else {
+      backgroundImage = `radial-gradient(circle at center, ${visuals.legalDot} 0%, ${visuals.legalDot} 15%, ${visuals.legalDotOutline} 15%, ${visuals.legalDotOutline} 19%, transparent 19%)`;
+    }
+  }
+  if (isPremoveDest && !isLegal) {
+    if (isOccupied) {
+      boxShadow = `inset 0 0 0 ${visuals.legalCaptureRingWidth}px ${visuals.premoveCaptureRing}`;
+      borderRadius = visuals.legalCaptureRingShape === "circle" ? "50%" : `${visuals.legalCaptureRingCornerRadius}%`;
+    } else if (visuals.legalMoveStyle === "ring") {
+      const inner = visuals.legalRingInnerRadius;
+      const outer = visuals.legalRingOuterRadius;
+      backgroundImage = `radial-gradient(circle at center, transparent 0%, transparent ${inner}%, ${visuals.premoveDot} ${inner}%, ${visuals.premoveDot} ${outer}%, transparent ${outer}%)`;
+    } else {
+      backgroundImage = `radial-gradient(circle at center, ${visuals.premoveDot} 0%, ${visuals.premoveDot} 15%, ${visuals.premoveDot} 19%, transparent 19%)`;
+    }
+  }
+  return /* @__PURE__ */ jsx(
+    "div",
+    {
+      "data-square": sq2,
+      style: {
+        backgroundColor: bg,
+        boxShadow,
+        outline,
+        outlineOffset,
+        backgroundImage,
+        borderRadius,
+        position: "relative"
+      }
+    }
+  );
+});
 var Squares = memo(function Squares2({
   theme,
   orientation,
@@ -1115,6 +1246,8 @@ var Squares = memo(function Squares2({
     }
     return result;
   }, [asWhite]);
+  const lightSquare = theme.lightSquare;
+  const darkSquare = theme.darkSquare;
   return /* @__PURE__ */ jsx(
     "div",
     {
@@ -1125,103 +1258,28 @@ var Squares = memo(function Squares2({
         gridTemplateColumns: "repeat(8, 1fr)",
         gridTemplateRows: "repeat(8, 1fr)"
       },
-      children: squares.map(({ sq: sq2, isLight }) => {
-        const isLastMoveFrom = lastMove?.from === sq2;
-        const isLastMoveTo = lastMove?.to === sq2;
-        const isSelected = selectedSquare === sq2;
-        const isDragHover = dragHoverSquare === sq2;
-        const isLegal = legalSet.has(sq2);
-        const isPremoveDest = premoveSet.has(sq2);
-        const isPremoveCurrent = premoveCurrentSet.has(sq2);
-        const isMarked = !!markedSquares[sq2];
-        const customHighlight = highlightedSquares[sq2];
-        const isOccupied = occupiedSquares?.has(sq2);
-        const isCheck = check === sq2;
-        let bg = isLight ? theme.lightSquare : theme.darkSquare;
-        let boxShadow;
-        let outline;
-        let outlineOffset;
-        let backgroundImage;
-        let borderRadius;
-        if (isLastMoveFrom || isLastMoveTo) {
-          bg = highlightColor;
-        }
-        if (customHighlight) {
-          bg = customHighlight;
-        }
-        if (isCheck) {
-          backgroundImage = visuals.checkGradient;
-        }
-        if (isMarked) {
-          bg = visuals.markOverlay;
-          outline = `2px solid ${visuals.markOutline}`;
-          outlineOffset = "-2px";
-        }
-        if (isSelected) {
-          const style = visuals.selectedStyle;
-          if (style === "fill" || style === "both") {
-            bg = selectedColor;
-          }
-          if (style === "border" || style === "both") {
-            boxShadow = `inset 0 0 0 ${visuals.selectedBorderWidth}px ${visuals.selectedOutline}`;
-          }
-        }
-        if (isDragHover) {
-          bg = dragOverColor;
-        }
-        if (isPremoveCurrent) {
-          const style = visuals.premoveCurrentStyle;
-          if (style === "fill" || style === "both") {
-            bg = visuals.premoveCurrent;
-          }
-          if (style === "dashed" || style === "both") {
-            const w = visuals.premoveCurrentBorderWidth;
-            const borderColor = visuals.premoveCurrentBorderColor || visuals.premoveCurrent;
-            outline = `${w}px dashed ${borderColor}`;
-            outlineOffset = `-${w}px`;
-          }
-        }
-        if (isLegal) {
-          if (isOccupied) {
-            boxShadow = `inset 0 0 0 ${visuals.legalCaptureRingWidth}px ${visuals.legalCaptureRing}`;
-            borderRadius = visuals.legalCaptureRingShape === "circle" ? "50%" : `${visuals.legalCaptureRingCornerRadius}%`;
-          } else if (visuals.legalMoveStyle === "ring") {
-            const inner = visuals.legalRingInnerRadius;
-            const outer = visuals.legalRingOuterRadius;
-            backgroundImage = `radial-gradient(circle at center, transparent 0%, transparent ${inner}%, ${visuals.legalDot} ${inner}%, ${visuals.legalDot} ${outer}%, transparent ${outer}%)`;
-          } else {
-            backgroundImage = `radial-gradient(circle at center, ${visuals.legalDot} 0%, ${visuals.legalDot} 15%, ${visuals.legalDotOutline} 15%, ${visuals.legalDotOutline} 19%, transparent 19%)`;
-          }
-        }
-        if (isPremoveDest && !isLegal) {
-          if (isOccupied) {
-            boxShadow = `inset 0 0 0 ${visuals.legalCaptureRingWidth}px ${visuals.premoveCaptureRing}`;
-            borderRadius = visuals.legalCaptureRingShape === "circle" ? "50%" : `${visuals.legalCaptureRingCornerRadius}%`;
-          } else if (visuals.legalMoveStyle === "ring") {
-            const inner = visuals.legalRingInnerRadius;
-            const outer = visuals.legalRingOuterRadius;
-            backgroundImage = `radial-gradient(circle at center, transparent 0%, transparent ${inner}%, ${visuals.premoveDot} ${inner}%, ${visuals.premoveDot} ${outer}%, transparent ${outer}%)`;
-          } else {
-            backgroundImage = `radial-gradient(circle at center, ${visuals.premoveDot} 0%, ${visuals.premoveDot} 15%, ${visuals.premoveDot} 19%, transparent 19%)`;
-          }
-        }
-        return /* @__PURE__ */ jsx(
-          "div",
-          {
-            "data-square": sq2,
-            style: {
-              backgroundColor: bg,
-              boxShadow,
-              outline,
-              outlineOffset,
-              backgroundImage,
-              borderRadius,
-              position: "relative"
-            }
-          },
-          sq2
-        );
-      })
+      children: squares.map(({ sq: sq2, isLight }) => /* @__PURE__ */ jsx(
+        SquareCell,
+        {
+          sq: sq2,
+          baseBg: isLight ? lightSquare : darkSquare,
+          isLastMove: lastMove?.from === sq2 || lastMove?.to === sq2,
+          isSelected: selectedSquare === sq2,
+          isDragHover: dragHoverSquare === sq2,
+          isLegal: legalSet.has(sq2),
+          isPremoveDest: premoveSet.has(sq2),
+          isPremoveCurrent: premoveCurrentSet.has(sq2),
+          isMarked: !!markedSquares[sq2],
+          isCheck: check === sq2,
+          isOccupied: !!occupiedSquares?.has(sq2),
+          customHighlight: highlightedSquares[sq2],
+          highlightColor,
+          selectedColor,
+          dragOverColor,
+          visuals
+        },
+        sq2
+      ))
     }
   );
 });
@@ -1672,6 +1730,7 @@ var ArrowsLayer = memo(function ArrowsLayer2({
   const lineJoin = visuals.lineJoin ?? "miter";
   const dashArray = visuals.dashArray ?? visuals.dash;
   const dashOffset = visuals.dashOffset ?? 0;
+  const knightArrowShape = visuals.knightArrowShape ?? "l-shaped";
   const headLength = visuals.headLength ?? visuals.markerWidth ?? 3.2;
   const headWidth = visuals.headWidth ?? visuals.markerHeight ?? 3.5;
   const headShape = visuals.headShape ?? "classic";
@@ -1779,15 +1838,62 @@ var ArrowsLayer = memo(function ArrowsLayer2({
           const dy = to[1] - from[1];
           const dist = Math.sqrt(dx * dx + dy * dy);
           if (dist === 0) return null;
+          const markerUrl = `url(#${markerKey("h", arrow.color, headShape, markerVariant)})`;
+          const keyBase = `${arrow.startSquare}-${arrow.endSquare}-${arrow.color}-${i}`;
+          const lineShorten = margin + headForwardExtent;
+          const df = toFR[0] - fromFR[0];
+          const dr = toFR[1] - fromFR[1];
+          const isKnight = Math.abs(df) === 1 && Math.abs(dr) === 2 || Math.abs(df) === 2 && Math.abs(dr) === 1;
+          if (isKnight && knightArrowShape === "l-shaped") {
+            const cornerFR = Math.abs(dr) === 2 ? [fromFR[0], toFR[1]] : [toFR[0], fromFR[1]];
+            const corner = pos2user(cornerFR[0], cornerFR[1], asWhite, boardWidth, boardHeight);
+            const l1x = corner[0] - from[0];
+            const l1y = corner[1] - from[1];
+            const l1 = Math.hypot(l1x, l1y) || 1;
+            const l2x = to[0] - corner[0];
+            const l2y = to[1] - corner[1];
+            const l2 = Math.hypot(l2x, l2y) || 1;
+            const sX = from[0] + l1x / l1 * startOffset;
+            const sY = from[1] + l1y / l1 * startOffset;
+            const eX = to[0] - l2x / l2 * lineShorten;
+            const eY = to[1] - l2y / l2 * lineShorten;
+            const d = `M${sX.toFixed(4)},${sY.toFixed(4)} L${corner[0].toFixed(4)},${corner[1].toFixed(4)} L${eX.toFixed(4)},${eY.toFixed(4)}`;
+            return /* @__PURE__ */ jsxs("g", { opacity: lineOpacity, children: [
+              hasOutline && /* @__PURE__ */ jsx(
+                "path",
+                {
+                  d,
+                  fill: "none",
+                  stroke: outlineColor,
+                  strokeWidth: lineWidth + outlineWidth * 2,
+                  strokeLinecap: lineCap,
+                  strokeLinejoin: lineJoin,
+                  strokeDasharray: dashArray,
+                  strokeDashoffset: dashOffset
+                }
+              ),
+              /* @__PURE__ */ jsx(
+                "path",
+                {
+                  d,
+                  fill: "none",
+                  stroke: arrow.color,
+                  strokeWidth: lineWidth,
+                  strokeLinecap: lineCap,
+                  strokeLinejoin: lineJoin,
+                  strokeDasharray: dashArray,
+                  strokeDashoffset: dashOffset,
+                  markerEnd: markerUrl
+                }
+              )
+            ] }, keyBase);
+          }
           const ux = dx / dist;
           const uy = dy / dist;
           const startX = from[0] + ux * startOffset;
           const startY = from[1] + uy * startOffset;
-          const lineShorten = margin + headForwardExtent;
           const endX = to[0] - ux * lineShorten;
           const endY = to[1] - uy * lineShorten;
-          const markerUrl = `url(#${markerKey("h", arrow.color, headShape, markerVariant)})`;
-          const keyBase = `${arrow.startSquare}-${arrow.endSquare}-${arrow.color}-${i}`;
           return /* @__PURE__ */ jsxs("g", { opacity: lineOpacity, children: [
             hasOutline && /* @__PURE__ */ jsx(
               "line",

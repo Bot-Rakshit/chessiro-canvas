@@ -51,6 +51,157 @@ const EMPTY_MARKS: Record<string, boolean> = {};
 const EMPTY_HIGHLIGHTS: Record<string, string> = {};
 const EMPTY_SQUARE_VISUALS: Partial<SquareVisuals> = {};
 
+interface SquareCellProps {
+  sq: Square;
+  /** Base square color (already resolved from light/dark + theme). */
+  baseBg: string;
+  isLastMove: boolean;
+  isSelected: boolean;
+  isDragHover: boolean;
+  isLegal: boolean;
+  isPremoveDest: boolean;
+  isPremoveCurrent: boolean;
+  isMarked: boolean;
+  isCheck: boolean;
+  isOccupied: boolean;
+  customHighlight?: string;
+  highlightColor: string;
+  selectedColor: string;
+  dragOverColor: string;
+  visuals: Required<SquareVisuals>;
+}
+
+// Each cell is memoized so an interaction that changes one square's state (selection,
+// drag-hover, a legal dot) only re-renders the squares that actually changed — not all
+// 64. This mirrors chessground, which toggles state per-square instead of repainting the
+// whole grid. All props are primitives except `visuals`, whose reference is stabilized by
+// the parent's useMemo, so the memo comparison stays cheap and correct.
+const SquareCell = memo(function SquareCell({
+  sq,
+  baseBg,
+  isLastMove,
+  isSelected,
+  isDragHover,
+  isLegal,
+  isPremoveDest,
+  isPremoveCurrent,
+  isMarked,
+  isCheck,
+  isOccupied,
+  customHighlight,
+  highlightColor,
+  selectedColor,
+  dragOverColor,
+  visuals,
+}: SquareCellProps) {
+  let bg = baseBg;
+  let boxShadow: string | undefined;
+  let outline: string | undefined;
+  let outlineOffset: string | undefined;
+  let backgroundImage: string | undefined;
+  let borderRadius: string | undefined;
+
+  // Last move highlight
+  if (isLastMove) {
+    bg = highlightColor;
+  }
+
+  // Custom highlights
+  if (customHighlight) {
+    bg = customHighlight;
+  }
+
+  // Check highlight (radial red glow, like lichess/chessground)
+  if (isCheck) {
+    backgroundImage = visuals.checkGradient;
+  }
+
+  // Marked squares (right-click)
+  if (isMarked) {
+    bg = visuals.markOverlay;
+    outline = `2px solid ${visuals.markOutline}`;
+    outlineOffset = '-2px';
+  }
+
+  // Selected square (stays highlighted during drag too)
+  if (isSelected) {
+    const style = visuals.selectedStyle;
+    if (style === 'fill' || style === 'both') {
+      bg = selectedColor;
+    }
+    if (style === 'border' || style === 'both') {
+      boxShadow = `inset 0 0 0 ${visuals.selectedBorderWidth}px ${visuals.selectedOutline}`;
+    }
+  }
+
+  // Drag hover highlight (square the piece is currently over)
+  if (isDragHover) {
+    bg = dragOverColor;
+  }
+
+  // Current premove highlight. Style: 'fill' = solid bg (legacy behavior),
+  // 'dashed' = inset dashed border via CSS outline, 'both' = bg + dashed border.
+  if (isPremoveCurrent) {
+    const style = visuals.premoveCurrentStyle;
+    if (style === 'fill' || style === 'both') {
+      bg = visuals.premoveCurrent;
+    }
+    if (style === 'dashed' || style === 'both') {
+      const w = visuals.premoveCurrentBorderWidth;
+      const borderColor = visuals.premoveCurrentBorderColor || visuals.premoveCurrent;
+      outline = `${w}px dashed ${borderColor}`;
+      outlineOffset = `-${w}px`;
+    }
+  }
+
+  // Legal move indicators
+  if (isLegal) {
+    if (isOccupied) {
+      boxShadow = `inset 0 0 0 ${visuals.legalCaptureRingWidth}px ${visuals.legalCaptureRing}`;
+      borderRadius = visuals.legalCaptureRingShape === 'circle'
+        ? '50%'
+        : `${visuals.legalCaptureRingCornerRadius}%`;
+    } else if (visuals.legalMoveStyle === 'ring') {
+      const inner = visuals.legalRingInnerRadius;
+      const outer = visuals.legalRingOuterRadius;
+      backgroundImage = `radial-gradient(circle at center, transparent 0%, transparent ${inner}%, ${visuals.legalDot} ${inner}%, ${visuals.legalDot} ${outer}%, transparent ${outer}%)`;
+    } else {
+      backgroundImage = `radial-gradient(circle at center, ${visuals.legalDot} 0%, ${visuals.legalDot} 15%, ${visuals.legalDotOutline} 15%, ${visuals.legalDotOutline} 19%, transparent 19%)`;
+    }
+  }
+
+  // Premove destination indicators (same style, different color)
+  if (isPremoveDest && !isLegal) {
+    if (isOccupied) {
+      boxShadow = `inset 0 0 0 ${visuals.legalCaptureRingWidth}px ${visuals.premoveCaptureRing}`;
+      borderRadius = visuals.legalCaptureRingShape === 'circle'
+        ? '50%'
+        : `${visuals.legalCaptureRingCornerRadius}%`;
+    } else if (visuals.legalMoveStyle === 'ring') {
+      const inner = visuals.legalRingInnerRadius;
+      const outer = visuals.legalRingOuterRadius;
+      backgroundImage = `radial-gradient(circle at center, transparent 0%, transparent ${inner}%, ${visuals.premoveDot} ${inner}%, ${visuals.premoveDot} ${outer}%, transparent ${outer}%)`;
+    } else {
+      backgroundImage = `radial-gradient(circle at center, ${visuals.premoveDot} 0%, ${visuals.premoveDot} 15%, ${visuals.premoveDot} 19%, transparent 19%)`;
+    }
+  }
+
+  return (
+    <div
+      data-square={sq}
+      style={{
+        backgroundColor: bg,
+        boxShadow,
+        outline,
+        outlineOffset,
+        backgroundImage,
+        borderRadius,
+        position: 'relative',
+      }}
+    />
+  );
+});
+
 export const Squares = memo(function Squares({
   theme,
   orientation,
@@ -112,6 +263,9 @@ export const Squares = memo(function Squares({
     return result;
   }, [asWhite]);
 
+  const lightSquare = theme.lightSquare;
+  const darkSquare = theme.darkSquare;
+
   return (
     <div
       style={{
@@ -122,127 +276,27 @@ export const Squares = memo(function Squares({
         gridTemplateRows: 'repeat(8, 1fr)',
       }}
     >
-      {squares.map(({ sq, isLight }) => {
-        const isLastMoveFrom = lastMove?.from === sq;
-        const isLastMoveTo = lastMove?.to === sq;
-        const isSelected = selectedSquare === sq;
-        const isDragHover = dragHoverSquare === sq;
-        const isLegal = legalSet.has(sq);
-        const isPremoveDest = premoveSet.has(sq);
-        const isPremoveCurrent = premoveCurrentSet.has(sq);
-        const isMarked = !!markedSquares[sq];
-        const customHighlight = highlightedSquares[sq];
-        const isOccupied = occupiedSquares?.has(sq);
-        const isCheck = check === sq;
-
-        let bg = isLight ? theme.lightSquare : theme.darkSquare;
-        let boxShadow: string | undefined;
-        let outline: string | undefined;
-        let outlineOffset: string | undefined;
-        let backgroundImage: string | undefined;
-        let borderRadius: string | undefined;
-
-        // Last move highlight
-        if (isLastMoveFrom || isLastMoveTo) {
-          bg = highlightColor;
-        }
-
-        // Custom highlights
-        if (customHighlight) {
-          bg = customHighlight;
-        }
-
-        // Check highlight (radial red glow, like lichess/chessground)
-        if (isCheck) {
-          backgroundImage = visuals.checkGradient;
-        }
-
-        // Marked squares (right-click)
-        if (isMarked) {
-          bg = visuals.markOverlay;
-          outline = `2px solid ${visuals.markOutline}`;
-          outlineOffset = '-2px';
-        }
-
-        // Selected square (stays highlighted during drag too)
-        if (isSelected) {
-          const style = visuals.selectedStyle;
-          if (style === 'fill' || style === 'both') {
-            bg = selectedColor;
-          }
-          if (style === 'border' || style === 'both') {
-            boxShadow = `inset 0 0 0 ${visuals.selectedBorderWidth}px ${visuals.selectedOutline}`;
-          }
-        }
-
-        // Drag hover highlight (square the piece is currently over)
-        if (isDragHover) {
-          bg = dragOverColor;
-        }
-
-        // Current premove highlight. Style: 'fill' = solid bg (legacy behavior),
-        // 'dashed' = inset dashed border via CSS outline, 'both' = bg + dashed border.
-        if (isPremoveCurrent) {
-          const style = visuals.premoveCurrentStyle;
-          if (style === 'fill' || style === 'both') {
-            bg = visuals.premoveCurrent;
-          }
-          if (style === 'dashed' || style === 'both') {
-            const w = visuals.premoveCurrentBorderWidth;
-            const borderColor = visuals.premoveCurrentBorderColor || visuals.premoveCurrent;
-            outline = `${w}px dashed ${borderColor}`;
-            outlineOffset = `-${w}px`;
-          }
-        }
-
-        // Legal move indicators
-        if (isLegal) {
-          if (isOccupied) {
-            boxShadow = `inset 0 0 0 ${visuals.legalCaptureRingWidth}px ${visuals.legalCaptureRing}`;
-            borderRadius = visuals.legalCaptureRingShape === 'circle'
-              ? '50%'
-              : `${visuals.legalCaptureRingCornerRadius}%`;
-          } else if (visuals.legalMoveStyle === 'ring') {
-            const inner = visuals.legalRingInnerRadius;
-            const outer = visuals.legalRingOuterRadius;
-            backgroundImage = `radial-gradient(circle at center, transparent 0%, transparent ${inner}%, ${visuals.legalDot} ${inner}%, ${visuals.legalDot} ${outer}%, transparent ${outer}%)`;
-          } else {
-            backgroundImage = `radial-gradient(circle at center, ${visuals.legalDot} 0%, ${visuals.legalDot} 15%, ${visuals.legalDotOutline} 15%, ${visuals.legalDotOutline} 19%, transparent 19%)`;
-          }
-        }
-
-        // Premove destination indicators (same style, different color)
-        if (isPremoveDest && !isLegal) {
-          if (isOccupied) {
-            boxShadow = `inset 0 0 0 ${visuals.legalCaptureRingWidth}px ${visuals.premoveCaptureRing}`;
-            borderRadius = visuals.legalCaptureRingShape === 'circle'
-              ? '50%'
-              : `${visuals.legalCaptureRingCornerRadius}%`;
-          } else if (visuals.legalMoveStyle === 'ring') {
-            const inner = visuals.legalRingInnerRadius;
-            const outer = visuals.legalRingOuterRadius;
-            backgroundImage = `radial-gradient(circle at center, transparent 0%, transparent ${inner}%, ${visuals.premoveDot} ${inner}%, ${visuals.premoveDot} ${outer}%, transparent ${outer}%)`;
-          } else {
-            backgroundImage = `radial-gradient(circle at center, ${visuals.premoveDot} 0%, ${visuals.premoveDot} 15%, ${visuals.premoveDot} 19%, transparent 19%)`;
-          }
-        }
-
-        return (
-          <div
-            key={sq}
-            data-square={sq}
-            style={{
-              backgroundColor: bg,
-              boxShadow,
-              outline,
-              outlineOffset,
-              backgroundImage,
-              borderRadius,
-              position: 'relative',
-            }}
-          />
-        );
-      })}
+      {squares.map(({ sq, isLight }) => (
+        <SquareCell
+          key={sq}
+          sq={sq}
+          baseBg={isLight ? lightSquare : darkSquare}
+          isLastMove={lastMove?.from === sq || lastMove?.to === sq}
+          isSelected={selectedSquare === sq}
+          isDragHover={dragHoverSquare === sq}
+          isLegal={legalSet.has(sq)}
+          isPremoveDest={premoveSet.has(sq)}
+          isPremoveCurrent={premoveCurrentSet.has(sq)}
+          isMarked={!!markedSquares[sq]}
+          isCheck={check === sq}
+          isOccupied={!!occupiedSquares?.has(sq)}
+          customHighlight={highlightedSquares[sq]}
+          highlightColor={highlightColor}
+          selectedColor={selectedColor}
+          dragOverColor={dragOverColor}
+          visuals={visuals}
+        />
+      ))}
     </div>
   );
 });
