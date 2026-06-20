@@ -12,6 +12,7 @@ interface PiecesLayerProps {
   orientation: Orientation;
   pieceSet?: PieceSet;
   customPieces?: PieceRenderer;
+  flipPieces?: boolean;
   boardWidth: number;
   boardHeight: number;
   animationDurationMs: number;
@@ -31,6 +32,7 @@ export const PiecesLayer = memo(function PiecesLayer({
   orientation,
   pieceSet,
   customPieces,
+  flipPieces = false,
   boardWidth,
   boardHeight,
   animationDurationMs,
@@ -221,6 +223,7 @@ export const PiecesLayer = memo(function PiecesLayer({
 
   const sqW = boardWidth / 8;
   const sqH = boardHeight / 8;
+  const pieceRotation = flipPieces ? 'rotate(180deg)' : '';
 
   return (
     <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', overflow: 'hidden' }}>
@@ -238,11 +241,18 @@ export const PiecesLayer = memo(function PiecesLayer({
             pointerEvents: 'none',
           }}
         >
-          <div style={
-            ps.selected && selectedPieceScale
-              ? { transition: 'transform 0.15s ease-out', transform: `scale(${selectedPieceScale})`, width: '100%', height: '100%' }
-              : { transition: 'transform 0.15s ease-out', width: '100%', height: '100%' }
-          }>
+          <div
+            style={{
+              transition: 'transform 0.15s ease-out',
+              transform: [
+                pieceRotation,
+                ps.selected && selectedPieceScale ? `scale(${selectedPieceScale})` : '',
+              ].filter(Boolean).join(' ') || undefined,
+              transformOrigin: 'center center',
+              width: '100%',
+              height: '100%',
+            }}
+          >
             {renderPiece(ps.piece)}
           </div>
         </div>

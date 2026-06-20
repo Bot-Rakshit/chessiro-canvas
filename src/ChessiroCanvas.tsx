@@ -60,6 +60,7 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
       onPlyMarksChange,
       theme = DEFAULT_THEME,
       pieceSet,
+      flipPieces = false,
       showMargin = true,
       marginThickness = 24,
       marginRadius = 4,
@@ -285,6 +286,7 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
                     orientation={orientation}
                     pieceSet={pieceSet}
                     customPieces={customPieces}
+                    flipPieces={flipPieces}
                     boardWidth={boardWidth}
                     boardHeight={boardHeight}
                     animationDurationMs={showAnimations ? animationDurationMs : 0}
@@ -325,6 +327,7 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
                     <PromotionDialog
                       promotion={interaction.pendingPromotion}
                       pieceSet={pieceSet}
+                      flipPieces={flipPieces}
                       visuals={promotionVisuals}
                       onSelect={interaction.handlePromotionSelect}
                       onDismiss={interaction.handlePromotionDismiss}
@@ -356,6 +359,7 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
             squareSize={squareSize}
             pieceSet={pieceSet}
             customPieces={customPieces}
+            flipPieces={flipPieces}
             scale={interaction.drag.isTouch ? touchDragScale : dragScale}
             liftSquares={interaction.drag.isTouch ? touchDragLiftSquares : dragLiftSquares}
           />

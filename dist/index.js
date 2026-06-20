@@ -204,7 +204,6 @@ function premoveDests(square, pieces, color) {
           const tf = f + df * i, tr = r + dr * i;
           if (!isValid(tf, tr)) break;
           results.push(sq(tf, tr));
-          if (pieces.get(sq(tf, tr))) break;
         }
       }
       break;
@@ -215,7 +214,6 @@ function premoveDests(square, pieces, color) {
           const tf = f + df * i, tr = r + dr * i;
           if (!isValid(tf, tr)) break;
           results.push(sq(tf, tr));
-          if (pieces.get(sq(tf, tr))) break;
         }
       }
       break;
@@ -226,7 +224,6 @@ function premoveDests(square, pieces, color) {
           const tf = f + df * i, tr = r + dr * i;
           if (!isValid(tf, tr)) break;
           results.push(sq(tf, tr));
-          if (pieces.get(sq(tf, tr))) break;
         }
       }
       break;
@@ -1446,6 +1443,7 @@ var PiecesLayer = memo(function PiecesLayer2({
   orientation,
   pieceSet,
   customPieces,
+  flipPieces = false,
   boardWidth,
   boardHeight,
   animationDurationMs,
@@ -1602,6 +1600,7 @@ var PiecesLayer = memo(function PiecesLayer2({
   );
   const sqW = boardWidth / 8;
   const sqH = boardHeight / 8;
+  const pieceRotation = flipPieces ? "rotate(180deg)" : "";
   return /* @__PURE__ */ jsx("div", { style: { position: "absolute", inset: 0, pointerEvents: "none", overflow: "hidden" }, children: pieceStates.map((ps) => /* @__PURE__ */ jsx(
     "div",
     {
@@ -1615,7 +1614,22 @@ var PiecesLayer = memo(function PiecesLayer2({
         zIndex: ps.dragging ? 1 : 2,
         pointerEvents: "none"
       },
-      children: /* @__PURE__ */ jsx("div", { style: ps.selected && selectedPieceScale ? { transition: "transform 0.15s ease-out", transform: `scale(${selectedPieceScale})`, width: "100%", height: "100%" } : { transition: "transform 0.15s ease-out", width: "100%", height: "100%" }, children: renderPiece(ps.piece) })
+      children: /* @__PURE__ */ jsx(
+        "div",
+        {
+          style: {
+            transition: "transform 0.15s ease-out",
+            transform: [
+              pieceRotation,
+              ps.selected && selectedPieceScale ? `scale(${selectedPieceScale})` : ""
+            ].filter(Boolean).join(" ") || void 0,
+            transformOrigin: "center center",
+            width: "100%",
+            height: "100%"
+          },
+          children: renderPiece(ps.piece)
+        }
+      )
     },
     `${ps.square}-${ps.piece.color}${ps.piece.role}`
   )) });
@@ -2134,6 +2148,7 @@ var PROMO_LABELS = {
 var PromotionDialog = memo(function PromotionDialog2({
   promotion,
   pieceSet,
+  flipPieces = false,
   visuals = {},
   onSelect,
   onDismiss
@@ -2199,7 +2214,21 @@ var PromotionDialog = memo(function PromotionDialog2({
                   cursor: "pointer"
                 },
                 children: [
-                  /* @__PURE__ */ jsx("div", { style: { width: "42px", height: "42px", display: "flex", alignItems: "center", justifyContent: "center" }, children: renderPiece(promotion.color, piece) }),
+                  /* @__PURE__ */ jsx(
+                    "div",
+                    {
+                      style: {
+                        width: "42px",
+                        height: "42px",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        transform: flipPieces ? "rotate(180deg)" : void 0,
+                        transformOrigin: "center center"
+                      },
+                      children: renderPiece(promotion.color, piece)
+                    }
+                  ),
                   /* @__PURE__ */ jsx("span", { style: { fontSize: "0.85rem", fontWeight: 400, color: visuals.optionTextColor || "#4B3621" }, children: PROMO_LABELS[piece] })
                 ]
               },
@@ -2236,6 +2265,7 @@ var DragGhost = memo(forwardRef(function DragGhost2({
   squareSize,
   pieceSet,
   customPieces,
+  flipPieces = false,
   scale = 1,
   liftSquares = 0
 }, ref) {
@@ -2250,7 +2280,11 @@ var DragGhost = memo(forwardRef(function DragGhost2({
   }
   const offset = squareSize / 2;
   const lift = liftSquares * squareSize;
-  const liftTransform = scale !== 1 || lift !== 0 ? `translate(0, ${-lift}px) scale(${scale})` : void 0;
+  const liftTransform = [
+    lift !== 0 ? `translate(0, ${-lift}px)` : "",
+    scale !== 1 ? `scale(${scale})` : "",
+    flipPieces ? "rotate(180deg)" : ""
+  ].filter(Boolean).join(" ") || void 0;
   const ghost = /* @__PURE__ */ jsx(
     "div",
     {
@@ -2479,6 +2513,7 @@ var ChessiroCanvas = forwardRef(
       onPlyMarksChange,
       theme = DEFAULT_THEME,
       pieceSet,
+      flipPieces = false,
       showMargin = true,
       marginThickness = 24,
       marginRadius = 4,
@@ -2700,6 +2735,7 @@ var ChessiroCanvas = forwardRef(
                               orientation,
                               pieceSet,
                               customPieces,
+                              flipPieces,
                               boardWidth,
                               boardHeight,
                               animationDurationMs: showAnimations ? animationDurationMs : 0,
@@ -2743,6 +2779,7 @@ var ChessiroCanvas = forwardRef(
                             {
                               promotion: interaction.pendingPromotion,
                               pieceSet,
+                              flipPieces,
                               visuals: promotionVisuals,
                               onSelect: interaction.handlePromotionSelect,
                               onDismiss: interaction.handlePromotionDismiss
@@ -2777,6 +2814,7 @@ var ChessiroCanvas = forwardRef(
               squareSize,
               pieceSet,
               customPieces,
+              flipPieces,
               scale: interaction.drag.isTouch ? touchDragScale : dragScale,
               liftSquares: interaction.drag.isTouch ? touchDragLiftSquares : dragLiftSquares
             }

@@ -348,6 +348,8 @@ export interface ChessiroCanvasProps {
   // Visual
   theme?: BoardTheme;
   pieceSet?: PieceSet;
+  /** Rotate piece artwork 180deg without changing board coordinates. Useful for pass-and-play. Default: false. */
+  flipPieces?: boolean;
   showMargin?: boolean;
   marginThickness?: number;
   marginRadius?: string | number;

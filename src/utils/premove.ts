@@ -7,12 +7,10 @@ const sq = (f: number, r: number): Square => `${FILES[f]}${RANKS[r]}` as Square;
 /**
  * Compute all legal premove destinations for a piece on a given square.
  *
- * Premoves allow any geometrically reachable square — including squares
- * currently occupied by one of *our own* pieces, because by the time the
- * premove fires the opponent may well have captured that piece (the classic
- * "premove a recapture" case). Sliding pieces still stop AT the first
- * occupied square (they can't jump through pieces mid-premove), but they
- * may target it.
+ * Premoves allow any geometrically reachable square. They intentionally ignore
+ * the current board blockers because by the time the premove fires the
+ * opponent may have moved or captured one of those blockers. The eventual
+ * move is still validated against the resulting position before it is played.
  */
 export function premoveDests(
   square: Square,
@@ -59,7 +57,6 @@ export function premoveDests(
           const tf = f + df*i, tr = r + dr*i;
           if (!isValid(tf, tr)) break;
           results.push(sq(tf, tr));
-          if (pieces.get(sq(tf, tr))) break; // stop AT any occupant
         }
       }
       break;
@@ -70,7 +67,6 @@ export function premoveDests(
           const tf = f + df*i, tr = r + dr*i;
           if (!isValid(tf, tr)) break;
           results.push(sq(tf, tr));
-          if (pieces.get(sq(tf, tr))) break;
         }
       }
       break;
@@ -81,7 +77,6 @@ export function premoveDests(
           const tf = f + df*i, tr = r + dr*i;
           if (!isValid(tf, tr)) break;
           results.push(sq(tf, tr));
-          if (pieces.get(sq(tf, tr))) break;
         }
       }
       break;

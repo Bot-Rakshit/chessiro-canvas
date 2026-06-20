@@ -11,6 +11,8 @@ interface DragGhostProps {
   squareSize: number;
   pieceSet?: PieceSet;
   customPieces?: PieceRenderer;
+  /** Rotate the dragged piece artwork 180deg. Default: false. */
+  flipPieces?: boolean;
   /** Scale factor applied to the dragged piece. Default: 1. */
   scale?: number;
   /** Upward offset (in square-size units) so the piece floats above the finger/cursor. Default: 0. */
@@ -24,6 +26,7 @@ export const DragGhost = memo(forwardRef<HTMLDivElement, DragGhostProps>(functio
   squareSize,
   pieceSet,
   customPieces,
+  flipPieces = false,
   scale = 1,
   liftSquares = 0,
 }, ref) {
@@ -43,9 +46,11 @@ export const DragGhost = memo(forwardRef<HTMLDivElement, DragGhostProps>(functio
   const offset = squareSize / 2;
   // Inner wrapper carries the visual transform (scale + lift).
   const lift = liftSquares * squareSize;
-  const liftTransform = scale !== 1 || lift !== 0
-    ? `translate(0, ${-lift}px) scale(${scale})`
-    : undefined;
+  const liftTransform = [
+    lift !== 0 ? `translate(0, ${-lift}px)` : '',
+    scale !== 1 ? `scale(${scale})` : '',
+    flipPieces ? 'rotate(180deg)' : '',
+  ].filter(Boolean).join(' ') || undefined;
 
   const ghost = (
     <div

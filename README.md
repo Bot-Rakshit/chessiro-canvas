@@ -58,6 +58,13 @@ Use `pieceSet.path` only when you want to override with your own hosted piece se
 />
 ```
 
+For pass-and-play boards where the device is shared across the table, use `flipPieces`
+to rotate all piece artwork 180 degrees without changing board coordinates or move logic.
+
+```tsx
+<ChessiroCanvas position={fen} flipPieces />
+```
+
 If pieces appear as broken images, upgrade to the latest package version.
 
 ### Customize Legal Move UI

@@ -14,6 +14,7 @@ const PROMO_LABELS: Record<PromotionPiece, string> = {
 interface PromotionDialogProps {
   promotion: PromotionContext;
   pieceSet?: PieceSet;
+  flipPieces?: boolean;
   visuals?: Partial<PromotionVisuals>;
   onSelect: (piece: PromotionPiece) => void;
   onDismiss: () => void;
@@ -22,6 +23,7 @@ interface PromotionDialogProps {
 export const PromotionDialog = memo(function PromotionDialog({
   promotion,
   pieceSet,
+  flipPieces = false,
   visuals = {},
   onSelect,
   onDismiss,
@@ -90,7 +92,17 @@ export const PromotionDialog = memo(function PromotionDialog({
                 cursor: 'pointer',
               }}
             >
-              <div style={{ width: '42px', height: '42px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div
+                style={{
+                  width: '42px',
+                  height: '42px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transform: flipPieces ? 'rotate(180deg)' : undefined,
+                  transformOrigin: 'center center',
+                }}
+              >
                 {renderPiece(promotion.color, piece)}
               </div>
               <span style={{ fontSize: '0.85rem', fontWeight: 400, color: visuals.optionTextColor || '#4B3621' }}>

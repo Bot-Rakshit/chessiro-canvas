@@ -1,6 +1,6 @@
 {
   "name": "chessiro-canvas",
-  "version": "0.1.37",
+  "version": "0.1.39",
   "description": "Lightweight, high-performance React chessboard component",
   "type": "module",
   "main": "dist/index.js",
@@ -25,6 +25,7 @@
     "docs:dev": "npm --prefix demo run dev",
     "docs:build": "npm --prefix demo run build",
     "docs:preview": "npm --prefix demo run preview",
+    "test": "npm run build && node scripts/test-premove.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/",
     "clean": "rm -rf dist",
@@ -60,6 +61,6 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Bot-Rakshit/chessiro-canvas.git"
+    "url": "git+https://github.com/Bot-Rakshit/chessiro-canvas.git"
   }
 }
