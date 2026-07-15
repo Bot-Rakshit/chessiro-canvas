@@ -1,11 +1,18 @@
 import { forwardRef, useCallback, useImperativeHandle, useMemo, useRef } from 'react';
-import type { ChessiroCanvasProps, ChessiroCanvasRef, BoardTheme } from './types';
+import type {
+  ChessiroCanvasProps, ChessiroCanvasRef, BoardTheme,
+  AnimateMoveOptions, PulseSquareOptions, PromotionPiece, Square,
+} from './types';
 import { INITIAL_FEN, readFen } from './utils/fen';
+import { screenPos2square } from './utils/coords';
 import { useBoardSize } from './hooks/useBoardSize';
 import { useInteraction } from './interaction/useInteraction';
 import { useKeyboard } from './interaction/useKeyboard';
 import { Squares } from './render/Squares';
-import { PiecesLayer } from './render/Pieces';
+import { PiecesLayer, type PiecesLayerRef } from './render/Pieces';
+import { GhostPiecesLayer } from './render/GhostPieces';
+import { SquareLabelsLayer } from './render/SquareLabels';
+import { TeachingLayer, type TeachingLayerRef } from './render/TeachingLayer';
 import { ArrowsLayer } from './render/Arrows';
 import { Notation } from './render/Notation';
 import { PromotionDialog } from './render/Promotion';
@@ -46,6 +53,10 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
       onMove,
       lastMove,
       dests,
+      autoPromoteTo,
+      expectedMove,
+      onWrongMove,
+      wrongMoveFeedback = 'shake',
       premovable,
       arrows = EMPTY_ARRAY,
       onArrowsChange,
@@ -74,6 +85,8 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
       overlayVisuals,
       check,
       moveQualityBadge,
+      ghostPieces = EMPTY_ARRAY,
+      squareLabels,
       allowDragging = true,
       allowDrawingArrows = true,
       animationDurationMs = 200,
@@ -101,6 +114,8 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
     } = props;
 
     const boardRef = useRef<HTMLDivElement>(null);
+    const piecesLayerRef = useRef<PiecesLayerRef>(null);
+    const teachingRef = useRef<TeachingLayerRef>(null);
     const { bounds, getFreshBounds } = useBoardSize(boardRef);
 
     const piecesMap = useMemo(() => readFen(position || INITIAL_FEN), [position]);
@@ -126,6 +141,30 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
       return fresh ? boundsToDomRect(fresh) : null;
     }, [getFreshBounds, boundsToDomRect]);
 
+    // Guided mode: only the expected move(s) pass through to onMove; anything
+    // else is rejected (piece snaps back), shakes and fires onWrongMove.
+    const guardedOnMove = useCallback(
+      (from: string, to: string, promotion?: PromotionPiece): boolean => {
+        if (expectedMove) {
+          const accepted = (Array.isArray(expectedMove) ? expectedMove : [expectedMove]).some(
+            (m) =>
+              m.from === from &&
+              m.to === to &&
+              (m.promotion === undefined || m.promotion === promotion),
+          );
+          if (!accepted) {
+            if (wrongMoveFeedback === 'shake') {
+              teachingRef.current?.shakePiece(from);
+            }
+            onWrongMove?.(from, to);
+            return false;
+          }
+        }
+        return onMove?.(from, to, promotion) ?? false;
+      },
+      [expectedMove, onMove, onWrongMove, wrongMoveFeedback],
+    );
+
     const interaction = useInteraction({
       position,
       pieces: piecesMap,
@@ -135,8 +174,9 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
       allowDrawingArrows,
       boardRef,
       boardBounds: boardDomRect,
-      onMove,
+      onMove: onMove ? guardedOnMove : undefined,
       dests,
+      autoPromoteTo,
       turnColor,
       movableColor,
       premovable,
@@ -165,6 +205,10 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
       for (const sq of piecesMap.keys()) set.add(sq);
       return set;
     }, [piecesMap, interaction.legalSquares, interaction.premoveSquares]);
+
+    const getPieceElement = useCallback((square: string): HTMLDivElement | null => {
+      return piecesLayerRef.current?.getPieceElement(square) ?? null;
+    }, []);
 
     const handleDeselect = useCallback(() => {
       interaction.clearSelection();
@@ -196,7 +240,24 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
       getBoardRect() {
         return boardRef.current?.getBoundingClientRect() ?? null;
       },
-    }), [bounds, orientation]);
+      getSquareAtPoint(clientX: number, clientY: number): Square | null {
+        const fresh = getFreshDomRect();
+        if (!fresh) return null;
+        return screenPos2square(clientX, clientY, orientation === 'white', fresh) ?? null;
+      },
+      animateMove(from: string, to: string, options?: AnimateMoveOptions) {
+        return teachingRef.current?.animateMove(from, to, options) ?? Promise.resolve();
+      },
+      pulseSquare(square: string, options?: PulseSquareOptions) {
+        return teachingRef.current?.pulseSquare(square, options) ?? Promise.resolve();
+      },
+      shakePiece(square: string) {
+        return teachingRef.current?.shakePiece(square) ?? Promise.resolve();
+      },
+      clearTeachingEffects() {
+        teachingRef.current?.clearEffects();
+      },
+    }), [bounds, orientation, getFreshDomRect]);
 
     const hasValidSize = bounds && bounds.width > 0;
     const boardWidth = bounds?.width ?? 0;
@@ -253,49 +314,72 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
             onMouseDown={interaction.handlePointerDown as any}
             onTouchStart={interaction.handlePointerDown as any}
           >
-            {hasValidSize && (
-              <>
-                <div
-                  style={{
-                    position: 'absolute',
-                    inset: 0,
-                    borderRadius: boardRadius,
-                    overflow: clipBoardContent ? 'hidden' : 'visible',
-                  }}
-                >
-                  <Squares
-                    theme={theme}
-                    orientation={orientation}
-                    lastMove={lastMove}
-                    selectedSquare={interaction.selectedSquare}
-                    draggingSquare={interaction.drag?.origSquare}
-                    dragHoverSquare={interaction.dragHoverSquare}
-                    legalSquares={interaction.legalSquares}
-                    premoveSquares={interaction.premoveSquares}
-                    premoveCurrent={interaction.premoveCurrent}
-                    occupiedSquares={occupiedSquares}
-                    markedSquares={interaction.activeMarkedSquares}
-                    highlightedSquares={highlightedSquares}
-                    squareVisuals={squareVisuals}
-                    check={check}
-                  />
+            <div
+              style={{
+                position: 'absolute',
+                inset: 0,
+                borderRadius: boardRadius,
+                overflow: clipBoardContent ? 'hidden' : 'visible',
+              }}
+            >
+              <Squares
+                theme={theme}
+                orientation={orientation}
+                lastMove={lastMove}
+                selectedSquare={interaction.selectedSquare}
+                draggingSquare={interaction.drag?.origSquare}
+                dragHoverSquare={interaction.dragHoverSquare}
+                legalSquares={interaction.legalSquares}
+                premoveSquares={interaction.premoveSquares}
+                premoveCurrent={interaction.premoveCurrent}
+                occupiedSquares={occupiedSquares}
+                markedSquares={interaction.activeMarkedSquares}
+                highlightedSquares={highlightedSquares}
+                squareVisuals={squareVisuals}
+                check={check}
+              />
 
-                  <PiecesLayer
-                    position={position}
-                    pieces={piecesMap}
-                    orientation={orientation}
-                    pieceSet={pieceSet}
-                    customPieces={customPieces}
-                    flipPieces={flipPieces}
-                    boardWidth={boardWidth}
-                    boardHeight={boardHeight}
-                    animationDurationMs={showAnimations ? animationDurationMs : 0}
-                    showAnimations={showAnimations}
-                    draggingSquare={interaction.drag?.origSquare}
-                    selectedSquare={interaction.selectedSquare}
-                    selectedPieceScale={selectedPieceScale}
-                  />
+              {ghostPieces.length > 0 && (
+                <GhostPiecesLayer
+                  ghosts={ghostPieces}
+                  orientation={orientation}
+                  pieceSet={pieceSet}
+                  customPieces={customPieces}
+                  flipPieces={flipPieces}
+                />
+              )}
 
+              <PiecesLayer
+                ref={piecesLayerRef}
+                position={position}
+                pieces={piecesMap}
+                orientation={orientation}
+                pieceSet={pieceSet}
+                customPieces={customPieces}
+                flipPieces={flipPieces}
+                animationDurationMs={showAnimations ? animationDurationMs : 0}
+                showAnimations={showAnimations}
+                draggingSquare={interaction.drag?.origSquare}
+                selectedSquare={interaction.selectedSquare}
+                selectedPieceScale={selectedPieceScale}
+              />
+
+              {squareLabels && (
+                <SquareLabelsLayer labels={squareLabels} orientation={orientation} />
+              )}
+
+              <TeachingLayer
+                ref={teachingRef}
+                orientation={orientation}
+                pieces={piecesMap}
+                pieceSet={pieceSet}
+                customPieces={customPieces}
+                flipPieces={flipPieces}
+                getPieceElement={getPieceElement}
+              />
+
+              {hasValidSize && (
+                <>
                   <ArrowsLayer
                     arrows={interaction.renderedArrows}
                     orientation={orientation}
@@ -333,19 +417,19 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
                       onDismiss={interaction.handlePromotionDismiss}
                     />
                   )}
-                </div>
+                </>
+              )}
+            </div>
 
-                {showNotation && (
-                  <Notation
-                    orientation={orientation}
-                    theme={theme}
-                    showOnMargin={showMargin}
-                    marginThickness={marginThickness}
-                    marginRadius={marginRadius}
-                    visuals={notationVisuals}
-                  />
-                )}
-              </>
+            {showNotation && (
+              <Notation
+                orientation={orientation}
+                theme={theme}
+                showOnMargin={showMargin}
+                marginThickness={marginThickness}
+                marginRadius={marginRadius}
+                visuals={notationVisuals}
+              />
             )}
           </div>
         </div>

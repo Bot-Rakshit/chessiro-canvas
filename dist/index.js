@@ -1,4 +1,4 @@
-import { memo, useMemo, useState, useEffect, useRef, useCallback, useLayoutEffect, forwardRef, useImperativeHandle } from 'react';
+import { memo, useMemo, useState, useEffect, forwardRef, useRef, useImperativeHandle, useCallback, useLayoutEffect } from 'react';
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime';
 import { createPortal } from 'react-dom';
 
@@ -80,6 +80,40 @@ function writeFen(pieces) {
   }
   return ranks.join("/");
 }
+
+// src/utils/coords.ts
+var ALL_SQUARES = FILES.flatMap(
+  (f) => RANKS.map((r) => `${f}${r}`)
+);
+function pos2square(pos) {
+  if (pos[0] < 0 || pos[0] > 7 || pos[1] < 0 || pos[1] > 7) return void 0;
+  return `${FILES[pos[0]]}${RANKS[pos[1]]}`;
+}
+function square2pos(sq2) {
+  return [sq2.charCodeAt(0) - 97, sq2.charCodeAt(1) - 49];
+}
+function pos2translate(pos, asWhite, boundsWidth, boundsHeight) {
+  const sqW = boundsWidth / 8;
+  const sqH = boundsHeight / 8;
+  return [
+    (asWhite ? pos[0] : 7 - pos[0]) * sqW,
+    (asWhite ? 7 - pos[1] : pos[1]) * sqH
+  ];
+}
+function screenPos2square(clientX, clientY, asWhite, bounds) {
+  let file = Math.floor(8 * (clientX - bounds.left) / bounds.width);
+  if (!asWhite) file = 7 - file;
+  let rank = 7 - Math.floor(8 * (clientY - bounds.top) / bounds.height);
+  if (!asWhite) rank = 7 - rank;
+  if (file < 0 || file > 7 || rank < 0 || rank > 7) return void 0;
+  return pos2square([file, rank]);
+}
+function distanceSq(a, b) {
+  return (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2;
+}
+function samePiece(a, b) {
+  return a.color === b.color && a.role === b.role;
+}
 function useBoardSize(boardRef) {
   const [bounds, setBounds] = useState(null);
   const cachedBounds = useRef(null);
@@ -122,46 +156,14 @@ function useBoardSize(boardRef) {
     const observer = new ResizeObserver(updateBounds);
     observer.observe(el);
     window.addEventListener("scroll", updateBounds, { passive: true, capture: true });
+    window.addEventListener("resize", updateBounds, { passive: true });
     return () => {
       observer.disconnect();
       window.removeEventListener("scroll", updateBounds, { capture: true });
+      window.removeEventListener("resize", updateBounds);
     };
   }, [boardRef, updateBounds]);
   return { bounds, updateBounds, getFreshBounds };
-}
-
-// src/utils/coords.ts
-var ALL_SQUARES = FILES.flatMap(
-  (f) => RANKS.map((r) => `${f}${r}`)
-);
-function pos2square(pos) {
-  if (pos[0] < 0 || pos[0] > 7 || pos[1] < 0 || pos[1] > 7) return void 0;
-  return `${FILES[pos[0]]}${RANKS[pos[1]]}`;
-}
-function square2pos(sq2) {
-  return [sq2.charCodeAt(0) - 97, sq2.charCodeAt(1) - 49];
-}
-function pos2translate(pos, asWhite, boundsWidth, boundsHeight) {
-  const sqW = boundsWidth / 8;
-  const sqH = boundsHeight / 8;
-  return [
-    (asWhite ? pos[0] : 7 - pos[0]) * sqW,
-    (asWhite ? 7 - pos[1] : pos[1]) * sqH
-  ];
-}
-function screenPos2square(clientX, clientY, asWhite, bounds) {
-  let file = Math.floor(8 * (clientX - bounds.left) / bounds.width);
-  if (!asWhite) file = 7 - file;
-  let rank = 7 - Math.floor(8 * (clientY - bounds.top) / bounds.height);
-  if (!asWhite) rank = 7 - rank;
-  if (file < 0 || file > 7 || rank < 0 || rank > 7) return void 0;
-  return pos2square([file, rank]);
-}
-function distanceSq(a, b) {
-  return (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2;
-}
-function samePiece(a, b) {
-  return a.color === b.color && a.role === b.role;
 }
 
 // src/utils/premove.ts
@@ -334,6 +336,7 @@ function useInteraction(opts) {
     getFreshBounds,
     onMove,
     dests,
+    autoPromoteTo,
     turnColor,
     movableColor,
     premovable,
@@ -376,6 +379,9 @@ function useInteraction(opts) {
   const dragKeyChangedRef = useRef(false);
   const isTouchRef = useRef(false);
   const lastTouchTsRef = useRef(0);
+  const docMoveHandlerRef = useRef(null);
+  const docUpHandlerRef = useRef(null);
+  const listenersActiveRef = useRef(false);
   const selectedRef = useRef(selectedSquare);
   const legalRef = useRef(legalSquares);
   const premoveRef = useRef(premoveSquares);
@@ -466,6 +472,38 @@ function useInteraction(opts) {
   const getCurrentBounds = useCallback(() => {
     return getFreshBounds?.() ?? boardBounds;
   }, [boardBounds, getFreshBounds]);
+  const onDocMove = useCallback((e) => {
+    docMoveHandlerRef.current?.(e);
+  }, []);
+  const onDocUp = useCallback((e) => {
+    docUpHandlerRef.current?.(e);
+    if (!dragRef.current && !arrowStartRef.current && listenersActiveRef.current) {
+      listenersActiveRef.current = false;
+      document.removeEventListener("mousemove", onDocMove);
+      document.removeEventListener("touchmove", onDocMove);
+      document.removeEventListener("mouseup", onDocUp);
+      document.removeEventListener("touchend", onDocUp);
+      document.removeEventListener("touchcancel", onDocUp);
+    }
+  }, [onDocMove]);
+  const detachDocListeners = useCallback(() => {
+    if (!listenersActiveRef.current) return;
+    listenersActiveRef.current = false;
+    document.removeEventListener("mousemove", onDocMove);
+    document.removeEventListener("touchmove", onDocMove);
+    document.removeEventListener("mouseup", onDocUp);
+    document.removeEventListener("touchend", onDocUp);
+    document.removeEventListener("touchcancel", onDocUp);
+  }, [onDocMove, onDocUp]);
+  const attachDocListeners = useCallback((blockScroll) => {
+    if (listenersActiveRef.current) return;
+    listenersActiveRef.current = true;
+    document.addEventListener("mousemove", onDocMove);
+    document.addEventListener("touchmove", onDocMove, { passive: !blockScroll });
+    document.addEventListener("mouseup", onDocUp);
+    document.addEventListener("touchend", onDocUp);
+    document.addEventListener("touchcancel", onDocUp);
+  }, [onDocMove, onDocUp]);
   const attemptMove = useCallback((from, to, promotion) => {
     if (!onMove || !interactive) return false;
     const validDests = getDestsForSquare(from);
@@ -474,8 +512,12 @@ function useInteraction(opts) {
     if (piece?.role === "p" && !promotion) {
       const toRank = parseInt(to[1]);
       if (piece.color === "w" && toRank === 8 || piece.color === "b" && toRank === 1) {
-        setPendingPromotion({ from, to, color: piece.color });
-        return "pending";
+        if (autoPromoteTo) {
+          promotion = autoPromoteTo;
+        } else {
+          setPendingPromotion({ from, to, color: piece.color });
+          return "pending";
+        }
       }
     }
     const success = onMove(from, to, promotion);
@@ -485,7 +527,7 @@ function useInteraction(opts) {
       setPremoveSquares([]);
     }
     return success;
-  }, [onMove, interactive, getDestsForSquare, dests]);
+  }, [onMove, interactive, getDestsForSquare, dests, autoPromoteTo]);
   const attemptPremove = useCallback((from, to) => {
     if (!premovable?.enabled) return;
     setPremoveCurrent([from, to]);
@@ -717,6 +759,7 @@ function useInteraction(opts) {
         arrowColorRef.current = eventBrushColor(nativeEvent, brushes);
         const pos2 = getClientPos(nativeEvent);
         arrowPosRef.current = pos2 ?? null;
+        attachDocListeners(blockTouchScroll ?? false);
       }
       return;
     }
@@ -740,6 +783,7 @@ function useInteraction(opts) {
         dragRef.current = newDrag;
         setDrag(newDrag);
         startedDragCandidate = true;
+        attachDocListeners(blockTouchScroll ?? false);
       }
     }
     if (blockTouchScroll && "touches" in e && piece) {
@@ -759,7 +803,8 @@ function useInteraction(opts) {
     brushes,
     canMoveColor,
     canPremoveColor,
-    blockTouchScroll
+    blockTouchScroll,
+    attachDocListeners
   ]);
   useEffect(() => {
     const handleMove = (e) => {
@@ -913,16 +958,8 @@ function useInteraction(opts) {
         }
       });
     };
-    document.addEventListener("mousemove", handleMove);
-    document.addEventListener("touchmove", handleMove, { passive: !blockTouchScroll });
-    document.addEventListener("mouseup", handleUp);
-    document.addEventListener("touchend", handleUp);
-    return () => {
-      document.removeEventListener("mousemove", handleMove);
-      document.removeEventListener("touchmove", handleMove);
-      document.removeEventListener("mouseup", handleUp);
-      document.removeEventListener("touchend", handleUp);
-    };
+    docMoveHandlerRef.current = handleMove;
+    docUpHandlerRef.current = handleUp;
   }, [
     getCurrentBounds,
     asWhite,
@@ -940,6 +977,9 @@ function useInteraction(opts) {
     dests,
     handleSquareInteraction
   ]);
+  useEffect(() => {
+    return () => detachDocListeners();
+  }, [detachDocListeners]);
   useEffect(() => {
     const el = boardRef.current;
     if (!el) return;
@@ -1434,24 +1474,41 @@ function resolvePieceImageSrc(pieceKey, piecePath) {
   if (piecePath) return `${piecePath}/${normalized}.svg`;
   return DEFAULT_PIECE_SOURCES[normalized] ?? DEFAULT_PIECE_SOURCES.wq;
 }
+var PieceGlyph = memo(function PieceGlyph2({
+  pieceKey,
+  pieceSet,
+  customPieces
+}) {
+  if (customPieces?.[pieceKey]) {
+    return customPieces[pieceKey]();
+  }
+  const src = resolvePieceImageSrc(pieceKey, pieceSet?.path);
+  return /* @__PURE__ */ jsx(CachedPieceImg, { src, alt: pieceKey });
+});
 function easing(t) {
   return t < 0.5 ? 4 * t * t * t : (t - 1) * (2 * t - 2) * (2 * t - 2) + 1;
 }
-var PiecesLayer = memo(function PiecesLayer2({
+function squareColRow(sq2, asWhite) {
+  const f = sq2.charCodeAt(0) - 97;
+  const r = sq2.charCodeAt(1) - 49;
+  return [asWhite ? f : 7 - f, asWhite ? 7 - r : r];
+}
+function baseTransform(col, row) {
+  return `translate(${col * 100}%, ${row * 100}%)`;
+}
+var PiecesLayer = memo(forwardRef(function PiecesLayer2({
   position,
   pieces,
   orientation,
   pieceSet,
   customPieces,
   flipPieces = false,
-  boardWidth,
-  boardHeight,
   animationDurationMs,
   showAnimations,
   draggingSquare,
   selectedSquare,
   selectedPieceScale
-}) {
+}, ref) {
   const asWhite = orientation === "white";
   const piecePath = pieceSet?.path;
   const currentPos = position || INITIAL_FEN;
@@ -1461,13 +1518,20 @@ var PiecesLayer = memo(function PiecesLayer2({
   const prevPiecesRef = useRef(pieces);
   const rafIdRef = useRef(null);
   const pieceElsRef = useRef(/* @__PURE__ */ new Map());
+  const fadingElsRef = useRef(/* @__PURE__ */ new Map());
+  const refCallbacksRef = useRef(/* @__PURE__ */ new Map());
+  const fadingRefCallbacksRef = useRef(/* @__PURE__ */ new Map());
   const animRef = useRef(null);
+  const [fadings, setFadings] = useState([]);
+  useImperativeHandle(ref, () => ({
+    getPieceElement(square) {
+      return pieceElsRef.current.get(square) ?? null;
+    }
+  }), []);
   useEffect(() => {
     if (piecePath) preloadPieceSet(piecePath);
   }, [piecePath]);
-  const applyTransforms = useCallback(() => {
-    const sqW2 = boardWidth / 8;
-    const sqH2 = boardHeight / 8;
+  const syncTransforms = useCallback(() => {
     const anim = animRef.current;
     let ease = 0;
     if (anim) {
@@ -1480,41 +1544,72 @@ var PiecesLayer = memo(function PiecesLayer2({
       }
     }
     const currentAnim = animRef.current;
+    const mult = asWhite ? 1 : -1;
     for (const [sq2, el] of pieceElsRef.current) {
-      const basePos = square2pos(sq2);
-      const [baseX, baseY] = pos2translate(basePos, asWhite, boardWidth, boardHeight);
-      let x = baseX;
-      let y = baseY;
-      if (currentAnim) {
-        const vec = currentAnim.plan.anims.get(sq2);
-        if (vec) {
-          const mult = asWhite ? 1 : -1;
-          x += mult * (vec.fromPos[0] - vec.toPos[0]) * ease * sqW2;
-          y -= mult * (vec.fromPos[1] - vec.toPos[1]) * ease * sqH2;
-          el.style.zIndex = "8";
-          el.style.willChange = "transform";
-        } else {
-          el.style.zIndex = "2";
-          el.style.willChange = "";
-        }
+      const [col, row] = squareColRow(sq2, asWhite);
+      const vec = currentAnim?.plan.anims.get(sq2);
+      if (vec) {
+        let x = col + mult * (vec.fromPos[0] - vec.toPos[0]) * ease;
+        let y = row - mult * (vec.fromPos[1] - vec.toPos[1]) * ease;
+        x = Math.max(0, Math.min(7, x));
+        y = Math.max(0, Math.min(7, y));
+        el.style.transform = `translate(${x * 100}%, ${y * 100}%)`;
+        el.style.zIndex = "8";
+        el.style.willChange = "transform";
       } else {
+        el.style.transform = baseTransform(col, row);
         el.style.zIndex = "2";
         el.style.willChange = "";
       }
-      x = Math.max(0, Math.min(boardWidth - sqW2, x));
-      y = Math.max(0, Math.min(boardHeight - sqH2, y));
-      el.style.transform = `translate(${x}px, ${y}px)`;
     }
     return !!animRef.current;
-  }, [asWhite, boardWidth, boardHeight]);
+  }, [asWhite]);
+  const stepFrame = useCallback(() => {
+    const anim = animRef.current;
+    if (!anim) return false;
+    const elapsed = performance.now() - anim.startTime;
+    const rest = 1 - elapsed * anim.frequency;
+    if (rest <= 0) {
+      animRef.current = null;
+      for (const sq2 of anim.plan.anims.keys()) {
+        const el = pieceElsRef.current.get(sq2);
+        if (el) {
+          const [col, row] = squareColRow(sq2, asWhite);
+          el.style.transform = baseTransform(col, row);
+          el.style.zIndex = "2";
+          el.style.willChange = "";
+        }
+      }
+      if (anim.plan.fadings.size > 0) {
+        setFadings((prev) => prev.length === 0 ? prev : []);
+      }
+      return false;
+    }
+    const ease = easing(rest);
+    const mult = asWhite ? 1 : -1;
+    for (const [sq2, vec] of anim.plan.anims) {
+      const el = pieceElsRef.current.get(sq2);
+      if (!el) continue;
+      const [col, row] = squareColRow(sq2, asWhite);
+      let x = col + mult * (vec.fromPos[0] - vec.toPos[0]) * ease;
+      let y = row - mult * (vec.fromPos[1] - vec.toPos[1]) * ease;
+      x = Math.max(0, Math.min(7, x));
+      y = Math.max(0, Math.min(7, y));
+      el.style.transform = `translate(${x * 100}%, ${y * 100}%)`;
+    }
+    for (const sq2 of anim.plan.fadings.keys()) {
+      const el = fadingElsRef.current.get(sq2);
+      if (el) el.style.opacity = String(ease);
+    }
+    return true;
+  }, [asWhite]);
   const animLoop = useCallback(() => {
-    const stillAnimating = applyTransforms();
-    if (stillAnimating) {
+    if (stepFrame()) {
       rafIdRef.current = requestAnimationFrame(animLoop);
     } else {
       rafIdRef.current = null;
     }
-  }, [applyTransforms]);
+  }, [stepFrame]);
   useLayoutEffect(() => {
     if (prevDraggingRef.current && !draggingSquare) {
       skipNextAnimRef.current = true;
@@ -1541,14 +1636,20 @@ var PiecesLayer = memo(function PiecesLayer2({
         startTime: performance.now(),
         frequency: 1 / animationDurationMs
       };
+      const nextFadings = [];
+      for (const [square, piece] of nextPlan.fadings) {
+        nextFadings.push({ square, piece });
+      }
+      setFadings((prev) => prev.length === 0 && nextFadings.length === 0 ? prev : nextFadings);
     } else if (positionChanged || !showAnimations || animationDurationMs < 50) {
       animRef.current = null;
+      setFadings((prev) => prev.length === 0 ? prev : []);
     }
     if (rafIdRef.current !== null) {
       cancelAnimationFrame(rafIdRef.current);
       rafIdRef.current = null;
     }
-    const stillAnimating = applyTransforms();
+    const stillAnimating = syncTransforms();
     if (stillAnimating) {
       rafIdRef.current = requestAnimationFrame(animLoop);
     }
@@ -1558,7 +1659,7 @@ var PiecesLayer = memo(function PiecesLayer2({
     draggingSquare,
     showAnimations,
     animationDurationMs,
-    applyTransforms,
+    syncTransforms,
     animLoop
   ]);
   useEffect(() => {
@@ -1580,60 +1681,529 @@ var PiecesLayer = memo(function PiecesLayer2({
     }
     return states;
   }, [pieces, draggingSquare, selectedSquare]);
-  const setRef = useCallback((square) => (el) => {
-    if (el) {
-      pieceElsRef.current.set(square, el);
-    } else {
-      pieceElsRef.current.delete(square);
+  const setRef = useCallback((square) => {
+    let cb = refCallbacksRef.current.get(square);
+    if (!cb) {
+      cb = (el) => {
+        if (el) {
+          pieceElsRef.current.set(square, el);
+        } else {
+          pieceElsRef.current.delete(square);
+        }
+      };
+      refCallbacksRef.current.set(square, cb);
     }
+    return cb;
   }, []);
-  const renderPiece = useCallback(
-    (piece) => {
-      const key = `${piece.color}${piece.role.toUpperCase()}`;
-      if (customPieces?.[key]) {
-        return customPieces[key]();
-      }
-      const src = resolvePieceImageSrc(key, piecePath);
-      return /* @__PURE__ */ jsx(CachedPieceImg, { src, alt: key });
-    },
-    [piecePath, customPieces]
-  );
-  const sqW = boardWidth / 8;
-  const sqH = boardHeight / 8;
+  const setFadingRef = useCallback((square) => {
+    let cb = fadingRefCallbacksRef.current.get(square);
+    if (!cb) {
+      cb = (el) => {
+        if (el) {
+          fadingElsRef.current.set(square, el);
+        } else {
+          fadingElsRef.current.delete(square);
+        }
+      };
+      fadingRefCallbacksRef.current.set(square, cb);
+    }
+    return cb;
+  }, []);
   const pieceRotation = flipPieces ? "rotate(180deg)" : "";
-  return /* @__PURE__ */ jsx("div", { style: { position: "absolute", inset: 0, pointerEvents: "none", overflow: "hidden" }, children: pieceStates.map((ps) => /* @__PURE__ */ jsx(
-    "div",
-    {
-      ref: setRef(ps.square),
-      style: {
-        position: "absolute",
-        width: `${sqW}px`,
-        height: `${sqH}px`,
-        transform: "translate(0px, 0px)",
-        opacity: ps.dragging ? 0.5 : 1,
-        zIndex: ps.dragging ? 1 : 2,
-        pointerEvents: "none"
-      },
-      children: /* @__PURE__ */ jsx(
+  return /* @__PURE__ */ jsxs("div", { style: { position: "absolute", inset: 0, pointerEvents: "none", overflow: "hidden" }, children: [
+    fadings.map((f) => {
+      const [col, row] = squareColRow(f.square, asWhite);
+      return /* @__PURE__ */ jsx(
         "div",
         {
+          ref: setFadingRef(f.square),
           style: {
-            transition: "transform 0.15s ease-out",
-            transform: [
-              pieceRotation,
-              ps.selected && selectedPieceScale ? `scale(${selectedPieceScale})` : ""
-            ].filter(Boolean).join(" ") || void 0,
-            transformOrigin: "center center",
-            width: "100%",
-            height: "100%"
+            position: "absolute",
+            width: "12.5%",
+            height: "12.5%",
+            transform: baseTransform(col, row),
+            opacity: 1,
+            zIndex: 1,
+            pointerEvents: "none"
           },
-          children: renderPiece(ps.piece)
-        }
-      )
-    },
-    `${ps.square}-${ps.piece.color}${ps.piece.role}`
-  )) });
+          children: /* @__PURE__ */ jsx(
+            "div",
+            {
+              style: {
+                transform: pieceRotation || void 0,
+                width: "100%",
+                height: "100%"
+              },
+              children: /* @__PURE__ */ jsx(
+                PieceGlyph,
+                {
+                  pieceKey: `${f.piece.color}${f.piece.role.toUpperCase()}`,
+                  pieceSet,
+                  customPieces
+                }
+              )
+            }
+          )
+        },
+        `fade-${f.square}-${f.piece.color}${f.piece.role}`
+      );
+    }),
+    pieceStates.map((ps) => {
+      const [col, row] = squareColRow(ps.square, asWhite);
+      return /* @__PURE__ */ jsx(
+        "div",
+        {
+          ref: setRef(ps.square),
+          style: {
+            position: "absolute",
+            width: "12.5%",
+            height: "12.5%",
+            transform: baseTransform(col, row),
+            opacity: ps.dragging ? 0.5 : 1,
+            zIndex: ps.dragging ? 1 : 2,
+            pointerEvents: "none"
+          },
+          children: /* @__PURE__ */ jsx(
+            "div",
+            {
+              style: {
+                transition: "transform 0.15s ease-out",
+                transform: [
+                  pieceRotation,
+                  ps.selected && selectedPieceScale ? `scale(${selectedPieceScale})` : ""
+                ].filter(Boolean).join(" ") || void 0,
+                transformOrigin: "center center",
+                width: "100%",
+                height: "100%"
+              },
+              children: /* @__PURE__ */ jsx(
+                PieceGlyph,
+                {
+                  pieceKey: `${ps.piece.color}${ps.piece.role.toUpperCase()}`,
+                  pieceSet,
+                  customPieces
+                }
+              )
+            }
+          )
+        },
+        `${ps.square}-${ps.piece.color}${ps.piece.role}`
+      );
+    })
+  ] });
+}));
+function squareColRow2(sq2, asWhite) {
+  const f = sq2.charCodeAt(0) - 97;
+  const r = sq2.charCodeAt(1) - 49;
+  return [asWhite ? f : 7 - f, asWhite ? 7 - r : r];
+}
+function isValidSquare(sq2) {
+  return /^[a-h][1-8]$/.test(sq2);
+}
+var GhostPiecesLayer = memo(function GhostPiecesLayer2({
+  ghosts,
+  orientation,
+  pieceSet,
+  customPieces,
+  flipPieces = false
+}) {
+  const asWhite = orientation === "white";
+  return /* @__PURE__ */ jsx("div", { style: { position: "absolute", inset: 0, pointerEvents: "none", overflow: "hidden" }, children: ghosts.map((g, i) => {
+    if (!isValidSquare(g.square)) return null;
+    const [col, row] = squareColRow2(g.square, asWhite);
+    const scale = g.scale ?? 1;
+    return /* @__PURE__ */ jsx(
+      "div",
+      {
+        style: {
+          position: "absolute",
+          width: "12.5%",
+          height: "12.5%",
+          transform: `translate(${col * 100}%, ${row * 100}%)`,
+          opacity: g.opacity ?? 0.45,
+          zIndex: 1,
+          pointerEvents: "none"
+        },
+        children: /* @__PURE__ */ jsx(
+          "div",
+          {
+            style: {
+              width: "100%",
+              height: "100%",
+              transform: [
+                flipPieces ? "rotate(180deg)" : "",
+                scale !== 1 ? `scale(${scale})` : ""
+              ].filter(Boolean).join(" ") || void 0,
+              transformOrigin: "center center"
+            },
+            children: /* @__PURE__ */ jsx(PieceGlyph, { pieceKey: g.piece, pieceSet, customPieces })
+          }
+        )
+      },
+      `ghost-${g.square}-${g.piece}-${i}`
+    );
+  }) });
 });
+function squareColRow3(sq2, asWhite) {
+  const f = sq2.charCodeAt(0) - 97;
+  const r = sq2.charCodeAt(1) - 49;
+  return [asWhite ? f : 7 - f, asWhite ? 7 - r : r];
+}
+function isValidSquare2(sq2) {
+  return /^[a-h][1-8]$/.test(sq2);
+}
+var CORNER_POSITIONS = {
+  topLeft: { top: "4%", left: "4%" },
+  topRight: { top: "4%", right: "4%" },
+  bottomLeft: { bottom: "4%", left: "4%" },
+  bottomRight: { bottom: "4%", right: "4%" },
+  center: { top: "50%", left: "50%", transform: "translate(-50%, -50%)" }
+};
+var SquareLabelsLayer = memo(function SquareLabelsLayer2({
+  labels,
+  orientation
+}) {
+  const asWhite = orientation === "white";
+  const entries = Object.entries(labels);
+  if (entries.length === 0) return null;
+  return /* @__PURE__ */ jsx("div", { style: { position: "absolute", inset: 0, pointerEvents: "none", overflow: "hidden", zIndex: 6 }, children: entries.map(([sq2, raw]) => {
+    if (!isValidSquare2(sq2)) return null;
+    const label = typeof raw === "string" ? { text: raw } : raw;
+    if (!label.text) return null;
+    const [col, row] = squareColRow3(sq2, asWhite);
+    const corner = label.corner ?? "topRight";
+    return /* @__PURE__ */ jsx(
+      "div",
+      {
+        style: {
+          position: "absolute",
+          width: "12.5%",
+          height: "12.5%",
+          transform: `translate(${col * 100}%, ${row * 100}%)`,
+          pointerEvents: "none"
+        },
+        children: /* @__PURE__ */ jsx(
+          "span",
+          {
+            style: {
+              position: "absolute",
+              ...CORNER_POSITIONS[corner],
+              minWidth: "1.5em",
+              padding: "0.1em 0.35em",
+              borderRadius: "999px",
+              background: label.background ?? "rgba(15, 23, 42, 0.85)",
+              color: label.color ?? "#ffffff",
+              fontSize: label.fontSize ?? "clamp(9px, 1.6vmin, 13px)",
+              fontWeight: 700,
+              fontFamily: "system-ui, sans-serif",
+              lineHeight: 1.4,
+              textAlign: "center",
+              whiteSpace: "nowrap",
+              boxShadow: "0 1px 3px rgba(0, 0, 0, 0.35)"
+            },
+            children: label.text
+          }
+        )
+      },
+      `label-${sq2}`
+    );
+  }) });
+});
+var DEFAULT_DEMO_DURATION_MS = 900;
+var DEFAULT_LIFT_SCALE = 1.18;
+var DEFAULT_PULSE_COLOR = "rgba(255, 188, 66, 0.95)";
+var DEFAULT_PULSE_DURATION_MS = 700;
+var DEFAULT_PULSE_TIMES = 2;
+function squareColRow4(sq2, asWhite) {
+  const f = sq2.charCodeAt(0) - 97;
+  const r = sq2.charCodeAt(1) - 49;
+  return [asWhite ? f : 7 - f, asWhite ? 7 - r : r];
+}
+function isValidSquare3(sq2) {
+  return typeof sq2 === "string" && /^[a-h][1-8]$/.test(sq2);
+}
+function canAnimate(el) {
+  return typeof el.animate === "function";
+}
+var TeachingLayer = memo(forwardRef(function TeachingLayer2({
+  orientation,
+  pieces,
+  pieceSet,
+  customPieces,
+  flipPieces = false,
+  getPieceElement
+}, ref) {
+  const asWhite = orientation === "white";
+  const [demos, setDemos] = useState([]);
+  const [pulses, setPulses] = useState([]);
+  const demosRef = useRef(demos);
+  demosRef.current = demos;
+  const idRef = useRef(0);
+  const piecesRef = useRef(pieces);
+  piecesRef.current = pieces;
+  const asWhiteRef = useRef(asWhite);
+  asWhiteRef.current = asWhite;
+  const demoResolversRef = useRef(/* @__PURE__ */ new Map());
+  const demoAnimationsRef = useRef(/* @__PURE__ */ new Map());
+  const startedRef = useRef(/* @__PURE__ */ new Set());
+  const finishedRef = useRef(/* @__PURE__ */ new Set());
+  const getPieceElementRef = useRef(getPieceElement);
+  getPieceElementRef.current = getPieceElement;
+  const finishDemo = useCallback((entry) => {
+    if (finishedRef.current.has(entry.id)) return;
+    finishedRef.current.add(entry.id);
+    const resolve = demoResolversRef.current.get(entry.id);
+    demoResolversRef.current.delete(entry.id);
+    resolve?.();
+    const cleanup = () => {
+      demoAnimationsRef.current.delete(entry.id);
+      startedRef.current.delete(entry.id);
+      finishedRef.current.delete(entry.id);
+      if (entry.hiddenSquare) {
+        const orig = getPieceElementRef.current(entry.hiddenSquare);
+        if (orig) orig.style.opacity = "";
+      }
+      setDemos((prev) => prev.filter((d) => d.id !== entry.id));
+    };
+    if (typeof requestAnimationFrame === "function") {
+      requestAnimationFrame(() => requestAnimationFrame(cleanup));
+    } else {
+      cleanup();
+    }
+  }, []);
+  const startDemoAnimation = useCallback((el, entry) => {
+    if (startedRef.current.has(entry.id)) return;
+    startedRef.current.add(entry.id);
+    if (!canAnimate(el)) {
+      finishDemo(entry);
+      return;
+    }
+    const fromT = `translate(${entry.fromCol * 100}%, ${entry.fromRow * 100}%)`;
+    const toT = `translate(${entry.toCol * 100}%, ${entry.toRow * 100}%)`;
+    const lift = entry.liftScale;
+    const glide = el.animate(
+      [
+        { transform: `${fromT} scale(1)` },
+        { transform: `${fromT} scale(${lift})`, offset: 0.15 },
+        { transform: `${toT} scale(${lift})`, offset: 0.85 },
+        { transform: `${toT} scale(1)` }
+      ],
+      { duration: Math.max(50, entry.durationMs), easing: "ease-in-out", fill: "forwards" }
+    );
+    demoAnimationsRef.current.set(entry.id, glide);
+    glide.oncancel = () => finishDemo(entry);
+    glide.onfinish = () => {
+      if (entry.ghost) {
+        const fade = el.animate(
+          [{ opacity: String(entry.ghostOpacity) }, { opacity: "0" }],
+          { duration: 200, easing: "ease-out", fill: "forwards" }
+        );
+        demoAnimationsRef.current.set(entry.id, fade);
+        fade.onfinish = () => finishDemo(entry);
+        fade.oncancel = () => finishDemo(entry);
+      } else {
+        finishDemo(entry);
+      }
+    };
+  }, [finishDemo]);
+  const animateMove = useCallback((from, to, options) => {
+    if (!isValidSquare3(from) || !isValidSquare3(to) || from === to) {
+      return Promise.resolve();
+    }
+    const existing = piecesRef.current.get(from);
+    const pieceKey = options?.piece ?? (existing ? `${existing.color}${existing.role.toUpperCase()}` : void 0);
+    if (!pieceKey) return Promise.resolve();
+    const ghost = options?.ghost ?? false;
+    const hideOriginal = !ghost && (options?.hideOriginal ?? true) && !!existing;
+    const white = asWhiteRef.current;
+    const [fromCol, fromRow] = squareColRow4(from, white);
+    const [toCol, toRow] = squareColRow4(to, white);
+    const entry = {
+      id: ++idRef.current,
+      pieceKey,
+      fromCol,
+      fromRow,
+      toCol,
+      toRow,
+      durationMs: options?.durationMs ?? DEFAULT_DEMO_DURATION_MS,
+      liftScale: options?.liftScale ?? DEFAULT_LIFT_SCALE,
+      ghost,
+      ghostOpacity: ghost ? 0.6 : 1,
+      hiddenSquare: hideOriginal ? from : null
+    };
+    if (entry.hiddenSquare) {
+      const orig = getPieceElementRef.current(entry.hiddenSquare);
+      if (orig) orig.style.opacity = "0";
+    }
+    return new Promise((resolve) => {
+      demoResolversRef.current.set(entry.id, resolve);
+      setDemos((prev) => [...prev, entry]);
+    });
+  }, []);
+  const pulseSquare = useCallback((square, options) => {
+    if (!isValidSquare3(square)) return Promise.resolve();
+    const [col, row] = squareColRow4(square, asWhiteRef.current);
+    const entry = {
+      id: ++idRef.current,
+      col,
+      row,
+      color: options?.color ?? DEFAULT_PULSE_COLOR,
+      durationMs: options?.durationMs ?? DEFAULT_PULSE_DURATION_MS,
+      times: Math.max(1, options?.times ?? DEFAULT_PULSE_TIMES)
+    };
+    return new Promise((resolve) => {
+      demoResolversRef.current.set(entry.id, resolve);
+      setPulses((prev) => [...prev, entry]);
+    });
+  }, []);
+  const finishPulse = useCallback((id) => {
+    startedRef.current.delete(id);
+    const resolve = demoResolversRef.current.get(id);
+    demoResolversRef.current.delete(id);
+    setPulses((prev) => prev.filter((p) => p.id !== id));
+    resolve?.();
+  }, []);
+  const startPulseAnimation = useCallback((el, entry) => {
+    if (startedRef.current.has(entry.id)) return;
+    startedRef.current.add(entry.id);
+    if (!canAnimate(el)) {
+      finishPulse(entry.id);
+      return;
+    }
+    const anim = el.animate(
+      [
+        { opacity: "0", transform: "scale(0.55)" },
+        { opacity: "1", transform: "scale(0.92)", offset: 0.35 },
+        { opacity: "0", transform: "scale(1.28)" }
+      ],
+      {
+        duration: Math.max(150, entry.durationMs),
+        iterations: entry.times,
+        easing: "ease-out"
+      }
+    );
+    anim.onfinish = () => finishPulse(entry.id);
+    anim.oncancel = () => finishPulse(entry.id);
+  }, [finishPulse]);
+  const shakePiece = useCallback((square) => {
+    if (!isValidSquare3(square)) return Promise.resolve();
+    const outer = getPieceElementRef.current(square);
+    const inner = outer?.firstElementChild;
+    if (!inner || !canAnimate(inner)) return Promise.resolve();
+    return new Promise((resolve) => {
+      const anim = inner.animate(
+        [
+          { transform: "translateX(0)" },
+          { transform: "translateX(-9%)" },
+          { transform: "translateX(9%)" },
+          { transform: "translateX(-6%)" },
+          { transform: "translateX(6%)" },
+          { transform: "translateX(-3%)" },
+          { transform: "translateX(0)" }
+        ],
+        { duration: 420, easing: "ease-in-out" }
+      );
+      anim.onfinish = () => resolve();
+      anim.oncancel = () => resolve();
+    });
+  }, []);
+  const clearEffects = useCallback(() => {
+    for (const anim of Array.from(demoAnimationsRef.current.values())) {
+      anim.cancel();
+    }
+    for (const entry of demosRef.current) {
+      if (entry.hiddenSquare) {
+        const orig = getPieceElementRef.current(entry.hiddenSquare);
+        if (orig) orig.style.opacity = "";
+      }
+    }
+    const resolvers = Array.from(demoResolversRef.current.values());
+    demoResolversRef.current.clear();
+    demoAnimationsRef.current.clear();
+    startedRef.current.clear();
+    setDemos([]);
+    setPulses([]);
+    for (const resolve of resolvers) resolve();
+  }, []);
+  useImperativeHandle(ref, () => ({
+    animateMove,
+    pulseSquare,
+    shakePiece,
+    clearEffects
+  }), [animateMove, pulseSquare, shakePiece, clearEffects]);
+  useEffect(() => {
+    return () => {
+      for (const anim of demoAnimationsRef.current.values()) {
+        anim.cancel();
+      }
+      for (const resolve of demoResolversRef.current.values()) resolve();
+      demoResolversRef.current.clear();
+    };
+  }, []);
+  if (demos.length === 0 && pulses.length === 0) return null;
+  return /* @__PURE__ */ jsxs("div", { style: { position: "absolute", inset: 0, pointerEvents: "none", overflow: "hidden", zIndex: 9 }, children: [
+    pulses.map((p) => /* @__PURE__ */ jsx(
+      "div",
+      {
+        style: {
+          position: "absolute",
+          width: "12.5%",
+          height: "12.5%",
+          transform: `translate(${p.col * 100}%, ${p.row * 100}%)`,
+          pointerEvents: "none"
+        },
+        children: /* @__PURE__ */ jsx(
+          "div",
+          {
+            ref: (el) => {
+              if (el) startPulseAnimation(el, p);
+            },
+            style: {
+              position: "absolute",
+              inset: "6%",
+              borderRadius: "50%",
+              border: `3px solid ${p.color}`,
+              boxShadow: `0 0 12px 1px ${p.color}`,
+              opacity: 0
+            }
+          }
+        )
+      },
+      `pulse-${p.id}`
+    )),
+    demos.map((d) => /* @__PURE__ */ jsx(
+      "div",
+      {
+        ref: (el) => {
+          if (el) startDemoAnimation(el, d);
+        },
+        style: {
+          position: "absolute",
+          width: "12.5%",
+          height: "12.5%",
+          transform: `translate(${d.fromCol * 100}%, ${d.fromRow * 100}%)`,
+          opacity: d.ghost ? d.ghostOpacity : 1,
+          willChange: "transform",
+          pointerEvents: "none",
+          filter: "drop-shadow(0 4px 6px rgba(0, 0, 0, 0.28))"
+        },
+        children: /* @__PURE__ */ jsx(
+          "div",
+          {
+            style: {
+              width: "100%",
+              height: "100%",
+              transform: flipPieces ? "rotate(180deg)" : void 0,
+              transformOrigin: "center center"
+            },
+            children: /* @__PURE__ */ jsx(PieceGlyph, { pieceKey: d.pieceKey, pieceSet, customPieces })
+          }
+        )
+      },
+      `demo-${d.id}`
+    ))
+  ] });
+}));
 function pos2user(fileIdx, rankIdx, asWhite, boardWidth, boardHeight) {
   const f = asWhite ? fileIdx : 7 - fileIdx;
   const r = asWhite ? rankIdx : 7 - rankIdx;
@@ -2499,6 +3069,10 @@ var ChessiroCanvas = forwardRef(
       onMove,
       lastMove,
       dests,
+      autoPromoteTo,
+      expectedMove,
+      onWrongMove,
+      wrongMoveFeedback = "shake",
       premovable,
       arrows = EMPTY_ARRAY,
       onArrowsChange,
@@ -2527,6 +3101,8 @@ var ChessiroCanvas = forwardRef(
       overlayVisuals,
       check,
       moveQualityBadge,
+      ghostPieces = EMPTY_ARRAY,
+      squareLabels,
       allowDragging = true,
       allowDrawingArrows = true,
       animationDurationMs = 200,
@@ -2553,6 +3129,8 @@ var ChessiroCanvas = forwardRef(
       style
     } = props;
     const boardRef = useRef(null);
+    const piecesLayerRef = useRef(null);
+    const teachingRef = useRef(null);
     const { bounds, getFreshBounds } = useBoardSize(boardRef);
     const piecesMap = useMemo(() => readFen(position || INITIAL_FEN), [position]);
     const boundsToDomRect = useCallback((b) => {
@@ -2576,6 +3154,24 @@ var ChessiroCanvas = forwardRef(
       const fresh = getFreshBounds();
       return fresh ? boundsToDomRect(fresh) : null;
     }, [getFreshBounds, boundsToDomRect]);
+    const guardedOnMove = useCallback(
+      (from, to, promotion) => {
+        if (expectedMove) {
+          const accepted = (Array.isArray(expectedMove) ? expectedMove : [expectedMove]).some(
+            (m) => m.from === from && m.to === to && (m.promotion === void 0 || m.promotion === promotion)
+          );
+          if (!accepted) {
+            if (wrongMoveFeedback === "shake") {
+              teachingRef.current?.shakePiece(from);
+            }
+            onWrongMove?.(from, to);
+            return false;
+          }
+        }
+        return onMove?.(from, to, promotion) ?? false;
+      },
+      [expectedMove, onMove, onWrongMove, wrongMoveFeedback]
+    );
     const interaction = useInteraction({
       position,
       pieces: piecesMap,
@@ -2585,8 +3181,9 @@ var ChessiroCanvas = forwardRef(
       allowDrawingArrows,
       boardRef,
       boardBounds: boardDomRect,
-      onMove,
+      onMove: onMove ? guardedOnMove : void 0,
       dests,
+      autoPromoteTo,
       turnColor,
       movableColor,
       premovable,
@@ -2614,6 +3211,9 @@ var ChessiroCanvas = forwardRef(
       for (const sq2 of piecesMap.keys()) set.add(sq2);
       return set;
     }, [piecesMap, interaction.legalSquares, interaction.premoveSquares]);
+    const getPieceElement = useCallback((square) => {
+      return piecesLayerRef.current?.getPieceElement(square) ?? null;
+    }, []);
     const handleDeselect = useCallback(() => {
       interaction.clearSelection();
       onDeselect?.();
@@ -2641,8 +3241,25 @@ var ChessiroCanvas = forwardRef(
       },
       getBoardRect() {
         return boardRef.current?.getBoundingClientRect() ?? null;
+      },
+      getSquareAtPoint(clientX, clientY) {
+        const fresh = getFreshDomRect();
+        if (!fresh) return null;
+        return screenPos2square(clientX, clientY, orientation === "white", fresh) ?? null;
+      },
+      animateMove(from, to, options) {
+        return teachingRef.current?.animateMove(from, to, options) ?? Promise.resolve();
+      },
+      pulseSquare(square, options) {
+        return teachingRef.current?.pulseSquare(square, options) ?? Promise.resolve();
+      },
+      shakePiece(square) {
+        return teachingRef.current?.shakePiece(square) ?? Promise.resolve();
+      },
+      clearTeachingEffects() {
+        teachingRef.current?.clearEffects();
       }
-    }), [bounds, orientation]);
+    }), [bounds, orientation, getFreshDomRect]);
     const hasValidSize = bounds && bounds.width > 0;
     const boardWidth = bounds?.width ?? 0;
     const boardHeight = bounds?.height ?? 0;
@@ -2680,7 +3297,7 @@ var ChessiroCanvas = forwardRef(
                 position: "relative",
                 padding: marginPx
               },
-              children: /* @__PURE__ */ jsx(
+              children: /* @__PURE__ */ jsxs(
                 "div",
                 {
                   ref: boardRef,
@@ -2697,7 +3314,7 @@ var ChessiroCanvas = forwardRef(
                   },
                   onMouseDown: interaction.handlePointerDown,
                   onTouchStart: interaction.handlePointerDown,
-                  children: hasValidSize && /* @__PURE__ */ jsxs(Fragment, { children: [
+                  children: [
                     /* @__PURE__ */ jsxs(
                       "div",
                       {
@@ -2727,17 +3344,26 @@ var ChessiroCanvas = forwardRef(
                               check
                             }
                           ),
+                          ghostPieces.length > 0 && /* @__PURE__ */ jsx(
+                            GhostPiecesLayer,
+                            {
+                              ghosts: ghostPieces,
+                              orientation,
+                              pieceSet,
+                              customPieces,
+                              flipPieces
+                            }
+                          ),
                           /* @__PURE__ */ jsx(
                             PiecesLayer,
                             {
+                              ref: piecesLayerRef,
                               position,
                               pieces: piecesMap,
                               orientation,
                               pieceSet,
                               customPieces,
                               flipPieces,
-                              boardWidth,
-                              boardHeight,
                               animationDurationMs: showAnimations ? animationDurationMs : 0,
                               showAnimations,
                               draggingSquare: interaction.drag?.origSquare,
@@ -2745,46 +3371,61 @@ var ChessiroCanvas = forwardRef(
                               selectedPieceScale
                             }
                           ),
+                          squareLabels && /* @__PURE__ */ jsx(SquareLabelsLayer, { labels: squareLabels, orientation }),
                           /* @__PURE__ */ jsx(
-                            ArrowsLayer,
+                            TeachingLayer,
                             {
-                              arrows: interaction.renderedArrows,
+                              ref: teachingRef,
                               orientation,
-                              boardWidth,
-                              boardHeight,
-                              visuals: arrowVisuals
-                            }
-                          ),
-                          moveQualityBadge && /* @__PURE__ */ jsx(
-                            Badge,
-                            {
-                              badge: moveQualityBadge,
-                              orientation,
-                              squareSize
-                            }
-                          ),
-                          overlays.length > 0 && /* @__PURE__ */ jsx(
-                            OverlaysLayer,
-                            {
-                              overlays,
-                              orientation,
-                              boardWidth,
-                              boardHeight,
-                              renderer: overlayRenderer,
-                              visuals: overlayVisuals
-                            }
-                          ),
-                          interaction.pendingPromotion && /* @__PURE__ */ jsx(
-                            PromotionDialog,
-                            {
-                              promotion: interaction.pendingPromotion,
+                              pieces: piecesMap,
                               pieceSet,
+                              customPieces,
                               flipPieces,
-                              visuals: promotionVisuals,
-                              onSelect: interaction.handlePromotionSelect,
-                              onDismiss: interaction.handlePromotionDismiss
+                              getPieceElement
                             }
-                          )
+                          ),
+                          hasValidSize && /* @__PURE__ */ jsxs(Fragment, { children: [
+                            /* @__PURE__ */ jsx(
+                              ArrowsLayer,
+                              {
+                                arrows: interaction.renderedArrows,
+                                orientation,
+                                boardWidth,
+                                boardHeight,
+                                visuals: arrowVisuals
+                              }
+                            ),
+                            moveQualityBadge && /* @__PURE__ */ jsx(
+                              Badge,
+                              {
+                                badge: moveQualityBadge,
+                                orientation,
+                                squareSize
+                              }
+                            ),
+                            overlays.length > 0 && /* @__PURE__ */ jsx(
+                              OverlaysLayer,
+                              {
+                                overlays,
+                                orientation,
+                                boardWidth,
+                                boardHeight,
+                                renderer: overlayRenderer,
+                                visuals: overlayVisuals
+                              }
+                            ),
+                            interaction.pendingPromotion && /* @__PURE__ */ jsx(
+                              PromotionDialog,
+                              {
+                                promotion: interaction.pendingPromotion,
+                                pieceSet,
+                                flipPieces,
+                                visuals: promotionVisuals,
+                                onSelect: interaction.handlePromotionSelect,
+                                onDismiss: interaction.handlePromotionDismiss
+                              }
+                            )
+                          ] })
                         ]
                       }
                     ),
@@ -2799,7 +3440,7 @@ var ChessiroCanvas = forwardRef(
                         visuals: notationVisuals
                       }
                     )
-                  ] })
+                  ]
                 }
               )
             }
@@ -2825,6 +3466,6 @@ var ChessiroCanvas = forwardRef(
   }
 );
 
-export { ChessiroCanvas, DEFAULT_ARROW_BRUSHES, INITIAL_FEN, INITIAL_GAME_FEN, preloadPieceSet, premoveDests, readFen, writeFen };
+export { ChessiroCanvas, DEFAULT_ARROW_BRUSHES, INITIAL_FEN, INITIAL_GAME_FEN, preloadPieceSet, premoveDests, readFen, resolvePieceImageSrc, writeFen };
 //# sourceMappingURL=index.js.map
 //# sourceMappingURL=index.js.map

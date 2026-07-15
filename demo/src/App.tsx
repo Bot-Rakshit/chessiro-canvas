@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
   ChessiroCanvas,
   DEFAULT_ARROW_BRUSHES,
+  resolvePieceImageSrc,
   type ArrowVisuals,
   type ArrowHeadShape,
   type ArrowBrushes,
@@ -10,6 +11,9 @@ import {
   type Arrow,
   type PieceColor,
   type SquareVisuals,
+  type ChessiroCanvasRef,
+  type GhostPiece,
+  type SquareLabel,
 } from 'chessiro-canvas';
 import { Chess } from 'chessops/chess';
 import { chessgroundDests } from 'chessops/compat';
@@ -61,6 +65,8 @@ const SECTION_LINKS = [
   { id: 'overview', label: 'Overview' },
   { id: 'playground', label: 'Playground' },
   { id: 'studio', label: 'Arrows & Premove Studio' },
+  { id: 'teaching', label: 'Teaching Toolkit' },
+  { id: 'drills', label: 'Interactive Drills' },
   { id: 'quick-start', label: 'Quick Start' },
   { id: 'customization', label: 'Customization' },
   { id: 'props', label: 'Props' },
@@ -256,9 +262,15 @@ const PROPS: { prop: string; type: string; defaultValue: string; notes: string }
   { prop: 'movableColor', type: "'w' | 'b' | 'both'", defaultValue: 'undefined', notes: 'Restricts movable side.' },
   { prop: 'onMove', type: '(from, to, promotion?) => boolean', defaultValue: 'undefined', notes: 'Move callback, return true to accept.' },
   { prop: 'dests', type: 'Map<Square, Square[]>', defaultValue: 'undefined', notes: 'Legal move destinations.' },
+  { prop: 'autoPromoteTo', type: "'q' | 'r' | 'b' | 'n'", defaultValue: 'undefined', notes: 'Skip promotion dialog, always promote to this piece.' },
+  { prop: 'expectedMove', type: 'ExpectedMove | ExpectedMove[] | null', defaultValue: 'undefined', notes: 'Guided mode: only these moves are accepted; others shake.' },
+  { prop: 'onWrongMove', type: '(from, to) => void', defaultValue: 'undefined', notes: 'Fired when a non-expected move is attempted.' },
+  { prop: 'ghostPieces', type: 'GhostPiece[]', defaultValue: 'undefined', notes: 'Translucent hint pieces (teaching).' },
+  { prop: 'squareLabels', type: 'Record<string, string | SquareLabel>', defaultValue: 'undefined', notes: 'Text badges on squares (counts, annotations).' },
   { prop: 'lastMove', type: '{ from; to } | null', defaultValue: 'undefined', notes: 'Last move highlight.' },
   { prop: 'theme', type: 'BoardTheme', defaultValue: 'built-in', notes: 'Board color palette.' },
   { prop: 'pieceSet', type: 'PieceSet', defaultValue: 'embedded', notes: 'Custom piece set path.' },
+  { prop: 'flipPieces', type: 'boolean', defaultValue: 'false', notes: 'Rotate piece artwork 180 degrees for pass-and-play.' },
   { prop: 'showMargin', type: 'boolean', defaultValue: 'true', notes: 'Show outer margin frame.' },
   { prop: 'showNotation', type: 'boolean', defaultValue: 'true', notes: 'Show file/rank labels.' },
   { prop: 'squareVisuals', type: 'Partial<SquareVisuals>', defaultValue: 'undefined', notes: 'Legal/premove hints, marks.' },
@@ -544,6 +556,34 @@ export function App() {
               </p>
             </div>
             <ArrowPremoveStudio theme={theme} />
+          </section>
+
+          <section id="teaching" className="mb-16">
+            <div className="mb-8">
+              <h2 className="text-2xl font-bold text-white mb-2">Teaching Toolkit</h2>
+              <p className="text-slate-400">
+                Coach-style demonstrations without a human coach: slowly pick a piece up and place it on a square,
+                preview ideas with ghost pieces, pulse squares to direct attention, and shake pieces for wrong-move
+                feedback. All available through the imperative ref API.
+              </p>
+            </div>
+            <TeachingStudio theme={theme} />
+          </section>
+
+          <section id="drills" className="mb-16">
+            <div className="mb-8">
+              <h2 className="text-2xl font-bold text-white mb-2">Interactive Drills</h2>
+              <p className="text-slate-400">
+                Two lesson patterns built entirely on the public API: a guided move drill
+                (<code className="text-amber-400">expectedMove</code> auto-rejects and shakes wrong moves) and a
+                piece-placement puzzle (<code className="text-amber-400">getSquareAtPoint</code> +
+                a palette you drag from).
+              </p>
+            </div>
+            <div className="space-y-10">
+              <GuidedDrill theme={theme} />
+              <ForkTrainer theme={theme} />
+            </div>
           </section>
 
           <section id="quick-start" className="mb-16">
@@ -1176,6 +1216,512 @@ function ArrowPremoveStudio({ theme }: { theme: BoardTheme }) {
         <h3 className="text-sm font-medium text-slate-400 mb-3">Copy-paste the current config</h3>
         <CodeBlock code={snippet} language="tsx" />
       </div>
+    </div>
+  );
+}
+
+const TEACHING_CODE = `const boardRef = useRef<ChessiroCanvasRef>(null);
+
+// Coach hand: slowly pick the piece up and place it on the square
+await boardRef.current.animateMove('e2', 'e4', { durationMs: 1000 });
+commitMove('e2', 'e4'); // update position once it resolves
+
+// Preview an idea without touching the position (fading copy)
+await boardRef.current.animateMove('g1', 'f3', { ghost: true });
+
+// Direct the student's attention to a square
+await boardRef.current.pulseSquare('f7', { color: 'rgba(239,68,68,0.9)', times: 2 });
+
+// Wrong-move feedback
+await boardRef.current.shakePiece('d1');
+
+// Persistent placement hints
+<ChessiroCanvas
+  ref={boardRef}
+  position={fen}
+  ghostPieces={[{ square: 'f3', piece: 'wN' }, { square: 'c4', piece: 'wB' }]}
+/>`;
+
+const LESSON_GHOSTS: GhostPiece[] = [
+  { square: 'f3', piece: 'wN' },
+  { square: 'c4', piece: 'wB' },
+  { square: 'd4', piece: 'wP', opacity: 0.35 },
+];
+
+function sleep(ms: number) {
+  return new Promise<void>((resolve) => setTimeout(resolve, ms));
+}
+
+function TeachingStudio({ theme }: { theme: BoardTheme }) {
+  const boardRef = useRef<ChessiroCanvasRef>(null);
+  const [pos, setPos] = useState(createInitialPosition);
+  const [lastMove, setLastMove] = useState<{ from: string; to: string } | null>(null);
+  const [instant, setInstant] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [showGhosts, setShowGhosts] = useState(false);
+  const [boardWidthPct, setBoardWidthPct] = useState(100);
+  const [status, setStatus] = useState<string>('Idle — try the buttons, or drag pieces yourself.');
+
+  const posRef = useRef(pos);
+  posRef.current = pos;
+
+  const fen = useMemo(() => makeFen(pos.toSetup()), [pos]);
+  const dests = useMemo(() => chessgroundDests(pos), [pos]);
+  const turnColor: PieceColor = pos.turn === 'white' ? 'w' : 'b';
+
+  const commitMove = useCallback((from: string, to: string): boolean => {
+    const move = parseUci(`${from}${to}`);
+    const current = posRef.current;
+    if (!move || !current.isLegal(move)) return false;
+    const next = current.clone();
+    next.play(move);
+    setPos(next);
+    setLastMove({ from, to });
+    return true;
+  }, []);
+
+  const handleMove = useCallback(
+    (from: string, to: string, promotion?: string): boolean => {
+      const move = parseUci(`${from}${to}${promotion ?? ''}`);
+      const current = posRef.current;
+      if (!move || !current.isLegal(move)) return false;
+      const next = current.clone();
+      next.play(move);
+      setPos(next);
+      setLastMove({ from, to });
+      return true;
+    },
+    [],
+  );
+
+  // Demonstrate a move like a coach: pulse the target, glide the piece there,
+  // then commit the position with animations suppressed for one tick so the
+  // move does not animate twice.
+  const demonstrate = useCallback(async (from: string, to: string, note?: string) => {
+    if (note) setStatus(note);
+    await boardRef.current?.pulseSquare(to, { times: 1, durationMs: 500 });
+    await boardRef.current?.animateMove(from, to, { durationMs: 950 });
+    setInstant(true);
+    commitMove(from, to);
+    window.setTimeout(() => setInstant(false), 80);
+    await sleep(120);
+  }, [commitMove]);
+
+  const runLesson = useCallback(async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      setPos(createInitialPosition());
+      setLastMove(null);
+      await sleep(400);
+      await demonstrate('e2', 'e4', 'Lesson: control the center with 1. e4');
+      await sleep(300);
+      await demonstrate('e7', 'e5', 'Black mirrors with 1... e5');
+      await sleep(300);
+      setStatus('Preview the idea first as a ghost...');
+      await boardRef.current?.animateMove('g1', 'f3', { ghost: true, durationMs: 900 });
+      await sleep(150);
+      await demonstrate('g1', 'f3', '...then play it: 2. Nf3 attacks e5');
+      await sleep(300);
+      await demonstrate('b8', 'c6', 'Black defends with 2... Nc6');
+      await sleep(300);
+      setStatus('f7 is the weakest square in Black\u2019s camp!');
+      await boardRef.current?.pulseSquare('f7', { color: 'rgba(239, 68, 68, 0.9)', times: 2 });
+      await demonstrate('f1', 'c4', '3. Bc4 — the Italian Game, eyeing f7');
+      setStatus('Lesson complete. Your move!');
+    } finally {
+      setBusy(false);
+    }
+  }, [busy, demonstrate]);
+
+  const previewRandomMove = useCallback(async () => {
+    if (busy) return;
+    const entries = Array.from(dests.entries()).filter(([, tos]) => tos.length > 0);
+    if (entries.length === 0) return;
+    const [from, tos] = entries[Math.floor(Math.random() * entries.length)];
+    const to = tos[Math.floor(Math.random() * tos.length)];
+    setBusy(true);
+    setStatus(`Ghost preview: ${from} \u2192 ${to} (position untouched)`);
+    try {
+      await boardRef.current?.animateMove(from, to, { ghost: true, durationMs: 900 });
+    } finally {
+      setBusy(false);
+    }
+  }, [busy, dests]);
+
+  const pulseCenter = useCallback(() => {
+    setStatus('Pulse: look at d4/e4!');
+    boardRef.current?.pulseSquare('d4', { times: 2 });
+    boardRef.current?.pulseSquare('e4', { color: 'rgba(56, 189, 248, 0.95)', times: 2 });
+  }, []);
+
+  const shakeKing = useCallback(() => {
+    const board = posRef.current.board;
+    const kingIdx = board.kingOf(posRef.current.turn);
+    if (kingIdx === undefined) return;
+    const file = 'abcdefgh'[kingIdx % 8];
+    const rank = Math.floor(kingIdx / 8) + 1;
+    setStatus(`Shake: not the king! (${file}${rank})`);
+    boardRef.current?.shakePiece(`${file}${rank}`);
+  }, []);
+
+  const resetLesson = useCallback(() => {
+    boardRef.current?.clearTeachingEffects();
+    setPos(createInitialPosition());
+    setLastMove(null);
+    setStatus('Board reset.');
+  }, []);
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px] gap-6">
+      <div className="space-y-4">
+        <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-4 flex items-start justify-center">
+          <div style={{ width: `${boardWidthPct}%`, transition: 'width 0.2s ease' }}>
+            <ChessiroCanvas
+              ref={boardRef}
+              position={fen}
+              lastMove={lastMove}
+              turnColor={turnColor}
+              movableColor={turnColor}
+              dests={dests}
+              onMove={handleMove}
+              interactive={!busy}
+              theme={theme}
+              showAnimations={!instant}
+              showNotation
+              showMargin
+              ghostPieces={showGhosts ? LESSON_GHOSTS : undefined}
+            />
+          </div>
+        </div>
+        <div className="p-3 rounded-lg bg-slate-900/50 border border-slate-800 text-sm text-amber-400 min-h-[42px]">
+          {status}
+        </div>
+      </div>
+
+      <div className="space-y-4">
+        <ControlCard title="Coach demonstrations">
+          <button
+            onClick={runLesson}
+            disabled={busy}
+            className="w-full px-3 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-900 font-semibold text-sm transition-colors"
+          >
+            {busy ? 'Teaching…' : 'Run scripted lesson (Italian Game)'}
+          </button>
+          <button
+            onClick={previewRandomMove}
+            disabled={busy}
+            className="w-full px-3 py-2 rounded-lg border border-slate-700 hover:bg-slate-800 disabled:opacity-50 text-sm"
+          >
+            Ghost-preview a legal move
+          </button>
+          <p className="text-xs text-slate-500">
+            <code className="text-amber-400">animateMove()</code> slowly lifts the piece, glides it to the square and
+            sets it down. With <code className="text-amber-400">ghost: true</code> a translucent copy fades out and the
+            position is untouched.
+          </p>
+        </ControlCard>
+
+        <ControlCard title="Attention & feedback">
+          <button onClick={pulseCenter} className="w-full px-3 py-2 rounded-lg border border-slate-700 hover:bg-slate-800 text-sm">
+            Pulse the center (pulseSquare)
+          </button>
+          <button onClick={shakeKing} className="w-full px-3 py-2 rounded-lg border border-slate-700 hover:bg-slate-800 text-sm">
+            Shake the king (shakePiece)
+          </button>
+          <Toggle label="Ghost placement hints (ghostPieces)" checked={showGhosts} onChange={setShowGhosts} />
+          <p className="text-xs text-slate-500">
+            Ghost pieces show where pieces belong ("your knight goes to f3") without changing the position.
+          </p>
+        </ControlCard>
+
+        <ControlCard title="Resize robustness">
+          <Slider
+            label="Container width"
+            value={boardWidthPct}
+            min={45}
+            max={100}
+            step={1}
+            onChange={setBoardWidthPct}
+            format={(v) => `${v}%`}
+          />
+          <p className="text-xs text-slate-500">
+            Pieces are positioned with CSS percentages, so they stay glued to their squares through any resize,
+            container reflow or layout shift — even mid-animation.
+          </p>
+        </ControlCard>
+
+        <button onClick={resetLesson} className="w-full px-3 py-2 rounded-lg border border-slate-700 hover:bg-slate-800 text-sm">
+          Reset board & effects
+        </button>
+      </div>
+
+      <div className="lg:col-span-2">
+        <h3 className="text-sm font-medium text-slate-400 mb-3">Teaching API</h3>
+        <CodeBlock code={TEACHING_CODE} language="tsx" />
+      </div>
+    </div>
+  );
+}
+
+// ── Guided move drill: find the mate ────────────────────────────────
+
+const DRILL_FEN = 'r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5Q2/PPPP1PPP/RNB1K1NR w KQkq - 0 1';
+
+function createDrillPos() {
+  return Chess.fromSetup(parseFen(DRILL_FEN).unwrap()).unwrap();
+}
+
+const CONCEPT_ARROWS: Arrow[] = [
+  { startSquare: 'f3', endSquare: 'f7', color: 'rgba(34, 197, 94, 0.9)' },
+  { startSquare: 'c4', endSquare: 'f7', color: 'rgba(34, 197, 94, 0.9)' },
+];
+
+const CONCEPT_LABELS: Record<string, SquareLabel> = {
+  f7: { text: '2 v 1', corner: 'center', background: 'rgba(185, 28, 28, 0.92)' },
+  f3: { text: 'A', corner: 'topRight', background: 'rgba(21, 128, 61, 0.92)' },
+  c4: { text: 'A', corner: 'topRight', background: 'rgba(21, 128, 61, 0.92)' },
+  e8: { text: 'D', corner: 'topLeft', background: 'rgba(30, 64, 175, 0.92)' },
+};
+
+function GuidedDrill({ theme }: { theme: BoardTheme }) {
+  const boardRef = useRef<ChessiroCanvasRef>(null);
+  const [pos, setPos] = useState(createDrillPos);
+  const [lastMove, setLastMove] = useState<{ from: string; to: string } | null>(null);
+  const [solved, setSolved] = useState(false);
+  const [wrongCount, setWrongCount] = useState(0);
+  const [showConcept, setShowConcept] = useState(false);
+  const [status, setStatus] = useState('White to move. There is a mate in one — find it!');
+
+  const posRef = useRef(pos);
+  posRef.current = pos;
+
+  const fen = useMemo(() => makeFen(pos.toSetup()), [pos]);
+  const dests = useMemo(() => chessgroundDests(pos), [pos]);
+  const turnColor: PieceColor = pos.turn === 'white' ? 'w' : 'b';
+
+  const handleMove = useCallback((from: string, to: string, promotion?: string): boolean => {
+    const move = parseUci(`${from}${to}${promotion ?? ''}`);
+    const current = posRef.current;
+    if (!move || !current.isLegal(move)) return false;
+    const next = current.clone();
+    next.play(move);
+    setPos(next);
+    setLastMove({ from, to });
+    setSolved(true);
+    setStatus('Qxf7# — Scholar\u2019s Mate! The queen is protected by the bishop on c4.');
+    boardRef.current?.pulseSquare('f7', { color: 'rgba(34, 197, 94, 0.95)', times: 2 });
+    return true;
+  }, []);
+
+  const handleWrongMove = useCallback((from: string, to: string) => {
+    setWrongCount((c) => c + 1);
+    setStatus(`${from} \u2192 ${to} doesn\u2019t mate. Look for the weakest square around the black king.`);
+  }, []);
+
+  const showHint = useCallback(async () => {
+    setStatus('Hint: watch the ghost piece...');
+    await boardRef.current?.animateMove('f3', 'f7', { ghost: true, durationMs: 1000 });
+    setStatus('Now you play it!');
+  }, []);
+
+  const reset = useCallback(() => {
+    boardRef.current?.clearTeachingEffects();
+    setPos(createDrillPos());
+    setLastMove(null);
+    setSolved(false);
+    setWrongCount(0);
+    setShowConcept(false);
+    setStatus('White to move. There is a mate in one — find it!');
+  }, []);
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px] gap-6">
+      <div className="space-y-4">
+        <h3 className="text-lg font-semibold text-white">Drill 1 — Guided move: find the mate</h3>
+        <div className="aspect-square rounded-xl overflow-hidden border border-slate-800 bg-slate-900/50">
+          <ChessiroCanvas
+            ref={boardRef}
+            position={fen}
+            lastMove={lastMove}
+            turnColor={turnColor}
+            movableColor={turnColor}
+            dests={dests}
+            onMove={handleMove}
+            expectedMove={solved ? null : { from: 'f3', to: 'f7' }}
+            onWrongMove={handleWrongMove}
+            interactive={!solved}
+            theme={theme}
+            showNotation
+            showMargin
+            arrows={showConcept && !solved ? CONCEPT_ARROWS : undefined}
+            squareLabels={showConcept && !solved ? CONCEPT_LABELS : undefined}
+          />
+        </div>
+        <div className="p-3 rounded-lg bg-slate-900/50 border border-slate-800 text-sm text-amber-400 min-h-[42px]">
+          {status}
+        </div>
+      </div>
+
+      <div className="space-y-4">
+        <ControlCard title="Guided mode">
+          <p className="text-xs text-slate-500">
+            <code className="text-amber-400">expectedMove=&#123;&#123; from: 'f3', to: 'f7' &#125;&#125;</code> — every
+            other move is rejected: the piece snaps back and shakes automatically, and{' '}
+            <code className="text-amber-400">onWrongMove</code> fires so you can coach.
+          </p>
+          <div className="text-sm text-slate-300">
+            Wrong attempts: <code className="text-red-400">{wrongCount}</code>
+          </div>
+          <button onClick={showHint} disabled={solved} className="w-full px-3 py-2 rounded-lg border border-slate-700 hover:bg-slate-800 disabled:opacity-50 text-sm">
+            Ghost hint (animateMove ghost)
+          </button>
+          <Toggle label="Explain the concept (labels + arrows)" checked={showConcept} onChange={setShowConcept} />
+          <p className="text-xs text-slate-500">
+            <code className="text-amber-400">squareLabels</code> teaches the counting rule: f7 is attacked twice
+            (A = queen + bishop) but defended once (D = king), so the capture wins.
+          </p>
+          <button onClick={reset} className="w-full px-3 py-2 rounded-lg border border-slate-700 hover:bg-slate-800 text-sm">
+            Reset drill
+          </button>
+        </ControlCard>
+      </div>
+    </div>
+  );
+}
+
+// ── Placement drill: knight fork trainer ────────────────────────────
+
+const FORK_FEN = 'r3k3/8/8/8/8/8/8/4K3 w - - 0 1';
+const FORK_SOLVED_FEN = 'r3k3/2N5/8/8/8/8/8/4K3 b - - 0 1';
+const FORK_TARGET = 'c7';
+
+function ForkTrainer({ theme }: { theme: BoardTheme }) {
+  const boardRef = useRef<ChessiroCanvasRef>(null);
+  const [placed, setPlaced] = useState(false);
+  const [fails, setFails] = useState(0);
+  const [dragPos, setDragPos] = useState<[number, number] | null>(null);
+  const [status, setStatus] = useState('Drag the knight from the tray onto the square where it forks BOTH black pieces.');
+
+  const knightSrc = useMemo(() => resolvePieceImageSrc('wN'), []);
+
+  const handlePlacement = useCallback((sq: string) => {
+    if (sq === FORK_TARGET) {
+      setPlaced(true);
+      setStatus('Nc7+! One knight, two targets: check on e8 and the rook on a8 falls next move.');
+      boardRef.current?.pulseSquare('e8', { color: 'rgba(34, 197, 94, 0.95)', times: 2 });
+      boardRef.current?.pulseSquare('a8', { color: 'rgba(34, 197, 94, 0.95)', times: 2 });
+    } else {
+      setFails((f) => f + 1);
+      setStatus(`From ${sq} the knight doesn\u2019t hit both the king and the rook. Try again!`);
+      boardRef.current?.pulseSquare(sq, { color: 'rgba(239, 68, 68, 0.9)', times: 1 });
+    }
+  }, []);
+
+  const startPaletteDrag = useCallback((e: React.PointerEvent) => {
+    if (placed) return;
+    e.preventDefault();
+    setDragPos([e.clientX, e.clientY]);
+    const move = (ev: PointerEvent) => setDragPos([ev.clientX, ev.clientY]);
+    const up = (ev: PointerEvent) => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
+      setDragPos(null);
+      const sq = boardRef.current?.getSquareAtPoint(ev.clientX, ev.clientY);
+      if (!sq) {
+        setStatus('Drop the knight on the board.');
+        return;
+      }
+      handlePlacement(sq);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
+  }, [placed, handlePlacement]);
+
+  const reset = useCallback(() => {
+    boardRef.current?.clearTeachingEffects();
+    setPlaced(false);
+    setFails(0);
+    setStatus('Drag the knight from the tray onto the square where it forks BOTH black pieces.');
+  }, []);
+
+  const ghostHints = useMemo<GhostPiece[] | undefined>(() => {
+    if (placed || fails < 2) return undefined;
+    return [{ square: FORK_TARGET, piece: 'wN', opacity: 0.3 }];
+  }, [placed, fails]);
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px] gap-6">
+      <div className="space-y-4">
+        <h3 className="text-lg font-semibold text-white">Drill 2 — Placement: fork the king and rook</h3>
+        <div className="aspect-square rounded-xl overflow-hidden border border-slate-800 bg-slate-900/50">
+          <ChessiroCanvas
+            ref={boardRef}
+            position={placed ? FORK_SOLVED_FEN : FORK_FEN}
+            interactive={false}
+            theme={theme}
+            showNotation
+            showMargin
+            ghostPieces={ghostHints}
+            squareLabels={placed ? { e8: { text: '+', corner: 'center', background: 'rgba(21,128,61,0.92)' }, a8: { text: '\u2716', corner: 'center', background: 'rgba(185,28,28,0.92)' } } : undefined}
+          />
+        </div>
+        <div className="p-3 rounded-lg bg-slate-900/50 border border-slate-800 text-sm text-amber-400 min-h-[42px]">
+          {status}
+        </div>
+      </div>
+
+      <div className="space-y-4">
+        <ControlCard title="Piece tray">
+          <div className="flex items-center justify-center p-4 rounded-lg bg-slate-950 border border-dashed border-slate-700 min-h-[96px]">
+            {placed ? (
+              <span className="text-sm text-green-400">Placed! Nc7+ forks e8 and a8.</span>
+            ) : (
+              <img
+                src={knightSrc}
+                alt="White knight — drag me"
+                draggable={false}
+                onPointerDown={startPaletteDrag}
+                className="w-16 h-16 cursor-grab active:cursor-grabbing"
+                style={{ touchAction: 'none' }}
+              />
+            )}
+          </div>
+          <p className="text-xs text-slate-500">
+            Built with <code className="text-amber-400">ref.getSquareAtPoint(x, y)</code> +{' '}
+            <code className="text-amber-400">resolvePieceImageSrc('wN')</code> — track your own drag from any
+            palette and resolve the drop square on release. After two misses a{' '}
+            <code className="text-amber-400">ghostPieces</code> hint appears.
+          </p>
+          <div className="text-sm text-slate-300">
+            Misses: <code className="text-red-400">{fails}</code>
+          </div>
+          <button onClick={reset} className="w-full px-3 py-2 rounded-lg border border-slate-700 hover:bg-slate-800 text-sm">
+            Reset drill
+          </button>
+        </ControlCard>
+      </div>
+
+      {dragPos && (
+        <img
+          src={knightSrc}
+          alt=""
+          draggable={false}
+          style={{
+            position: 'fixed',
+            left: 0,
+            top: 0,
+            width: 64,
+            height: 64,
+            transform: `translate(${dragPos[0] - 32}px, ${dragPos[1] - 32}px)`,
+            pointerEvents: 'none',
+            zIndex: 1000,
+            filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.4))',
+          }}
+        />
+      )}
     </div>
   );
 }

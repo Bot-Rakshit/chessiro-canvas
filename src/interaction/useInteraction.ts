@@ -65,6 +65,7 @@ interface UseInteractionOptions {
   getFreshBounds?: () => DOMRect | null;
   onMove?: (from: string, to: string, promotion?: PromotionPiece) => boolean;
   dests?: Dests;
+  autoPromoteTo?: PromotionPiece;
   turnColor?: PieceColor;
   movableColor?: PieceColor | 'both';
   premovable?: PremoveConfig;
@@ -104,7 +105,7 @@ export interface InteractionState {
 export function useInteraction(opts: UseInteractionOptions): InteractionState {
   const {
     position, pieces, orientation, interactive, allowDragging, allowDrawingArrows,
-    boardRef, boardBounds, getFreshBounds, onMove, dests,
+    boardRef, boardBounds, getFreshBounds, onMove, dests, autoPromoteTo,
     turnColor, movableColor, premovable,
     arrows, onArrowsChange,
     arrowBrushes: customBrushes, snapArrowsToValidMoves = true,
@@ -141,6 +142,13 @@ export function useInteraction(opts: UseInteractionOptions): InteractionState {
   const dragKeyChangedRef = useRef(false);
   const isTouchRef = useRef(false);
   const lastTouchTsRef = useRef(0);
+
+  // Document listeners are attached only while a gesture (drag / arrow draw)
+  // is active, so idle boards do zero work on global pointer movement. The
+  // actual handlers live in refs and are swapped as props change mid-gesture.
+  const docMoveHandlerRef = useRef<((e: MouseEvent | TouchEvent) => void) | null>(null);
+  const docUpHandlerRef = useRef<((e: MouseEvent | TouchEvent) => void) | null>(null);
+  const listenersActiveRef = useRef(false);
 
   const selectedRef = useRef(selectedSquare);
   const legalRef = useRef(legalSquares);
@@ -267,6 +275,43 @@ export function useInteraction(opts: UseInteractionOptions): InteractionState {
     return getFreshBounds?.() ?? boardBounds;
   }, [boardBounds, getFreshBounds]);
 
+  const onDocMove = useCallback((e: MouseEvent | TouchEvent) => {
+    docMoveHandlerRef.current?.(e);
+  }, []);
+
+  const onDocUp = useCallback((e: MouseEvent | TouchEvent) => {
+    docUpHandlerRef.current?.(e);
+    if (!dragRef.current && !arrowStartRef.current && listenersActiveRef.current) {
+      listenersActiveRef.current = false;
+      document.removeEventListener('mousemove', onDocMove);
+      document.removeEventListener('touchmove', onDocMove);
+      document.removeEventListener('mouseup', onDocUp);
+      document.removeEventListener('touchend', onDocUp);
+      document.removeEventListener('touchcancel', onDocUp);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onDocMove]);
+
+  const detachDocListeners = useCallback(() => {
+    if (!listenersActiveRef.current) return;
+    listenersActiveRef.current = false;
+    document.removeEventListener('mousemove', onDocMove);
+    document.removeEventListener('touchmove', onDocMove);
+    document.removeEventListener('mouseup', onDocUp);
+    document.removeEventListener('touchend', onDocUp);
+    document.removeEventListener('touchcancel', onDocUp);
+  }, [onDocMove, onDocUp]);
+
+  const attachDocListeners = useCallback((blockScroll: boolean) => {
+    if (listenersActiveRef.current) return;
+    listenersActiveRef.current = true;
+    document.addEventListener('mousemove', onDocMove);
+    document.addEventListener('touchmove', onDocMove, { passive: !blockScroll });
+    document.addEventListener('mouseup', onDocUp);
+    document.addEventListener('touchend', onDocUp);
+    document.addEventListener('touchcancel', onDocUp);
+  }, [onDocMove, onDocUp]);
+
   const attemptMove = useCallback((from: string, to: string, promotion?: PromotionPiece): 'pending' | boolean => {
     if (!onMove || !interactive) return false;
     const validDests = getDestsForSquare(from);
@@ -276,8 +321,12 @@ export function useInteraction(opts: UseInteractionOptions): InteractionState {
     if (piece?.role === 'p' && !promotion) {
       const toRank = parseInt(to[1]);
       if ((piece.color === 'w' && toRank === 8) || (piece.color === 'b' && toRank === 1)) {
-        setPendingPromotion({ from, to, color: piece.color });
-        return 'pending';
+        if (autoPromoteTo) {
+          promotion = autoPromoteTo;
+        } else {
+          setPendingPromotion({ from, to, color: piece.color });
+          return 'pending';
+        }
       }
     }
 
@@ -288,7 +337,7 @@ export function useInteraction(opts: UseInteractionOptions): InteractionState {
       setPremoveSquares([]);
     }
     return success;
-  }, [onMove, interactive, getDestsForSquare, dests]);
+  }, [onMove, interactive, getDestsForSquare, dests, autoPromoteTo]);
 
   const attemptPremove = useCallback((from: string, to: string) => {
     if (!premovable?.enabled) return;
@@ -552,6 +601,7 @@ export function useInteraction(opts: UseInteractionOptions): InteractionState {
         arrowColorRef.current = eventBrushColor(nativeEvent as MouseEvent, brushes);
         const pos = getClientPos(nativeEvent);
         arrowPosRef.current = pos ?? null;
+        attachDocListeners(blockTouchScroll ?? false);
       }
       return;
     }
@@ -579,6 +629,7 @@ export function useInteraction(opts: UseInteractionOptions): InteractionState {
         dragRef.current = newDrag;
         setDrag(newDrag);
         startedDragCandidate = true;
+        attachDocListeners(blockTouchScroll ?? false);
       }
     }
 
@@ -591,7 +642,7 @@ export function useInteraction(opts: UseInteractionOptions): InteractionState {
       handleSquareInteraction(sq);
     }
   }, [getCurrentBounds, pendingPromotion, asWhite, interactive, allowDragging, allowDrawingArrows,
-    handleSquareInteraction, brushes, canMoveColor, canPremoveColor, blockTouchScroll]);
+    handleSquareInteraction, brushes, canMoveColor, canPremoveColor, blockTouchScroll, attachDocListeners]);
 
   // ── Document-level move/up for drag and arrow drawing ──
 
@@ -774,19 +825,19 @@ export function useInteraction(opts: UseInteractionOptions): InteractionState {
       });
     };
 
-    document.addEventListener('mousemove', handleMove);
-    document.addEventListener('touchmove', handleMove, { passive: !blockTouchScroll });
-    document.addEventListener('mouseup', handleUp);
-    document.addEventListener('touchend', handleUp);
-    return () => {
-      document.removeEventListener('mousemove', handleMove);
-      document.removeEventListener('touchmove', handleMove);
-      document.removeEventListener('mouseup', handleUp);
-      document.removeEventListener('touchend', handleUp);
-    };
+    // Publish the latest handler closures; the stable document listeners
+    // (attached only while a gesture is active) delegate through these refs,
+    // so prop/state changes mid-drag are picked up without re-attaching.
+    docMoveHandlerRef.current = handleMove;
+    docUpHandlerRef.current = handleUp;
   }, [getCurrentBounds, asWhite, interactive, attemptMove, attemptPremove,
     toggleArrow, toggleMark, getSnappedSquare, snapArrowsToValidMoves,
     canMoveColor, canPremoveColor, blockTouchScroll, getDestsForSquare, dests, handleSquareInteraction]);
+
+  // Detach any active gesture listeners on unmount.
+  useEffect(() => {
+    return () => detachDocListeners();
+  }, [detachDocListeners]);
 
   // Prevent context menu on the board
   useEffect(() => {

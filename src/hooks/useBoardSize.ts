@@ -70,10 +70,14 @@ export function useBoardSize(boardRef: React.RefObject<HTMLDivElement | null>) {
     observer.observe(el);
 
     window.addEventListener('scroll', updateBounds, { passive: true, capture: true });
+    // Catch layout shifts ResizeObserver can miss (e.g. the board element keeps
+    // its size but moves because surrounding content changed on window resize).
+    window.addEventListener('resize', updateBounds, { passive: true });
 
     return () => {
       observer.disconnect();
       window.removeEventListener('scroll', updateBounds, { capture: true } as EventListenerOptions);
+      window.removeEventListener('resize', updateBounds);
     };
   }, [boardRef, updateBounds]);
 

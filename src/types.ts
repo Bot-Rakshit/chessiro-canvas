@@ -296,6 +296,71 @@ export interface TextOverlay {
   style?: CSSProperties;
 }
 
+// ── Teaching helpers ───────────────────────────────────────────────
+
+/**
+ * A translucent hint piece rendered on a square without touching the real
+ * position. Useful for lessons: "your knight belongs here".
+ */
+export interface GhostPiece {
+  square: string;
+  /** Piece key like 'wN', 'bQ'. */
+  piece: string;
+  /** Opacity of the ghost. Default: 0.45. */
+  opacity?: number;
+  /** Scale of the ghost piece within its square. Default: 1. */
+  scale?: number;
+}
+
+export interface AnimateMoveOptions {
+  /** Total demonstration duration in ms. Default: 900 (slow, teaching pace). */
+  durationMs?: number;
+  /**
+   * Animate a translucent copy and leave the real position untouched
+   * (the copy fades out at the destination). Default: false.
+   */
+  ghost?: boolean;
+  /**
+   * Hide the real piece on the origin square while the demo piece glides
+   * (only when not a ghost). Default: true.
+   */
+  hideOriginal?: boolean;
+  /** Scale applied while the piece is "picked up". Default: 1.18. */
+  liftScale?: number;
+  /** Piece key like 'wQ' to animate when the origin square is empty. */
+  piece?: string;
+}
+
+export interface PulseSquareOptions {
+  /** Ring color. Default: 'rgba(255, 188, 66, 0.95)'. */
+  color?: string;
+  /** Duration of one pulse in ms. Default: 700. */
+  durationMs?: number;
+  /** Number of pulses. Default: 2. */
+  times?: number;
+}
+
+/**
+ * A small text badge rendered on a square (attacker counts, move numbers,
+ * "!" / "?" annotations, candidate-move letters, ...).
+ */
+export interface SquareLabel {
+  text: string;
+  color?: string;
+  background?: string;
+  fontSize?: string | number;
+  /** Where inside the square to place the badge. Default: 'topRight'. */
+  corner?: 'topLeft' | 'topRight' | 'bottomLeft' | 'bottomRight' | 'center';
+}
+
+/** A move the student is expected to play in guided (drill) mode. */
+export interface ExpectedMove {
+  from: string;
+  to: string;
+  /** When set, only this promotion piece is accepted. */
+  promotion?: PromotionPiece;
+}
+
 // ── Promotion ──────────────────────────────────────────────────────
 
 export type PromotionPiece = 'q' | 'r' | 'b' | 'n';
@@ -324,6 +389,20 @@ export interface ChessiroCanvasProps {
   onMove?: (from: string, to: string, promotion?: PromotionPiece) => boolean;
   lastMove?: { from: string; to: string } | null;
   dests?: Dests; // legal move destinations (if not provided, all moves allowed when interactive)
+  /** Skip the promotion dialog and always promote to this piece (e.g. 'q'). */
+  autoPromoteTo?: PromotionPiece;
+
+  // Guided mode (drills / lessons)
+  /**
+   * When set, only the given move(s) are accepted; any other attempted move is
+   * rejected, triggers `wrongMoveFeedback` and fires `onWrongMove`. Set to
+   * null/undefined to disable.
+   */
+  expectedMove?: ExpectedMove | ExpectedMove[] | null;
+  /** Called when the user attempts a move that doesn't match `expectedMove`. */
+  onWrongMove?: (from: string, to: string) => void;
+  /** Feedback when a wrong move is attempted in guided mode. Default: 'shake'. */
+  wrongMoveFeedback?: 'shake' | 'none';
 
   // Premoves
   premovable?: PremoveConfig;
@@ -363,6 +442,10 @@ export interface ChessiroCanvasProps {
   overlayVisuals?: Partial<OverlayVisuals>;
   check?: string | null; // square of the king in check (e.g. 'e1')
   moveQualityBadge?: MoveQualityBadge | null;
+  /** Translucent hint pieces rendered under the real pieces (teaching aid). */
+  ghostPieces?: GhostPiece[];
+  /** Text badges on squares (attacker counts, annotations, move numbers). */
+  squareLabels?: Record<string, string | SquareLabel>;
 
   // Behavior
   allowDragging?: boolean;
@@ -411,4 +494,23 @@ export interface ChessiroCanvasProps {
 export interface ChessiroCanvasRef {
   getSquareRect: (square: string) => DOMRect | null;
   getBoardRect: () => DOMRect | null;
+  /**
+   * Board square under a viewport point (clientX/clientY), or null when the
+   * point is outside the board. Enables external piece palettes: track your
+   * own drag and resolve the drop square with this.
+   */
+  getSquareAtPoint: (clientX: number, clientY: number) => Square | null;
+  /**
+   * Demonstrate a move: slowly pick up the piece on `from`, glide it to `to`
+   * and set it down. Resolves when the demonstration completes. Does not call
+   * onMove — commit the move (update `position`) yourself when it resolves,
+   * or pass `ghost: true` to animate a fading copy instead.
+   */
+  animateMove: (from: string, to: string, options?: AnimateMoveOptions) => Promise<void>;
+  /** Draw attention to a square with a pulsing ring. */
+  pulseSquare: (square: string, options?: PulseSquareOptions) => Promise<void>;
+  /** Shake the piece on a square ("wrong move" feedback). */
+  shakePiece: (square: string) => Promise<void>;
+  /** Cancel all in-flight teaching effects (demos and pulses). */
+  clearTeachingEffects: () => void;
 }

@@ -196,6 +196,64 @@ interface TextOverlay {
     className?: string;
     style?: CSSProperties;
 }
+/**
+ * A translucent hint piece rendered on a square without touching the real
+ * position. Useful for lessons: "your knight belongs here".
+ */
+interface GhostPiece {
+    square: string;
+    /** Piece key like 'wN', 'bQ'. */
+    piece: string;
+    /** Opacity of the ghost. Default: 0.45. */
+    opacity?: number;
+    /** Scale of the ghost piece within its square. Default: 1. */
+    scale?: number;
+}
+interface AnimateMoveOptions {
+    /** Total demonstration duration in ms. Default: 900 (slow, teaching pace). */
+    durationMs?: number;
+    /**
+     * Animate a translucent copy and leave the real position untouched
+     * (the copy fades out at the destination). Default: false.
+     */
+    ghost?: boolean;
+    /**
+     * Hide the real piece on the origin square while the demo piece glides
+     * (only when not a ghost). Default: true.
+     */
+    hideOriginal?: boolean;
+    /** Scale applied while the piece is "picked up". Default: 1.18. */
+    liftScale?: number;
+    /** Piece key like 'wQ' to animate when the origin square is empty. */
+    piece?: string;
+}
+interface PulseSquareOptions {
+    /** Ring color. Default: 'rgba(255, 188, 66, 0.95)'. */
+    color?: string;
+    /** Duration of one pulse in ms. Default: 700. */
+    durationMs?: number;
+    /** Number of pulses. Default: 2. */
+    times?: number;
+}
+/**
+ * A small text badge rendered on a square (attacker counts, move numbers,
+ * "!" / "?" annotations, candidate-move letters, ...).
+ */
+interface SquareLabel {
+    text: string;
+    color?: string;
+    background?: string;
+    fontSize?: string | number;
+    /** Where inside the square to place the badge. Default: 'topRight'. */
+    corner?: 'topLeft' | 'topRight' | 'bottomLeft' | 'bottomRight' | 'center';
+}
+/** A move the student is expected to play in guided (drill) mode. */
+interface ExpectedMove {
+    from: string;
+    to: string;
+    /** When set, only this promotion piece is accepted. */
+    promotion?: PromotionPiece;
+}
 type PromotionPiece = 'q' | 'r' | 'b' | 'n';
 interface PromotionContext {
     from: string;
@@ -215,6 +273,18 @@ interface ChessiroCanvasProps {
         to: string;
     } | null;
     dests?: Dests;
+    /** Skip the promotion dialog and always promote to this piece (e.g. 'q'). */
+    autoPromoteTo?: PromotionPiece;
+    /**
+     * When set, only the given move(s) are accepted; any other attempted move is
+     * rejected, triggers `wrongMoveFeedback` and fires `onWrongMove`. Set to
+     * null/undefined to disable.
+     */
+    expectedMove?: ExpectedMove | ExpectedMove[] | null;
+    /** Called when the user attempts a move that doesn't match `expectedMove`. */
+    onWrongMove?: (from: string, to: string) => void;
+    /** Feedback when a wrong move is attempted in guided mode. Default: 'shake'. */
+    wrongMoveFeedback?: 'shake' | 'none';
     premovable?: PremoveConfig;
     arrows?: Arrow[];
     onArrowsChange?: (arrows: Arrow[]) => void;
@@ -244,6 +314,10 @@ interface ChessiroCanvasProps {
     overlayVisuals?: Partial<OverlayVisuals>;
     check?: string | null;
     moveQualityBadge?: MoveQualityBadge | null;
+    /** Translucent hint pieces rendered under the real pieces (teaching aid). */
+    ghostPieces?: GhostPiece[];
+    /** Text badges on squares (attacker counts, annotations, move numbers). */
+    squareLabels?: Record<string, string | SquareLabel>;
     allowDragging?: boolean;
     allowDrawingArrows?: boolean;
     animationDurationMs?: number;
@@ -277,6 +351,25 @@ interface ChessiroCanvasProps {
 interface ChessiroCanvasRef {
     getSquareRect: (square: string) => DOMRect | null;
     getBoardRect: () => DOMRect | null;
+    /**
+     * Board square under a viewport point (clientX/clientY), or null when the
+     * point is outside the board. Enables external piece palettes: track your
+     * own drag and resolve the drop square with this.
+     */
+    getSquareAtPoint: (clientX: number, clientY: number) => Square | null;
+    /**
+     * Demonstrate a move: slowly pick up the piece on `from`, glide it to `to`
+     * and set it down. Resolves when the demonstration completes. Does not call
+     * onMove — commit the move (update `position`) yourself when it resolves,
+     * or pass `ghost: true` to animate a fading copy instead.
+     */
+    animateMove: (from: string, to: string, options?: AnimateMoveOptions) => Promise<void>;
+    /** Draw attention to a square with a pulsing ring. */
+    pulseSquare: (square: string, options?: PulseSquareOptions) => Promise<void>;
+    /** Shake the piece on a square ("wrong move" feedback). */
+    shakePiece: (square: string) => Promise<void>;
+    /** Cancel all in-flight teaching effects (demos and pulses). */
+    clearTeachingEffects: () => void;
 }
 
 declare const ChessiroCanvas: react.ForwardRefExoticComponent<ChessiroCanvasProps & react.RefAttributes<ChessiroCanvasRef>>;
@@ -298,4 +391,6 @@ declare function preloadPieceSet(path: string): void;
  */
 declare function premoveDests(square: Square, pieces: Pieces, color: PieceColor): Square[];
 
-export { type AnimationEvent, type Arrow, type ArrowBrush, type ArrowBrushes, type ArrowHeadShape, type ArrowVisuals, type BoardTheme, ChessiroCanvas, type ChessiroCanvasProps, type ChessiroCanvasRef, DEFAULT_ARROW_BRUSHES, type Dests, INITIAL_FEN, INITIAL_GAME_FEN, type MoveQualityBadge, type NotationVisuals, type Orientation, type OverlayVisuals, type Piece, type PieceColor, type PieceRenderer, type PieceRole, type PieceSet, type PremoveConfig, type PromotionContext, type PromotionPiece, type PromotionVisuals, type Square, type SquareVisuals, type TextOverlay, preloadPieceSet, premoveDests, readFen, writeFen };
+declare function resolvePieceImageSrc(pieceKey: string, piecePath?: string): string;
+
+export { type AnimateMoveOptions, type AnimationEvent, type Arrow, type ArrowBrush, type ArrowBrushes, type ArrowHeadShape, type ArrowVisuals, type BoardTheme, ChessiroCanvas, type ChessiroCanvasProps, type ChessiroCanvasRef, DEFAULT_ARROW_BRUSHES, type Dests, type ExpectedMove, type GhostPiece, INITIAL_FEN, INITIAL_GAME_FEN, type MoveQualityBadge, type NotationVisuals, type Orientation, type OverlayVisuals, type Piece, type PieceColor, type PieceRenderer, type PieceRole, type PieceSet, type PremoveConfig, type PromotionContext, type PromotionPiece, type PromotionVisuals, type PulseSquareOptions, type Square, type SquareLabel, type SquareVisuals, type TextOverlay, preloadPieceSet, premoveDests, readFen, resolvePieceImageSrc, writeFen };
