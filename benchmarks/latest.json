@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-15T12:52:10.534Z",
+  "generatedAt": "2026-07-16T17:43:42.104Z",
   "environment": {
     "node": "v26.0.0",
     "platform": "darwin",
@@ -46,22 +46,22 @@
   },
   "bundle": {
     "chessiroCanvas": {
-      "bytes": 128691,
-      "gzipBytes": 26792
+      "bytes": 164001,
+      "gzipBytes": 33238
     },
     "reactChessboard": {
       "bytes": 182451,
       "gzipBytes": 38277
     },
-    "gzipReductionPct": 30.004963816391044
+    "gzipReductionPct": 13.16456357603783
   },
   "dragTest": {
     "chessiro": {
       "timeMs": {
-        "mean": 7.69748633333317,
-        "median": 7.412749999999505,
-        "p95": 8.4434169999995,
-        "stdev": 0.5323493690211774
+        "mean": 7.617389000000306,
+        "median": 7.475750000000517,
+        "p95": 8.13208300000042,
+        "stdev": 0.376006007479624
       },
       "reactCommits": {
         "mean": 11,
@@ -82,10 +82,10 @@
     },
     "reactCb": {
       "timeMs": {
-        "mean": 83.64043033333353,
-        "median": 80.859292000001,
-        "p95": 102.55654099999992,
-        "stdev": 14.444044971084704
+        "mean": 82.1981390000007,
+        "median": 69.78833400000076,
+        "p95": 111.8950420000001,
+        "stdev": 21.09307204740444
       },
       "reactCommits": {
         "mean": 509,
@@ -109,177 +109,177 @@
     "chessiroCanvas": {
       "rounds": [
         {
-          "mountWallMs": 4.002749999999992,
-          "updatesWallMs": 76.64370800000006,
-          "updateWallPerUpdateMs": 0.6386975666666672,
-          "mountActualMs": 3.3314470000001393,
-          "updateActualAvgMs": 0.18328878453037079,
-          "updateActualP95Ms": 0.2971709999990253,
+          "mountWallMs": 8.100625000000036,
+          "updatesWallMs": 76.20504199999993,
+          "updateWallPerUpdateMs": 0.6350420166666662,
+          "mountActualMs": 4.728743000000577,
+          "updateActualAvgMs": 0.1858849337016895,
+          "updateActualP95Ms": 0.2814139999998133,
           "profilerCommitCount": 182
         },
         {
-          "mountWallMs": 5.300958000000037,
-          "updatesWallMs": 100.2885,
-          "updateWallPerUpdateMs": 0.8357375,
-          "mountActualMs": 4.378124999999727,
-          "updateActualAvgMs": 0.27743288397790966,
-          "updateActualP95Ms": 0.4438300000002755,
+          "mountWallMs": 3.4198330000000396,
+          "updatesWallMs": 72.55929100000003,
+          "updateWallPerUpdateMs": 0.6046607583333335,
+          "mountActualMs": 2.8678659999998217,
+          "updateActualAvgMs": 0.17839154143644198,
+          "updateActualP95Ms": 0.26458500000012464,
           "profilerCommitCount": 182
         },
         {
-          "mountWallMs": 3.3629580000000487,
-          "updatesWallMs": 68.82770799999992,
-          "updateWallPerUpdateMs": 0.5735642333333326,
-          "mountActualMs": 2.8608289999998533,
-          "updateActualAvgMs": 0.16513990055248287,
-          "updateActualP95Ms": 0.25329199999998764,
+          "mountWallMs": 3.2646670000000313,
+          "updatesWallMs": 69.035708,
+          "updateWallPerUpdateMs": 0.5752975666666666,
+          "mountActualMs": 2.7599970000003395,
+          "updateActualAvgMs": 0.17067985082871112,
+          "updateActualP95Ms": 0.27758199999959743,
           "profilerCommitCount": 182
         },
         {
-          "mountWallMs": 3.3522500000000264,
-          "updatesWallMs": 110.85158399999989,
-          "updateWallPerUpdateMs": 0.9237631999999991,
-          "mountActualMs": 2.847619000000236,
-          "updateActualAvgMs": 0.31805495580107424,
-          "updateActualP95Ms": 0.9046670000018366,
+          "mountWallMs": 3.1599579999999605,
+          "updatesWallMs": 63.44904200000008,
+          "updateWallPerUpdateMs": 0.5287420166666673,
+          "mountActualMs": 2.683689000000527,
+          "updateActualAvgMs": 0.15223053591161403,
+          "updateActualP95Ms": 0.7097069999992982,
           "profilerCommitCount": 182
         },
         {
-          "mountWallMs": 5.28383400000007,
-          "updatesWallMs": 81.12099999999987,
-          "updateWallPerUpdateMs": 0.6760083333333322,
-          "mountActualMs": 4.723037000000204,
-          "updateActualAvgMs": 0.21670608839768316,
-          "updateActualP95Ms": 0.8614500000019234,
+          "mountWallMs": 3.13149999999996,
+          "updatesWallMs": 119.26900000000012,
+          "updateWallPerUpdateMs": 0.9939083333333343,
+          "mountActualMs": 2.6470340000010992,
+          "updateActualAvgMs": 0.36245292817678476,
+          "updateActualP95Ms": 0.9334079999994174,
           "profilerCommitCount": 182
         },
         {
-          "mountWallMs": 3.2621670000000904,
-          "updatesWallMs": 62.79533300000003,
-          "updateWallPerUpdateMs": 0.5232944416666669,
-          "mountActualMs": 2.7894929999990836,
-          "updateActualAvgMs": 0.1458447513812038,
-          "updateActualP95Ms": 0.20946300000264273,
+          "mountWallMs": 5.286458000000039,
+          "updatesWallMs": 71.9078750000001,
+          "updateWallPerUpdateMs": 0.5992322916666676,
+          "mountActualMs": 4.718714000001228,
+          "updateActualAvgMs": 0.18965356353596463,
+          "updateActualP95Ms": 0.8480070000005071,
           "profilerCommitCount": 182
         },
         {
-          "mountWallMs": 3.2284579999998186,
-          "updatesWallMs": 64.675209,
-          "updateWallPerUpdateMs": 0.538960075,
-          "mountActualMs": 2.7271660000001248,
-          "updateActualAvgMs": 0.14989974033155504,
-          "updateActualP95Ms": 0.22641600000019935,
+          "mountWallMs": 3.08070900000007,
+          "updatesWallMs": 69.30824999999982,
+          "updateWallPerUpdateMs": 0.5775687499999985,
+          "mountActualMs": 2.600999999997839,
+          "updateActualAvgMs": 0.1682384033148718,
+          "updateActualP95Ms": 0.6900740000005499,
           "profilerCommitCount": 182
         },
         {
-          "mountWallMs": 3.2516249999998763,
-          "updatesWallMs": 63.77879199999984,
-          "updateWallPerUpdateMs": 0.5314899333333319,
-          "mountActualMs": 2.7375150000000303,
-          "updateActualAvgMs": 0.15555031491697224,
-          "updateActualP95Ms": 0.22761999999806903,
+          "mountWallMs": 3.076000000000022,
+          "updatesWallMs": 63.81662499999993,
+          "updateWallPerUpdateMs": 0.5318052083333328,
+          "mountActualMs": 2.5798020000006545,
+          "updateActualAvgMs": 0.1510896353590211,
+          "updateActualP95Ms": 0.23087500000042382,
           "profilerCommitCount": 182
         },
         {
-          "mountWallMs": 2.936332999999877,
-          "updatesWallMs": 62.878958999999895,
-          "updateWallPerUpdateMs": 0.5239913249999991,
-          "mountActualMs": 2.5162850000017443,
-          "updateActualAvgMs": 0.14134409392263025,
-          "updateActualP95Ms": 0.2227109999989807,
+          "mountWallMs": 2.9717500000001564,
+          "updatesWallMs": 64.16358300000002,
+          "updateWallPerUpdateMs": 0.5346965250000001,
+          "mountActualMs": 2.540576000001238,
+          "updateActualAvgMs": 0.15192883977911703,
+          "updateActualP95Ms": 0.22734100000047874,
           "profilerCommitCount": 182
         },
         {
-          "mountWallMs": 1.3543749999998909,
-          "updatesWallMs": 18.987957999999935,
-          "updateWallPerUpdateMs": 0.1582329833333328,
-          "mountActualMs": 1.172074999999495,
-          "updateActualAvgMs": 0.05413916574582156,
-          "updateActualP95Ms": 0.119169000000511,
+          "mountWallMs": 1.3744580000000042,
+          "updatesWallMs": 19.28708299999994,
+          "updateWallPerUpdateMs": 0.16072569166666614,
+          "mountActualMs": 1.168623000000025,
+          "updateActualAvgMs": 0.059909895027585564,
+          "updateActualP95Ms": 0.11808099999916521,
           "profilerCommitCount": 182
         },
         {
-          "mountWallMs": 1.339083999999957,
-          "updatesWallMs": 18.939124999999876,
-          "updateWallPerUpdateMs": 0.15782604166666564,
-          "mountActualMs": 1.1637890000004063,
-          "updateActualAvgMs": 0.05936103867399014,
-          "updateActualP95Ms": 0.11900300000047537,
+          "mountWallMs": 1.3021659999999429,
+          "updatesWallMs": 19.10570800000005,
+          "updateWallPerUpdateMs": 0.15921423333333376,
+          "mountActualMs": 1.1230479999996987,
+          "updateActualAvgMs": 0.05906219337022716,
+          "updateActualP95Ms": 0.11741600000073049,
           "profilerCommitCount": 182
         },
         {
-          "mountWallMs": 1.362292000000025,
-          "updatesWallMs": 19.124042000000145,
-          "updateWallPerUpdateMs": 0.1593670166666679,
-          "mountActualMs": 1.1869980000008127,
-          "updateActualAvgMs": 0.05471944198895286,
-          "updateActualP95Ms": 0.11962300000050163,
+          "mountWallMs": 1.336416999999983,
+          "updatesWallMs": 19.455584000000044,
+          "updateWallPerUpdateMs": 0.16212986666666704,
+          "mountActualMs": 1.1457939999997961,
+          "updateActualAvgMs": 0.0596531270718756,
+          "updateActualP95Ms": 0.11816699999894809,
           "profilerCommitCount": 182
         },
         {
-          "mountWallMs": 1.3466249999999036,
-          "updatesWallMs": 20.204250000000002,
-          "updateWallPerUpdateMs": 0.16836875,
-          "mountActualMs": 1.1690869999993083,
-          "updateActualAvgMs": 0.06542736464097569,
-          "updateActualP95Ms": 0.1652930000007018,
+          "mountWallMs": 1.307790999999952,
+          "updatesWallMs": 20.64150000000018,
+          "updateWallPerUpdateMs": 0.17201250000000148,
+          "mountActualMs": 1.1259089999996377,
+          "updateActualAvgMs": 0.059283961325998474,
+          "updateActualP95Ms": 0.1623340000007829,
           "profilerCommitCount": 182
         },
         {
-          "mountWallMs": 1.3586250000000746,
-          "updatesWallMs": 20.4251670000001,
-          "updateWallPerUpdateMs": 0.17020972500000084,
-          "mountActualMs": 1.1760409999997137,
-          "updateActualAvgMs": 0.059105569060731035,
-          "updateActualP95Ms": 0.1633769999998549,
+          "mountWallMs": 1.3266250000001492,
+          "updatesWallMs": 20.163250000000062,
+          "updateWallPerUpdateMs": 0.16802708333333385,
+          "mountActualMs": 1.1485430000004726,
+          "updateActualAvgMs": 0.06413580662982524,
+          "updateActualP95Ms": 0.16291999999998552,
           "profilerCommitCount": 182
         },
         {
-          "mountWallMs": 1.4522910000000593,
-          "updatesWallMs": 19.797207999999955,
-          "updateWallPerUpdateMs": 0.16497673333333296,
-          "mountActualMs": 1.2372140000004492,
-          "updateActualAvgMs": 0.06385822099442516,
-          "updateActualP95Ms": 0.16154099999948812,
+          "mountWallMs": 1.3282500000000255,
+          "updatesWallMs": 20.070208000000093,
+          "updateWallPerUpdateMs": 0.16725173333333412,
+          "mountActualMs": 1.1570450000010624,
+          "updateActualAvgMs": 0.06390589502759027,
+          "updateActualP95Ms": 0.16133399999966969,
           "profilerCommitCount": 182
         }
       ],
       "summary": {
         "mountWallMs": {
-          "mean": 2.812974999999983,
-          "median": 3.2284579999998186,
-          "p95": 5.300958000000037,
-          "stdev": 1.3517204981492452
+          "mean": 2.8978138000000246,
+          "median": 3.076000000000022,
+          "p95": 8.100625000000036,
+          "stdev": 1.7914788901178986
         },
         "updatesWallMs": {
-          "mean": 53.955902866666634,
-          "median": 62.878958999999895,
-          "p95": 110.85158399999989,
-          "stdev": 30.89694482979437
+          "mean": 52.56251660000002,
+          "median": 63.81662499999993,
+          "p95": 119.26900000000012,
+          "stdev": 29.621473035618312
         },
         "updateWallPerUpdateMs": {
-          "mean": 0.44963252388888864,
-          "median": 0.5239913249999991,
-          "p95": 0.9237631999999991,
-          "stdev": 0.2574745402482864
+          "mean": 0.43802097166666687,
+          "median": 0.5318052083333328,
+          "p95": 0.9939083333333343,
+          "stdev": 0.2468456086301526
         },
         "mountActualMs": {
-          "mean": 2.4011146666667553,
-          "median": 2.7271660000001248,
-          "p95": 4.723037000000204,
-          "stdev": 1.1503230392728514
+          "mean": 2.3330922000002676,
+          "median": 2.5798020000006545,
+          "p95": 4.728743000000577,
+          "stdev": 1.176694235763516
         },
         "updateActualAvgMs": {
-          "mean": 0.14065815432778528,
-          "median": 0.1458447513812038,
-          "p95": 0.31805495580107424,
-          "stdev": 0.08099401855642512
+          "mean": 0.13843340736648793,
+          "median": 0.15192883977911703,
+          "p95": 0.36245292817678476,
+          "stdev": 0.07963607680537489
         },
         "updateActualP95Ms": {
-          "mean": 0.29964173333363153,
-          "median": 0.2227109999989807,
-          "p95": 0.9046670000018366,
-          "stdev": 0.24255932829952995
+          "mean": 0.35354966666663284,
+          "median": 0.23087500000042382,
+          "p95": 0.9334079999994174,
+          "stdev": 0.27654379196373785
         },
         "profilerCommitCount": {
           "mean": 182,
@@ -295,69 +295,69 @@
           "positionsTested": 17,
           "rounds": [
             {
-              "mountWallMs": 4.002749999999992,
-              "updatesWallMs": 76.64370800000006,
-              "updateWallPerUpdateMs": 0.6386975666666672,
-              "mountActualMs": 3.3314470000001393,
-              "updateActualAvgMs": 0.18328878453037079,
-              "updateActualP95Ms": 0.2971709999990253,
+              "mountWallMs": 8.100625000000036,
+              "updatesWallMs": 76.20504199999993,
+              "updateWallPerUpdateMs": 0.6350420166666662,
+              "mountActualMs": 4.728743000000577,
+              "updateActualAvgMs": 0.1858849337016895,
+              "updateActualP95Ms": 0.2814139999998133,
               "profilerCommitCount": 182
             },
             {
-              "mountWallMs": 5.300958000000037,
-              "updatesWallMs": 100.2885,
-              "updateWallPerUpdateMs": 0.8357375,
-              "mountActualMs": 4.378124999999727,
-              "updateActualAvgMs": 0.27743288397790966,
-              "updateActualP95Ms": 0.4438300000002755,
+              "mountWallMs": 3.4198330000000396,
+              "updatesWallMs": 72.55929100000003,
+              "updateWallPerUpdateMs": 0.6046607583333335,
+              "mountActualMs": 2.8678659999998217,
+              "updateActualAvgMs": 0.17839154143644198,
+              "updateActualP95Ms": 0.26458500000012464,
               "profilerCommitCount": 182
             },
             {
-              "mountWallMs": 3.3629580000000487,
-              "updatesWallMs": 68.82770799999992,
-              "updateWallPerUpdateMs": 0.5735642333333326,
-              "mountActualMs": 2.8608289999998533,
-              "updateActualAvgMs": 0.16513990055248287,
-              "updateActualP95Ms": 0.25329199999998764,
+              "mountWallMs": 3.2646670000000313,
+              "updatesWallMs": 69.035708,
+              "updateWallPerUpdateMs": 0.5752975666666666,
+              "mountActualMs": 2.7599970000003395,
+              "updateActualAvgMs": 0.17067985082871112,
+              "updateActualP95Ms": 0.27758199999959743,
               "profilerCommitCount": 182
             }
           ],
           "summary": {
             "mountWallMs": {
-              "mean": 4.222222000000026,
-              "median": 4.002749999999992,
-              "p95": 5.300958000000037,
-              "stdev": 0.8062617313205432
+              "mean": 4.9283750000000355,
+              "median": 3.4198330000000396,
+              "p95": 8.100625000000036,
+              "stdev": 2.244013765371327
             },
             "updatesWallMs": {
-              "mean": 81.91997199999999,
-              "median": 76.64370800000006,
-              "p95": 100.2885,
-              "stdev": 13.37471693569846
+              "mean": 72.60001366666665,
+              "median": 72.55929100000003,
+              "p95": 76.20504199999993,
+              "stdev": 2.927009993443149
             },
             "updateWallPerUpdateMs": {
-              "mean": 0.6826664333333333,
-              "median": 0.6386975666666672,
-              "p95": 0.8357375,
-              "stdev": 0.11145597446415384
+              "mean": 0.6050001138888887,
+              "median": 0.6046607583333335,
+              "p95": 0.6350420166666662,
+              "stdev": 0.024391749945359597
             },
             "mountActualMs": {
-              "mean": 3.5234669999999064,
-              "median": 3.3314470000001393,
-              "p95": 4.378124999999727,
-              "stdev": 0.6341401255263368
+              "mean": 3.4522020000002462,
+              "median": 2.8678659999998217,
+              "p95": 4.728743000000577,
+              "stdev": 0.903724376788117
             },
             "updateActualAvgMs": {
-              "mean": 0.20862052302025444,
-              "median": 0.18328878453037079,
-              "p95": 0.27743288397790966,
-              "stdev": 0.04921856873738937
+              "mean": 0.17831877532228088,
+              "median": 0.17839154143644198,
+              "p95": 0.1858849337016895,
+              "stdev": 0.0062076623337110615
             },
             "updateActualP95Ms": {
-              "mean": 0.33143099999976283,
-              "median": 0.2971709999990253,
-              "p95": 0.4438300000002755,
-              "stdev": 0.08147184814836483
+              "mean": 0.27452699999984514,
+              "median": 0.27758199999959743,
+              "p95": 0.2814139999998133,
+              "stdev": 0.007202017263528568
             },
             "profilerCommitCount": {
               "mean": 182,
@@ -373,69 +373,69 @@
           "positionsTested": 17,
           "rounds": [
             {
-              "mountWallMs": 3.3522500000000264,
-              "updatesWallMs": 110.85158399999989,
-              "updateWallPerUpdateMs": 0.9237631999999991,
-              "mountActualMs": 2.847619000000236,
-              "updateActualAvgMs": 0.31805495580107424,
-              "updateActualP95Ms": 0.9046670000018366,
+              "mountWallMs": 3.1599579999999605,
+              "updatesWallMs": 63.44904200000008,
+              "updateWallPerUpdateMs": 0.5287420166666673,
+              "mountActualMs": 2.683689000000527,
+              "updateActualAvgMs": 0.15223053591161403,
+              "updateActualP95Ms": 0.7097069999992982,
               "profilerCommitCount": 182
             },
             {
-              "mountWallMs": 5.28383400000007,
-              "updatesWallMs": 81.12099999999987,
-              "updateWallPerUpdateMs": 0.6760083333333322,
-              "mountActualMs": 4.723037000000204,
-              "updateActualAvgMs": 0.21670608839768316,
-              "updateActualP95Ms": 0.8614500000019234,
+              "mountWallMs": 3.13149999999996,
+              "updatesWallMs": 119.26900000000012,
+              "updateWallPerUpdateMs": 0.9939083333333343,
+              "mountActualMs": 2.6470340000010992,
+              "updateActualAvgMs": 0.36245292817678476,
+              "updateActualP95Ms": 0.9334079999994174,
               "profilerCommitCount": 182
             },
             {
-              "mountWallMs": 3.2621670000000904,
-              "updatesWallMs": 62.79533300000003,
-              "updateWallPerUpdateMs": 0.5232944416666669,
-              "mountActualMs": 2.7894929999990836,
-              "updateActualAvgMs": 0.1458447513812038,
-              "updateActualP95Ms": 0.20946300000264273,
+              "mountWallMs": 5.286458000000039,
+              "updatesWallMs": 71.9078750000001,
+              "updateWallPerUpdateMs": 0.5992322916666676,
+              "mountActualMs": 4.718714000001228,
+              "updateActualAvgMs": 0.18965356353596463,
+              "updateActualP95Ms": 0.8480070000005071,
               "profilerCommitCount": 182
             }
           ],
           "summary": {
             "mountWallMs": {
-              "mean": 3.9660836666667287,
-              "median": 3.3522500000000264,
-              "p95": 5.28383400000007,
-              "stdev": 0.9325156629506179
+              "mean": 3.8593053333333196,
+              "median": 3.1599579999999605,
+              "p95": 5.286458000000039,
+              "stdev": 1.0092162024467124
             },
             "updatesWallMs": {
-              "mean": 84.92263899999993,
-              "median": 81.12099999999987,
-              "p95": 110.85158399999989,
-              "stdev": 19.802191113754525
+              "mean": 84.87530566666676,
+              "median": 71.9078750000001,
+              "p95": 119.26900000000012,
+              "stdev": 24.563965767651705
             },
             "updateWallPerUpdateMs": {
-              "mean": 0.7076886583333328,
-              "median": 0.6760083333333322,
-              "p95": 0.9237631999999991,
-              "stdev": 0.16501825928128772
+              "mean": 0.7072942138888897,
+              "median": 0.5992322916666676,
+              "p95": 0.9939083333333343,
+              "stdev": 0.20469971473043086
             },
             "mountActualMs": {
-              "mean": 3.453382999999841,
-              "median": 2.847619000000236,
-              "p95": 4.723037000000204,
-              "stdev": 0.898094507928397
+              "mean": 3.3498123333342846,
+              "median": 2.683689000000527,
+              "p95": 4.718714000001228,
+              "stdev": 0.9680753162879049
             },
             "updateActualAvgMs": {
-              "mean": 0.22686859852665373,
-              "median": 0.21670608839768316,
-              "p95": 0.31805495580107424,
-              "stdev": 0.07067081474778898
+              "mean": 0.23477900920812114,
+              "median": 0.18965356353596463,
+              "p95": 0.36245292817678476,
+              "stdev": 0.09156270324302682
             },
             "updateActualP95Ms": {
-              "mean": 0.6585266666688009,
-              "median": 0.8614500000019234,
-              "p95": 0.9046670000018366,
-              "stdev": 0.31802574299574027
+              "mean": 0.8303739999997409,
+              "median": 0.8480070000005071,
+              "p95": 0.9334079999994174,
+              "stdev": 0.09217275941416964
             },
             "profilerCommitCount": {
               "mean": 182,
@@ -451,69 +451,69 @@
           "positionsTested": 17,
           "rounds": [
             {
-              "mountWallMs": 3.2284579999998186,
-              "updatesWallMs": 64.675209,
-              "updateWallPerUpdateMs": 0.538960075,
-              "mountActualMs": 2.7271660000001248,
-              "updateActualAvgMs": 0.14989974033155504,
-              "updateActualP95Ms": 0.22641600000019935,
+              "mountWallMs": 3.08070900000007,
+              "updatesWallMs": 69.30824999999982,
+              "updateWallPerUpdateMs": 0.5775687499999985,
+              "mountActualMs": 2.600999999997839,
+              "updateActualAvgMs": 0.1682384033148718,
+              "updateActualP95Ms": 0.6900740000005499,
               "profilerCommitCount": 182
             },
             {
-              "mountWallMs": 3.2516249999998763,
-              "updatesWallMs": 63.77879199999984,
-              "updateWallPerUpdateMs": 0.5314899333333319,
-              "mountActualMs": 2.7375150000000303,
-              "updateActualAvgMs": 0.15555031491697224,
-              "updateActualP95Ms": 0.22761999999806903,
+              "mountWallMs": 3.076000000000022,
+              "updatesWallMs": 63.81662499999993,
+              "updateWallPerUpdateMs": 0.5318052083333328,
+              "mountActualMs": 2.5798020000006545,
+              "updateActualAvgMs": 0.1510896353590211,
+              "updateActualP95Ms": 0.23087500000042382,
               "profilerCommitCount": 182
             },
             {
-              "mountWallMs": 2.936332999999877,
-              "updatesWallMs": 62.878958999999895,
-              "updateWallPerUpdateMs": 0.5239913249999991,
-              "mountActualMs": 2.5162850000017443,
-              "updateActualAvgMs": 0.14134409392263025,
-              "updateActualP95Ms": 0.2227109999989807,
+              "mountWallMs": 2.9717500000001564,
+              "updatesWallMs": 64.16358300000002,
+              "updateWallPerUpdateMs": 0.5346965250000001,
+              "mountActualMs": 2.540576000001238,
+              "updateActualAvgMs": 0.15192883977911703,
+              "updateActualP95Ms": 0.22734100000047874,
               "profilerCommitCount": 182
             }
           ],
           "summary": {
             "mountWallMs": {
-              "mean": 3.1388053333331905,
-              "median": 3.2284579999998186,
-              "p95": 3.2516249999998763,
-              "stdev": 0.14348161739709156
+              "mean": 3.0428196666667495,
+              "median": 3.076000000000022,
+              "p95": 3.08070900000007,
+              "stdev": 0.050290600913262686
             },
             "updatesWallMs": {
-              "mean": 63.77765333333324,
-              "median": 63.77879199999984,
-              "p95": 64.675209,
-              "stdev": 0.7333164337657713
+              "mean": 65.76281933333325,
+              "median": 64.16358300000002,
+              "p95": 69.30824999999982,
+              "stdev": 2.510996339111335
             },
             "updateWallPerUpdateMs": {
-              "mean": 0.5314804444444436,
-              "median": 0.5314899333333319,
-              "p95": 0.538960075,
-              "stdev": 0.006110970281381438
+              "mean": 0.5480234944444438,
+              "median": 0.5346965250000001,
+              "p95": 0.5775687499999985,
+              "stdev": 0.020924969492594488
             },
             "mountActualMs": {
-              "mean": 2.660322000000633,
-              "median": 2.7271660000001248,
-              "p95": 2.7375150000000303,
-              "stdev": 0.10193713251071121
+              "mean": 2.573792666666577,
+              "median": 2.5798020000006545,
+              "p95": 2.600999999997839,
+              "stdev": 0.0250313005287028
             },
             "updateActualAvgMs": {
-              "mean": 0.14893138305705253,
-              "median": 0.14989974033155504,
-              "p95": 0.15555031491697224,
-              "stdev": 0.0058399466660425505
+              "mean": 0.15708562615100333,
+              "median": 0.15192883977911703,
+              "p95": 0.1682384033148718,
+              "stdev": 0.007893642795096025
             },
             "updateActualP95Ms": {
-              "mean": 0.22558233333241637,
-              "median": 0.22641600000019935,
-              "p95": 0.22761999999806903,
-              "stdev": 0.002088990239723747
+              "mean": 0.38276333333381746,
+              "median": 0.23087500000042382,
+              "p95": 0.6900740000005499,
+              "stdev": 0.21730624576752433
             },
             "profilerCommitCount": {
               "mean": 182,
@@ -529,69 +529,69 @@
           "positionsTested": 10,
           "rounds": [
             {
-              "mountWallMs": 1.3543749999998909,
-              "updatesWallMs": 18.987957999999935,
-              "updateWallPerUpdateMs": 0.1582329833333328,
-              "mountActualMs": 1.172074999999495,
-              "updateActualAvgMs": 0.05413916574582156,
-              "updateActualP95Ms": 0.119169000000511,
+              "mountWallMs": 1.3744580000000042,
+              "updatesWallMs": 19.28708299999994,
+              "updateWallPerUpdateMs": 0.16072569166666614,
+              "mountActualMs": 1.168623000000025,
+              "updateActualAvgMs": 0.059909895027585564,
+              "updateActualP95Ms": 0.11808099999916521,
               "profilerCommitCount": 182
             },
             {
-              "mountWallMs": 1.339083999999957,
-              "updatesWallMs": 18.939124999999876,
-              "updateWallPerUpdateMs": 0.15782604166666564,
-              "mountActualMs": 1.1637890000004063,
-              "updateActualAvgMs": 0.05936103867399014,
-              "updateActualP95Ms": 0.11900300000047537,
+              "mountWallMs": 1.3021659999999429,
+              "updatesWallMs": 19.10570800000005,
+              "updateWallPerUpdateMs": 0.15921423333333376,
+              "mountActualMs": 1.1230479999996987,
+              "updateActualAvgMs": 0.05906219337022716,
+              "updateActualP95Ms": 0.11741600000073049,
               "profilerCommitCount": 182
             },
             {
-              "mountWallMs": 1.362292000000025,
-              "updatesWallMs": 19.124042000000145,
-              "updateWallPerUpdateMs": 0.1593670166666679,
-              "mountActualMs": 1.1869980000008127,
-              "updateActualAvgMs": 0.05471944198895286,
-              "updateActualP95Ms": 0.11962300000050163,
+              "mountWallMs": 1.336416999999983,
+              "updatesWallMs": 19.455584000000044,
+              "updateWallPerUpdateMs": 0.16212986666666704,
+              "mountActualMs": 1.1457939999997961,
+              "updateActualAvgMs": 0.0596531270718756,
+              "updateActualP95Ms": 0.11816699999894809,
               "profilerCommitCount": 182
             }
           ],
           "summary": {
             "mountWallMs": {
-              "mean": 1.3519169999999576,
-              "median": 1.3543749999998909,
-              "p95": 1.362292000000025,
-              "stdev": 0.009632726820602809
+              "mean": 1.33768033333331,
+              "median": 1.336416999999983,
+              "p95": 1.3744580000000042,
+              "stdev": 0.02952660184009822
             },
             "updatesWallMs": {
-              "mean": 19.017041666666653,
-              "median": 18.987957999999935,
-              "p95": 19.124042000000145,
-              "stdev": 0.07824307838337469
+              "mean": 19.28279166666668,
+              "median": 19.28708299999994,
+              "p95": 19.455584000000044,
+              "stdev": 0.1428685071439981
             },
             "updateWallPerUpdateMs": {
-              "mean": 0.15847534722222212,
-              "median": 0.1582329833333328,
-              "p95": 0.1593670166666679,
-              "stdev": 0.0006520256531947928
+              "mean": 0.16068993055555567,
+              "median": 0.16072569166666614,
+              "p95": 0.16212986666666704,
+              "stdev": 0.001190570892866646
             },
             "mountActualMs": {
-              "mean": 1.1742873333335713,
-              "median": 1.172074999999495,
-              "p95": 1.1869980000008127,
-              "stdev": 0.009603306178621148
+              "mean": 1.1458216666665066,
+              "median": 1.1457939999997961,
+              "p95": 1.168623000000025,
+              "stdev": 0.01860592612298156
             },
             "updateActualAvgMs": {
-              "mean": 0.05607321546958819,
-              "median": 0.05471944198895286,
-              "p95": 0.05936103867399014,
-              "stdev": 0.002336880569924872
+              "mean": 0.059541738489896114,
+              "median": 0.0596531270718756,
+              "p95": 0.059909895027585564,
+              "stdev": 0.00035492260857694754
             },
             "updateActualP95Ms": {
-              "mean": 0.119265000000496,
-              "median": 0.119169000000511,
-              "p95": 0.11962300000050163,
-              "stdev": 0.00026205851764568675
+              "mean": 0.11788799999961459,
+              "median": 0.11808099999916521,
+              "p95": 0.11816699999894809,
+              "stdev": 0.00033559598646846215
             },
             "profilerCommitCount": {
               "mean": 182,
@@ -607,69 +607,69 @@
           "positionsTested": 8,
           "rounds": [
             {
-              "mountWallMs": 1.3466249999999036,
-              "updatesWallMs": 20.204250000000002,
-              "updateWallPerUpdateMs": 0.16836875,
-              "mountActualMs": 1.1690869999993083,
-              "updateActualAvgMs": 0.06542736464097569,
-              "updateActualP95Ms": 0.1652930000007018,
+              "mountWallMs": 1.307790999999952,
+              "updatesWallMs": 20.64150000000018,
+              "updateWallPerUpdateMs": 0.17201250000000148,
+              "mountActualMs": 1.1259089999996377,
+              "updateActualAvgMs": 0.059283961325998474,
+              "updateActualP95Ms": 0.1623340000007829,
               "profilerCommitCount": 182
             },
             {
-              "mountWallMs": 1.3586250000000746,
-              "updatesWallMs": 20.4251670000001,
-              "updateWallPerUpdateMs": 0.17020972500000084,
-              "mountActualMs": 1.1760409999997137,
-              "updateActualAvgMs": 0.059105569060731035,
-              "updateActualP95Ms": 0.1633769999998549,
+              "mountWallMs": 1.3266250000001492,
+              "updatesWallMs": 20.163250000000062,
+              "updateWallPerUpdateMs": 0.16802708333333385,
+              "mountActualMs": 1.1485430000004726,
+              "updateActualAvgMs": 0.06413580662982524,
+              "updateActualP95Ms": 0.16291999999998552,
               "profilerCommitCount": 182
             },
             {
-              "mountWallMs": 1.4522910000000593,
-              "updatesWallMs": 19.797207999999955,
-              "updateWallPerUpdateMs": 0.16497673333333296,
-              "mountActualMs": 1.2372140000004492,
-              "updateActualAvgMs": 0.06385822099442516,
-              "updateActualP95Ms": 0.16154099999948812,
+              "mountWallMs": 1.3282500000000255,
+              "updatesWallMs": 20.070208000000093,
+              "updateWallPerUpdateMs": 0.16725173333333412,
+              "mountActualMs": 1.1570450000010624,
+              "updateActualAvgMs": 0.06390589502759027,
+              "updateActualP95Ms": 0.16133399999966969,
               "profilerCommitCount": 182
             }
           ],
           "summary": {
             "mountWallMs": {
-              "mean": 1.3858470000000125,
-              "median": 1.3586250000000746,
-              "p95": 1.4522910000000593,
-              "stdev": 0.04723772399262896
+              "mean": 1.3208886666667088,
+              "median": 1.3266250000001492,
+              "p95": 1.3282500000000255,
+              "stdev": 0.009285178524042337
             },
             "updatesWallMs": {
-              "mean": 20.142208333333354,
-              "median": 20.204250000000002,
-              "p95": 20.4251670000001,
-              "stdev": 0.26008973159581883
+              "mean": 20.291652666666778,
+              "median": 20.163250000000062,
+              "p95": 20.64150000000018,
+              "stdev": 0.2502786059858987
             },
             "updateWallPerUpdateMs": {
-              "mean": 0.16785173611111126,
-              "median": 0.16836875,
-              "p95": 0.17020972500000084,
-              "stdev": 0.0021674144299651545
+              "mean": 0.1690971055555565,
+              "median": 0.16802708333333385,
+              "p95": 0.17201250000000148,
+              "stdev": 0.0020856550498824836
             },
             "mountActualMs": {
-              "mean": 1.1941139999998238,
-              "median": 1.1760409999997137,
-              "p95": 1.2372140000004492,
-              "stdev": 0.030608245392833255
+              "mean": 1.1438323333337241,
+              "median": 1.1485430000004726,
+              "p95": 1.1570450000010624,
+              "stdev": 0.01314040611640524
             },
             "updateActualAvgMs": {
-              "mean": 0.0627970515653773,
-              "median": 0.06385822099442516,
-              "p95": 0.06542736464097569,
-              "stdev": 0.0026877295570127023
+              "mean": 0.062441887661137986,
+              "median": 0.06390589502759027,
+              "p95": 0.06413580662982524,
+              "stdev": 0.0022349629213682487
             },
             "updateActualP95Ms": {
-              "mean": 0.1634036666666816,
-              "median": 0.1633769999998549,
-              "p95": 0.1652930000007018,
-              "stdev": 0.001531863643978925
+              "mean": 0.16219600000014603,
+              "median": 0.1623340000007829,
+              "p95": 0.16291999999998552,
+              "stdev": 0.0006547936063535792
             },
             "profilerCommitCount": {
               "mean": 182,
@@ -684,177 +684,177 @@
     "reactChessboard": {
       "rounds": [
         {
-          "mountWallMs": 12.522874999999885,
-          "updatesWallMs": 303.64725,
-          "updateWallPerUpdateMs": 2.53039375,
-          "mountActualMs": 8.150371000002451,
-          "updateActualAvgMs": 1.5476190819674218,
-          "updateActualP95Ms": 5.540162000009786,
+          "mountWallMs": 21.69058300000006,
+          "updatesWallMs": 315.931875,
+          "updateWallPerUpdateMs": 2.6327656249999998,
+          "mountActualMs": 15.438433999995596,
+          "updateActualAvgMs": 1.6542907377045755,
+          "updateActualP95Ms": 5.601476000003686,
           "profilerCommitCount": 123
         },
         {
-          "mountWallMs": 14.07991600000014,
-          "updatesWallMs": 240.93837500000018,
-          "updateWallPerUpdateMs": 2.0078197916666682,
-          "mountActualMs": 9.879392999998345,
-          "updateActualAvgMs": 1.0228911557381244,
-          "updateActualP95Ms": 1.1341319999960433,
+          "mountWallMs": 12.923833000000286,
+          "updatesWallMs": 237.2279999999996,
+          "updateWallPerUpdateMs": 1.9768999999999968,
+          "mountActualMs": 8.788055999994867,
+          "updateActualAvgMs": 1.013872934427317,
+          "updateActualP95Ms": 1.1243139999824052,
           "profilerCommitCount": 123
         },
         {
-          "mountWallMs": 11.35858300000018,
-          "updatesWallMs": 240.06224999999995,
-          "updateWallPerUpdateMs": 2.0005187499999995,
-          "mountActualMs": 7.127741999996488,
-          "updateActualAvgMs": 1.046820786885504,
-          "updateActualP95Ms": 1.8061280000029,
+          "mountWallMs": 12.544458000000304,
+          "updatesWallMs": 234.780667,
+          "updateWallPerUpdateMs": 1.9565055583333333,
+          "mountActualMs": 8.363031999994746,
+          "updateActualAvgMs": 1.0049673770485406,
+          "updateActualP95Ms": 1.0953540000041357,
           "profilerCommitCount": 123
         },
         {
-          "mountWallMs": 11.125833000000057,
-          "updatesWallMs": 235.058,
-          "updateWallPerUpdateMs": 1.9588166666666667,
-          "mountActualMs": 7.090537999995377,
-          "updateActualAvgMs": 0.9956265245898148,
-          "updateActualP95Ms": 1.4504089999913958,
+          "mountWallMs": 16.84866699999975,
+          "updatesWallMs": 328.54770800000006,
+          "updateWallPerUpdateMs": 2.737897566666667,
+          "mountActualMs": 6.839290000006258,
+          "updateActualAvgMs": 1.6314617540986427,
+          "updateActualP95Ms": 5.779270999999881,
           "profilerCommitCount": 123
         },
         {
-          "mountWallMs": 16.406957999999577,
-          "updatesWallMs": 246.931916,
-          "updateWallPerUpdateMs": 2.0577659666666666,
-          "mountActualMs": 10.389037999997981,
-          "updateActualAvgMs": 1.0066607540979893,
-          "updateActualP95Ms": 1.319659999997839,
+          "mountWallMs": 13.121875000000273,
+          "updatesWallMs": 265.1645830000002,
+          "updateWallPerUpdateMs": 2.209704858333335,
+          "mountActualMs": 7.3653390000044965,
+          "updateActualAvgMs": 1.1000874999993722,
+          "updateActualP95Ms": 1.6453299999980118,
           "profilerCommitCount": 123
         },
         {
-          "mountWallMs": 11.349499999999807,
-          "updatesWallMs": 232.98649999999998,
-          "updateWallPerUpdateMs": 1.9415541666666665,
-          "mountActualMs": 7.199746000004325,
-          "updateActualAvgMs": 0.9876275409839175,
-          "updateActualP95Ms": 1.4912420000005113,
+          "mountWallMs": 11.62762500000008,
+          "updatesWallMs": 261.66254200000003,
+          "updateWallPerUpdateMs": 2.1805211833333336,
+          "mountActualMs": 7.460957999996026,
+          "updateActualAvgMs": 1.091285737704352,
+          "updateActualP95Ms": 1.852873000001182,
           "profilerCommitCount": 123
         },
         {
-          "mountWallMs": 11.937750000000051,
-          "updatesWallMs": 233.11816700000054,
-          "updateWallPerUpdateMs": 1.9426513916666712,
-          "mountActualMs": 8.08557799999744,
-          "updateActualAvgMs": 0.9813233442607986,
-          "updateActualP95Ms": 1.4577219999928275,
+          "mountWallMs": 12.255750000000262,
+          "updatesWallMs": 251.62504100000024,
+          "updateWallPerUpdateMs": 2.0968753416666686,
+          "mountActualMs": 8.336742999999842,
+          "updateActualAvgMs": 1.0433958770506073,
+          "updateActualP95Ms": 1.793459000018629,
           "profilerCommitCount": 123
         },
         {
-          "mountWallMs": 12.051625000000058,
-          "updatesWallMs": 250.11641700000018,
-          "updateWallPerUpdateMs": 2.0843034750000013,
-          "mountActualMs": 6.959893999997803,
-          "updateActualAvgMs": 1.045817549179767,
-          "updateActualP95Ms": 1.5943379999889657,
+          "mountWallMs": 12.23950000000059,
+          "updatesWallMs": 299.685958,
+          "updateWallPerUpdateMs": 2.4973829833333334,
+          "mountActualMs": 7.009675999996944,
+          "updateActualAvgMs": 1.2266616885238095,
+          "updateActualP95Ms": 2.0199129999955403,
           "profilerCommitCount": 123
         },
         {
-          "mountWallMs": 12.347791000000143,
-          "updatesWallMs": 239.03650000000016,
-          "updateWallPerUpdateMs": 1.9919708333333346,
-          "mountActualMs": 8.084975999973722,
-          "updateActualAvgMs": 0.9950587540989978,
-          "updateActualP95Ms": 1.267560999995112,
+          "mountWallMs": 11.933667000000241,
+          "updatesWallMs": 300.32745799999975,
+          "updateWallPerUpdateMs": 2.502728816666665,
+          "mountActualMs": 7.826608000008491,
+          "updateActualAvgMs": 1.5166033278689581,
+          "updateActualP95Ms": 5.570612999988043,
           "profilerCommitCount": 123
         },
         {
-          "mountWallMs": 10.85516699999971,
-          "updatesWallMs": 238.55000000000018,
-          "updateWallPerUpdateMs": 1.987916666666668,
-          "mountActualMs": 6.883982000027572,
-          "updateActualAvgMs": 1.0086294016379471,
-          "updateActualP95Ms": 1.4647269999859418,
+          "mountWallMs": 10.661208999999872,
+          "updatesWallMs": 234.92604200000005,
+          "updateWallPerUpdateMs": 1.957717016666667,
+          "mountActualMs": 6.797867999988739,
+          "updateActualAvgMs": 1.0016084672116434,
+          "updateActualP95Ms": 1.732295999994676,
           "profilerCommitCount": 123
         },
         {
-          "mountWallMs": 11.89954200000011,
-          "updatesWallMs": 232.8119999999999,
-          "updateWallPerUpdateMs": 1.940099999999999,
-          "mountActualMs": 8.102044999975988,
-          "updateActualAvgMs": 0.9754187540980623,
-          "updateActualP95Ms": 1.0984210000005987,
+          "mountWallMs": 11.649167000000489,
+          "updatesWallMs": 257.31487500000003,
+          "updateWallPerUpdateMs": 2.1442906250000004,
+          "mountActualMs": 7.881489999997939,
+          "updateActualAvgMs": 1.0644527049190535,
+          "updateActualP95Ms": 1.879979999996067,
           "profilerCommitCount": 123
         },
         {
-          "mountWallMs": 11.80620799999997,
-          "updatesWallMs": 308.0852080000004,
-          "updateWallPerUpdateMs": 2.567376733333337,
-          "mountActualMs": 7.493717000007564,
-          "updateActualAvgMs": 1.562328581968299,
-          "updateActualP95Ms": 5.655143999993015,
+          "mountWallMs": 11.008832999999868,
+          "updatesWallMs": 301.70208300000013,
+          "updateWallPerUpdateMs": 2.514184025000001,
+          "mountActualMs": 7.0662680000268665,
+          "updateActualAvgMs": 1.5055426639362581,
+          "updateActualP95Ms": 5.636181000009856,
           "profilerCommitCount": 123
         },
         {
-          "mountWallMs": 10.775834000000032,
-          "updatesWallMs": 238.62595899999997,
-          "updateWallPerUpdateMs": 1.988549658333333,
-          "mountActualMs": 6.737240000004931,
-          "updateActualAvgMs": 1.0079617213115897,
-          "updateActualP95Ms": 1.455949000007422,
+          "mountWallMs": 12.265707999999904,
+          "updatesWallMs": 245.18116700000064,
+          "updateWallPerUpdateMs": 2.043176391666672,
+          "mountActualMs": 8.181046000020615,
+          "updateActualAvgMs": 1.040785680327242,
+          "updateActualP95Ms": 1.7114050000018324,
           "profilerCommitCount": 123
         },
         {
-          "mountWallMs": 10.682749999999942,
-          "updatesWallMs": 231.0146249999998,
-          "updateWallPerUpdateMs": 1.9251218749999983,
-          "mountActualMs": 6.73358699999244,
-          "updateActualAvgMs": 0.9945673524581908,
-          "updateActualP95Ms": 1.8082639999856838,
+          "mountWallMs": 10.730458999999428,
+          "updatesWallMs": 315.6314169999996,
+          "updateWallPerUpdateMs": 2.63026180833333,
+          "mountActualMs": 6.676951000000372,
+          "updateActualAvgMs": 1.5643722295082148,
+          "updateActualP95Ms": 5.54169399998591,
           "profilerCommitCount": 123
         },
         {
-          "mountWallMs": 12.122957999999926,
-          "updatesWallMs": 299.1876659999998,
-          "updateWallPerUpdateMs": 2.4932305499999985,
-          "mountActualMs": 8.145452000005207,
-          "updateActualAvgMs": 1.488927508196963,
-          "updateActualP95Ms": 5.666324000012537,
+          "mountWallMs": 10.671957999999904,
+          "updatesWallMs": 235.96487499999967,
+          "updateWallPerUpdateMs": 1.9663739583333306,
+          "mountActualMs": 6.693209000000024,
+          "updateActualAvgMs": 0.9992424918042221,
+          "updateActualP95Ms": 1.688664999989669,
           "profilerCommitCount": 123
         }
       ],
       "summary": {
         "mountWallMs": {
-          "mean": 12.088219333333306,
-          "median": 11.89954200000011,
-          "p95": 16.406957999999577,
-          "stdev": 1.4197971452325355
+          "mean": 12.811552800000088,
+          "median": 12.23950000000059,
+          "p95": 21.69058300000006,
+          "stdev": 2.78754283809739
         },
         "updatesWallMs": {
-          "mean": 251.34472220000006,
-          "median": 239.03650000000016,
-          "p95": 308.0852080000004,
-          "stdev": 26.669308247644274
+          "mean": 272.3782860666667,
+          "median": 261.66254200000003,
+          "p95": 328.54770800000006,
+          "stdev": 32.915431834640295
         },
         "updateWallPerUpdateMs": {
-          "mean": 2.094539351666667,
-          "median": 1.9919708333333346,
-          "p95": 2.567376733333337,
-          "stdev": 0.22224423539703567
+          "mean": 2.2698190505555558,
+          "median": 2.1805211833333336,
+          "p95": 2.737897566666667,
+          "stdev": 0.2742952652886691
         },
         "mountActualMs": {
-          "mean": 7.804219933331842,
-          "median": 7.493717000007564,
-          "p95": 10.389037999997981,
-          "stdev": 1.056527771372573
+          "mean": 8.04833120000212,
+          "median": 7.460957999996026,
+          "p95": 15.438433999995596,
+          "stdev": 2.082224092295299
         },
         "updateActualAvgMs": {
-          "mean": 1.1111519207648926,
-          "median": 1.0079617213115897,
-          "p95": 1.562328581968299,
-          "stdev": 0.21229002313045497
+          "mean": 1.2305754114755203,
+          "median": 1.091285737704352,
+          "p95": 1.6542907377045755,
+          "stdev": 0.2513935349630963
         },
         "updateActualP95Ms": {
-          "mean": 2.2806788666640387,
-          "median": 1.4647269999859418,
-          "p95": 5.666324000012537,
-          "stdev": 1.6810972249657048
+          "mean": 2.978188266664635,
+          "median": 1.852873000001182,
+          "p95": 5.779270999999881,
+          "stdev": 1.8878101999225165
         },
         "profilerCommitCount": {
           "mean": 123,
@@ -870,69 +870,69 @@
           "positionsTested": 17,
           "rounds": [
             {
-              "mountWallMs": 12.522874999999885,
-              "updatesWallMs": 303.64725,
-              "updateWallPerUpdateMs": 2.53039375,
-              "mountActualMs": 8.150371000002451,
-              "updateActualAvgMs": 1.5476190819674218,
-              "updateActualP95Ms": 5.540162000009786,
+              "mountWallMs": 21.69058300000006,
+              "updatesWallMs": 315.931875,
+              "updateWallPerUpdateMs": 2.6327656249999998,
+              "mountActualMs": 15.438433999995596,
+              "updateActualAvgMs": 1.6542907377045755,
+              "updateActualP95Ms": 5.601476000003686,
               "profilerCommitCount": 123
             },
             {
-              "mountWallMs": 14.07991600000014,
-              "updatesWallMs": 240.93837500000018,
-              "updateWallPerUpdateMs": 2.0078197916666682,
-              "mountActualMs": 9.879392999998345,
-              "updateActualAvgMs": 1.0228911557381244,
-              "updateActualP95Ms": 1.1341319999960433,
+              "mountWallMs": 12.923833000000286,
+              "updatesWallMs": 237.2279999999996,
+              "updateWallPerUpdateMs": 1.9768999999999968,
+              "mountActualMs": 8.788055999994867,
+              "updateActualAvgMs": 1.013872934427317,
+              "updateActualP95Ms": 1.1243139999824052,
               "profilerCommitCount": 123
             },
             {
-              "mountWallMs": 11.35858300000018,
-              "updatesWallMs": 240.06224999999995,
-              "updateWallPerUpdateMs": 2.0005187499999995,
-              "mountActualMs": 7.127741999996488,
-              "updateActualAvgMs": 1.046820786885504,
-              "updateActualP95Ms": 1.8061280000029,
+              "mountWallMs": 12.544458000000304,
+              "updatesWallMs": 234.780667,
+              "updateWallPerUpdateMs": 1.9565055583333333,
+              "mountActualMs": 8.363031999994746,
+              "updateActualAvgMs": 1.0049673770485406,
+              "updateActualP95Ms": 1.0953540000041357,
               "profilerCommitCount": 123
             }
           ],
           "summary": {
             "mountWallMs": {
-              "mean": 12.653791333333402,
-              "median": 12.522874999999885,
-              "p95": 14.07991600000014,
-              "stdev": 1.11482962494195
+              "mean": 15.719624666666883,
+              "median": 12.923833000000286,
+              "p95": 21.69058300000006,
+              "stdev": 4.224944884173594
             },
             "updatesWallMs": {
-              "mean": 261.5492916666667,
-              "median": 240.93837500000018,
-              "p95": 303.64725,
-              "stdev": 29.769900577935037
+              "mean": 262.6468473333332,
+              "median": 237.2279999999996,
+              "p95": 315.931875,
+              "stdev": 37.69144898409811
             },
             "updateWallPerUpdateMs": {
-              "mean": 2.1795774305555558,
-              "median": 2.0078197916666682,
-              "p95": 2.53039375,
-              "stdev": 0.24808250481612534
+              "mean": 2.1887237277777767,
+              "median": 1.9768999999999968,
+              "p95": 2.6327656249999998,
+              "stdev": 0.31409540820081755
             },
             "mountActualMs": {
-              "mean": 8.385835333332428,
-              "median": 8.150371000002451,
-              "p95": 9.879392999998345,
-              "stdev": 1.135628576503105
+              "mean": 10.86317399999507,
+              "median": 8.788055999994867,
+              "p95": 15.438433999995596,
+              "stdev": 3.2398471569759413
             },
             "updateActualAvgMs": {
-              "mean": 1.2057770081970167,
-              "median": 1.046820786885504,
-              "p95": 1.5476190819674218,
-              "stdev": 0.24191618295248557
+              "mean": 1.2243770163934775,
+              "median": 1.013872934427317,
+              "p95": 1.6542907377045755,
+              "stdev": 0.30401664764364894
             },
             "updateActualP95Ms": {
-              "mean": 2.826807333336243,
-              "median": 1.8061280000029,
-              "p95": 5.540162000009786,
-              "stdev": 1.9381459897499336
+              "mean": 2.6070479999967424,
+              "median": 1.1243139999824052,
+              "p95": 5.601476000003686,
+              "stdev": 2.117413352153813
             },
             "profilerCommitCount": {
               "mean": 123,
@@ -948,69 +948,69 @@
           "positionsTested": 17,
           "rounds": [
             {
-              "mountWallMs": 11.125833000000057,
-              "updatesWallMs": 235.058,
-              "updateWallPerUpdateMs": 1.9588166666666667,
-              "mountActualMs": 7.090537999995377,
-              "updateActualAvgMs": 0.9956265245898148,
-              "updateActualP95Ms": 1.4504089999913958,
+              "mountWallMs": 16.84866699999975,
+              "updatesWallMs": 328.54770800000006,
+              "updateWallPerUpdateMs": 2.737897566666667,
+              "mountActualMs": 6.839290000006258,
+              "updateActualAvgMs": 1.6314617540986427,
+              "updateActualP95Ms": 5.779270999999881,
               "profilerCommitCount": 123
             },
             {
-              "mountWallMs": 16.406957999999577,
-              "updatesWallMs": 246.931916,
-              "updateWallPerUpdateMs": 2.0577659666666666,
-              "mountActualMs": 10.389037999997981,
-              "updateActualAvgMs": 1.0066607540979893,
-              "updateActualP95Ms": 1.319659999997839,
+              "mountWallMs": 13.121875000000273,
+              "updatesWallMs": 265.1645830000002,
+              "updateWallPerUpdateMs": 2.209704858333335,
+              "mountActualMs": 7.3653390000044965,
+              "updateActualAvgMs": 1.1000874999993722,
+              "updateActualP95Ms": 1.6453299999980118,
               "profilerCommitCount": 123
             },
             {
-              "mountWallMs": 11.349499999999807,
-              "updatesWallMs": 232.98649999999998,
-              "updateWallPerUpdateMs": 1.9415541666666665,
-              "mountActualMs": 7.199746000004325,
-              "updateActualAvgMs": 0.9876275409839175,
-              "updateActualP95Ms": 1.4912420000005113,
+              "mountWallMs": 11.62762500000008,
+              "updatesWallMs": 261.66254200000003,
+              "updateWallPerUpdateMs": 2.1805211833333336,
+              "mountActualMs": 7.460957999996026,
+              "updateActualAvgMs": 1.091285737704352,
+              "updateActualP95Ms": 1.852873000001182,
               "profilerCommitCount": 123
             }
           ],
           "summary": {
             "mountWallMs": {
-              "mean": 12.96076366666648,
-              "median": 11.349499999999807,
-              "p95": 16.406957999999577,
-              "stdev": 2.438537576642345
+              "mean": 13.866055666666702,
+              "median": 13.121875000000273,
+              "p95": 16.84866699999975,
+              "stdev": 2.1954761882744567
             },
             "updatesWallMs": {
-              "mean": 238.325472,
-              "median": 235.058,
-              "p95": 246.931916,
-              "stdev": 6.1441536876585445
+              "mean": 285.1249443333334,
+              "median": 265.1645830000002,
+              "p95": 328.54770800000006,
+              "stdev": 30.7377984044597
             },
             "updateWallPerUpdateMs": {
-              "mean": 1.9860455999999997,
-              "median": 1.9588166666666667,
-              "p95": 2.0577659666666666,
-              "stdev": 0.05120128073048782
+              "mean": 2.376041202777779,
+              "median": 2.209704858333335,
+              "p95": 2.737897566666667,
+              "stdev": 0.2561483200371642
             },
             "mountActualMs": {
-              "mean": 8.226440666665894,
-              "median": 7.199746000004325,
-              "p95": 10.389037999997981,
-              "stdev": 1.5298370319346173
+              "mean": 7.221862333335594,
+              "median": 7.3653390000044965,
+              "p95": 7.460957999996026,
+              "stdev": 0.27332147246009797
             },
             "updateActualAvgMs": {
-              "mean": 0.9966382732239073,
-              "median": 0.9956265245898148,
-              "p95": 1.0066607540979893,
-              "stdev": 0.007803141539805598
+              "mean": 1.274278330600789,
+              "median": 1.1000874999993722,
+              "p95": 1.6314617540986427,
+              "stdev": 0.2525923808182
             },
             "updateActualP95Ms": {
-              "mean": 1.420436999996582,
-              "median": 1.4504089999913958,
-              "p95": 1.4912420000005113,
-              "stdev": 0.07318395210698453
+              "mean": 3.0924913333330246,
+              "median": 1.852873000001182,
+              "p95": 5.779270999999881,
+              "stdev": 1.9017285570630076
             },
             "profilerCommitCount": {
               "mean": 123,
@@ -1026,69 +1026,69 @@
           "positionsTested": 17,
           "rounds": [
             {
-              "mountWallMs": 11.937750000000051,
-              "updatesWallMs": 233.11816700000054,
-              "updateWallPerUpdateMs": 1.9426513916666712,
-              "mountActualMs": 8.08557799999744,
-              "updateActualAvgMs": 0.9813233442607986,
-              "updateActualP95Ms": 1.4577219999928275,
+              "mountWallMs": 12.255750000000262,
+              "updatesWallMs": 251.62504100000024,
+              "updateWallPerUpdateMs": 2.0968753416666686,
+              "mountActualMs": 8.336742999999842,
+              "updateActualAvgMs": 1.0433958770506073,
+              "updateActualP95Ms": 1.793459000018629,
               "profilerCommitCount": 123
             },
             {
-              "mountWallMs": 12.051625000000058,
-              "updatesWallMs": 250.11641700000018,
-              "updateWallPerUpdateMs": 2.0843034750000013,
-              "mountActualMs": 6.959893999997803,
-              "updateActualAvgMs": 1.045817549179767,
-              "updateActualP95Ms": 1.5943379999889657,
+              "mountWallMs": 12.23950000000059,
+              "updatesWallMs": 299.685958,
+              "updateWallPerUpdateMs": 2.4973829833333334,
+              "mountActualMs": 7.009675999996944,
+              "updateActualAvgMs": 1.2266616885238095,
+              "updateActualP95Ms": 2.0199129999955403,
               "profilerCommitCount": 123
             },
             {
-              "mountWallMs": 12.347791000000143,
-              "updatesWallMs": 239.03650000000016,
-              "updateWallPerUpdateMs": 1.9919708333333346,
-              "mountActualMs": 8.084975999973722,
-              "updateActualAvgMs": 0.9950587540989978,
-              "updateActualP95Ms": 1.267560999995112,
+              "mountWallMs": 11.933667000000241,
+              "updatesWallMs": 300.32745799999975,
+              "updateWallPerUpdateMs": 2.502728816666665,
+              "mountActualMs": 7.826608000008491,
+              "updateActualAvgMs": 1.5166033278689581,
+              "updateActualP95Ms": 5.570612999988043,
               "profilerCommitCount": 123
             }
           ],
           "summary": {
             "mountWallMs": {
-              "mean": 12.112388666666751,
-              "median": 12.051625000000058,
-              "p95": 12.347791000000143,
-              "stdev": 0.17282471430200516
+              "mean": 12.142972333333697,
+              "median": 12.23950000000059,
+              "p95": 12.255750000000262,
+              "stdev": 0.14814982854387476
             },
             "updatesWallMs": {
-              "mean": 240.7570280000003,
-              "median": 239.03650000000016,
-              "p95": 250.11641700000018,
-              "stdev": 7.045343058347611
+              "mean": 283.87948566666665,
+              "median": 299.685958,
+              "p95": 300.32745799999975,
+              "stdev": 22.80884011560408
             },
             "updateWallPerUpdateMs": {
-              "mean": 2.0063085666666693,
-              "median": 1.9919708333333346,
-              "p95": 2.0843034750000013,
-              "stdev": 0.05871119215289667
+              "mean": 2.3656623805555554,
+              "median": 2.4973829833333334,
+              "p95": 2.502728816666665,
+              "stdev": 0.19007366763003405
             },
             "mountActualMs": {
-              "mean": 7.710149333322988,
-              "median": 8.084975999973722,
-              "p95": 8.08557799999744,
-              "stdev": 0.5305106907425278
+              "mean": 7.724342333335092,
+              "median": 7.826608000008491,
+              "p95": 8.336742999999842,
+              "stdev": 0.5465774757886811
             },
             "updateActualAvgMs": {
-              "mean": 1.0073998825131878,
-              "median": 0.9950587540989978,
-              "p95": 1.045817549179767,
-              "stdev": 0.027738099008813584
+              "mean": 1.2622202978144583,
+              "median": 1.2266616885238095,
+              "p95": 1.5166033278689581,
+              "stdev": 0.1948155262438704
             },
             "updateActualP95Ms": {
-              "mean": 1.4398736666589684,
-              "median": 1.4577219999928275,
-              "p95": 1.5943379999889657,
-              "stdev": 0.13400180143899354
+              "mean": 3.1279950000007375,
+              "median": 2.0199129999955403,
+              "p95": 5.570612999988043,
+              "stdev": 1.7296642013066919
             },
             "profilerCommitCount": {
               "mean": 123,
@@ -1104,69 +1104,69 @@
           "positionsTested": 10,
           "rounds": [
             {
-              "mountWallMs": 10.85516699999971,
-              "updatesWallMs": 238.55000000000018,
-              "updateWallPerUpdateMs": 1.987916666666668,
-              "mountActualMs": 6.883982000027572,
-              "updateActualAvgMs": 1.0086294016379471,
-              "updateActualP95Ms": 1.4647269999859418,
+              "mountWallMs": 10.661208999999872,
+              "updatesWallMs": 234.92604200000005,
+              "updateWallPerUpdateMs": 1.957717016666667,
+              "mountActualMs": 6.797867999988739,
+              "updateActualAvgMs": 1.0016084672116434,
+              "updateActualP95Ms": 1.732295999994676,
               "profilerCommitCount": 123
             },
             {
-              "mountWallMs": 11.89954200000011,
-              "updatesWallMs": 232.8119999999999,
-              "updateWallPerUpdateMs": 1.940099999999999,
-              "mountActualMs": 8.102044999975988,
-              "updateActualAvgMs": 0.9754187540980623,
-              "updateActualP95Ms": 1.0984210000005987,
+              "mountWallMs": 11.649167000000489,
+              "updatesWallMs": 257.31487500000003,
+              "updateWallPerUpdateMs": 2.1442906250000004,
+              "mountActualMs": 7.881489999997939,
+              "updateActualAvgMs": 1.0644527049190535,
+              "updateActualP95Ms": 1.879979999996067,
               "profilerCommitCount": 123
             },
             {
-              "mountWallMs": 11.80620799999997,
-              "updatesWallMs": 308.0852080000004,
-              "updateWallPerUpdateMs": 2.567376733333337,
-              "mountActualMs": 7.493717000007564,
-              "updateActualAvgMs": 1.562328581968299,
-              "updateActualP95Ms": 5.655143999993015,
+              "mountWallMs": 11.008832999999868,
+              "updatesWallMs": 301.70208300000013,
+              "updateWallPerUpdateMs": 2.514184025000001,
+              "mountActualMs": 7.0662680000268665,
+              "updateActualAvgMs": 1.5055426639362581,
+              "updateActualP95Ms": 5.636181000009856,
               "profilerCommitCount": 123
             }
           ],
           "summary": {
             "mountWallMs": {
-              "mean": 11.520305666666596,
-              "median": 11.80620799999997,
-              "p95": 11.89954200000011,
-              "stdev": 0.4718650183478034
+              "mean": 11.106403000000077,
+              "median": 11.008832999999868,
+              "p95": 11.649167000000489,
+              "stdev": 0.4091904048372716
             },
             "updatesWallMs": {
-              "mean": 259.8157360000002,
-              "median": 238.55000000000018,
-              "p95": 308.0852080000004,
-              "stdev": 34.2119628820983
+              "mean": 264.64766666666674,
+              "median": 257.31487500000003,
+              "p95": 301.70208300000013,
+              "stdev": 27.74992237981307
             },
             "updateWallPerUpdateMs": {
-              "mean": 2.1651311333333347,
-              "median": 1.987916666666668,
-              "p95": 2.567376733333337,
-              "stdev": 0.2850996906841526
+              "mean": 2.205397222222223,
+              "median": 2.1442906250000004,
+              "p95": 2.514184025000001,
+              "stdev": 0.23124935316510883
             },
             "mountActualMs": {
-              "mean": 7.493248000003708,
-              "median": 7.493717000007564,
-              "p95": 8.102044999975988,
-              "stdev": 0.4972722479900295
+              "mean": 7.248542000004515,
+              "median": 7.0662680000268665,
+              "p95": 7.881489999997939,
+              "stdev": 0.4607797869025025
             },
             "updateActualAvgMs": {
-              "mean": 1.1821255792347696,
-              "median": 1.0086294016379471,
-              "p95": 1.562328581968299,
-              "stdev": 0.2691857837296252
+              "mean": 1.1905346120223184,
+              "median": 1.0644527049190535,
+              "p95": 1.5055426639362581,
+              "stdev": 0.22421701411982975
             },
             "updateActualP95Ms": {
-              "mean": 2.739430666659852,
-              "median": 1.4647269999859418,
-              "p95": 5.655143999993015,
-              "stdev": 2.067137022234521
+              "mean": 3.0828190000001996,
+              "median": 1.879979999996067,
+              "p95": 5.636181000009856,
+              "stdev": 1.8065059771621914
             },
             "profilerCommitCount": {
               "mean": 123,
@@ -1182,69 +1182,69 @@
           "positionsTested": 8,
           "rounds": [
             {
-              "mountWallMs": 10.775834000000032,
-              "updatesWallMs": 238.62595899999997,
-              "updateWallPerUpdateMs": 1.988549658333333,
-              "mountActualMs": 6.737240000004931,
-              "updateActualAvgMs": 1.0079617213115897,
-              "updateActualP95Ms": 1.455949000007422,
+              "mountWallMs": 12.265707999999904,
+              "updatesWallMs": 245.18116700000064,
+              "updateWallPerUpdateMs": 2.043176391666672,
+              "mountActualMs": 8.181046000020615,
+              "updateActualAvgMs": 1.040785680327242,
+              "updateActualP95Ms": 1.7114050000018324,
               "profilerCommitCount": 123
             },
             {
-              "mountWallMs": 10.682749999999942,
-              "updatesWallMs": 231.0146249999998,
-              "updateWallPerUpdateMs": 1.9251218749999983,
-              "mountActualMs": 6.73358699999244,
-              "updateActualAvgMs": 0.9945673524581908,
-              "updateActualP95Ms": 1.8082639999856838,
+              "mountWallMs": 10.730458999999428,
+              "updatesWallMs": 315.6314169999996,
+              "updateWallPerUpdateMs": 2.63026180833333,
+              "mountActualMs": 6.676951000000372,
+              "updateActualAvgMs": 1.5643722295082148,
+              "updateActualP95Ms": 5.54169399998591,
               "profilerCommitCount": 123
             },
             {
-              "mountWallMs": 12.122957999999926,
-              "updatesWallMs": 299.1876659999998,
-              "updateWallPerUpdateMs": 2.4932305499999985,
-              "mountActualMs": 8.145452000005207,
-              "updateActualAvgMs": 1.488927508196963,
-              "updateActualP95Ms": 5.666324000012537,
+              "mountWallMs": 10.671957999999904,
+              "updatesWallMs": 235.96487499999967,
+              "updateWallPerUpdateMs": 1.9663739583333306,
+              "mountActualMs": 6.693209000000024,
+              "updateActualAvgMs": 0.9992424918042221,
+              "updateActualP95Ms": 1.688664999989669,
               "profilerCommitCount": 123
             }
           ],
           "summary": {
             "mountWallMs": {
-              "mean": 11.1938473333333,
-              "median": 10.775834000000032,
-              "p95": 12.122957999999926,
-              "stdev": 0.6580785824146338
+              "mean": 11.22270833333308,
+              "median": 10.730458999999428,
+              "p95": 12.265707999999904,
+              "stdev": 0.7378987375200691
             },
             "updatesWallMs": {
-              "mean": 256.2760833333332,
-              "median": 238.62595899999997,
-              "p95": 299.1876659999998,
-              "stdev": 30.501760020622985
+              "mean": 265.5924863333333,
+              "median": 245.18116700000064,
+              "p95": 315.6314169999996,
+              "stdev": 35.582354674331654
             },
             "updateWallPerUpdateMs": {
-              "mean": 2.1356340277777766,
-              "median": 1.988549658333333,
-              "p95": 2.4932305499999985,
-              "stdev": 0.25418133350519156
+              "mean": 2.213270719444444,
+              "median": 2.043176391666672,
+              "p95": 2.63026180833333,
+              "stdev": 0.29651962228609713
             },
             "mountActualMs": {
-              "mean": 7.205426333334192,
-              "median": 6.737240000004931,
-              "p95": 8.145452000005207,
-              "stdev": 0.664700196380537
+              "mean": 7.183735333340337,
+              "median": 6.693209000000024,
+              "p95": 8.181046000020615,
+              "stdev": 0.7052363693810714
             },
             "updateActualAvgMs": {
-              "mean": 1.1638188606555813,
-              "median": 1.0079617213115897,
-              "p95": 1.488927508196963,
-              "stdev": 0.2299515554906947
+              "mean": 1.2014668005465596,
+              "median": 1.040785680327242,
+              "p95": 1.5643722295082148,
+              "stdev": 0.257172733009738
             },
             "updateActualP95Ms": {
-              "mean": 2.9768456666685474,
-              "median": 1.8082639999856838,
-              "p95": 5.666324000012537,
-              "stdev": 1.907179723037395
+              "mean": 2.9805879999924705,
+              "median": 1.7114050000018324,
+              "p95": 5.54169399998591,
+              "stdev": 1.8109992148538578
             },
             "profilerCommitCount": {
               "mean": 123,
@@ -1257,100 +1257,100 @@
       ]
     },
     "comparison": {
-      "mountWallFasterPct": 76.7296164767362,
-      "updatesWallFasterPct": 78.53310688428428,
-      "updateWallPerRenderFasterPct": 78.53310688428428,
-      "profilerUpdateFasterPct": 87.34123105047964,
+      "mountWallFasterPct": 77.38124452798567,
+      "updatesWallFasterPct": 80.70238367417623,
+      "updateWallPerRenderFasterPct": 80.70238367417623,
+      "profilerUpdateFasterPct": 88.75051410295129,
       "overall": {
-        "mountWallFasterPct": 76.7296164767362,
-        "updatesWallFasterPct": 78.53310688428428,
-        "updateWallPerRenderFasterPct": 78.53310688428428,
-        "profilerUpdateFasterPct": 87.34123105047964
+        "mountWallFasterPct": 77.38124452798567,
+        "updatesWallFasterPct": 80.70238367417623,
+        "updateWallPerRenderFasterPct": 80.70238367417623,
+        "profilerUpdateFasterPct": 88.75051410295129
       },
       "scenarios": [
         {
           "id": "italian-castling",
           "name": "Italian Development + Castling",
           "positionsTested": 17,
-          "mountWallFasterPct": 66.63275149102871,
-          "updatesWallFasterPct": 68.67895474769496,
-          "updateWallPerRenderFasterPct": 68.67895474769495,
-          "profilerUpdateFasterPct": 82.69825004109158,
+          "mountWallFasterPct": 68.64826543568469,
+          "updatesWallFasterPct": 72.35831520394085,
+          "updateWallPerRenderFasterPct": 72.35831520394085,
+          "profilerUpdateFasterPct": 85.43595861938537,
           "chessiroCanvas": {
-            "updateWallPerUpdateMsMean": 0.6826664333333333,
-            "updateActualAvgMsMean": 0.20862052302025444
+            "updateWallPerUpdateMsMean": 0.6050001138888887,
+            "updateActualAvgMsMean": 0.17831877532228088
           },
           "reactChessboard": {
-            "updateWallPerUpdateMsMean": 2.1795774305555558,
-            "updateActualAvgMsMean": 1.2057770081970167
+            "updateWallPerUpdateMsMean": 2.1887237277777767,
+            "updateActualAvgMsMean": 1.2243770163934775
           }
         },
         {
           "id": "sicilian-captures",
           "name": "Sicilian Structure + Captures",
           "positionsTested": 17,
-          "mountWallFasterPct": 69.39930571477808,
-          "updatesWallFasterPct": 64.36694815399339,
-          "updateWallPerRenderFasterPct": 64.36694815399339,
-          "profilerUpdateFasterPct": 77.23661586938826,
+          "mountWallFasterPct": 72.16724477306914,
+          "updatesWallFasterPct": 70.23224121441972,
+          "updateWallPerRenderFasterPct": 70.23224121441972,
+          "profilerUpdateFasterPct": 81.57553153262607,
           "chessiroCanvas": {
-            "updateWallPerUpdateMsMean": 0.7076886583333328,
-            "updateActualAvgMsMean": 0.22686859852665373
+            "updateWallPerUpdateMsMean": 0.7072942138888897,
+            "updateActualAvgMsMean": 0.23477900920812114
           },
           "reactChessboard": {
-            "updateWallPerUpdateMsMean": 1.9860455999999997,
-            "updateActualAvgMsMean": 0.9966382732239073
+            "updateWallPerUpdateMsMean": 2.376041202777779,
+            "updateActualAvgMsMean": 1.274278330600789
           }
         },
         {
           "id": "french-advance",
           "name": "French Advance Pawn Tension",
           "positionsTested": 17,
-          "mountWallFasterPct": 74.08599228679665,
-          "updatesWallFasterPct": 73.50953620621485,
-          "updateWallPerRenderFasterPct": 73.50953620621486,
-          "profilerUpdateFasterPct": 85.21625963609313,
+          "mountWallFasterPct": 74.94172280773547,
+          "updatesWallFasterPct": 76.83424739942201,
+          "updateWallPerRenderFasterPct": 76.83424739942201,
+          "profilerUpdateFasterPct": 87.55481698218622,
           "chessiroCanvas": {
-            "updateWallPerUpdateMsMean": 0.5314804444444436,
-            "updateActualAvgMsMean": 0.14893138305705253
+            "updateWallPerUpdateMsMean": 0.5480234944444438,
+            "updateActualAvgMsMean": 0.15708562615100333
           },
           "reactChessboard": {
-            "updateWallPerUpdateMsMean": 2.0063085666666693,
-            "updateActualAvgMsMean": 1.0073998825131878
+            "updateWallPerUpdateMsMean": 2.3656623805555554,
+            "updateActualAvgMsMean": 1.2622202978144583
           }
         },
         {
           "id": "king-pawn-endgame",
           "name": "King + Pawn Endgame Maneuvers",
           "positionsTested": 10,
-          "mountWallFasterPct": 88.26492074848622,
-          "updatesWallFasterPct": 92.68056586585402,
-          "updateWallPerRenderFasterPct": 92.680565865854,
-          "profilerUpdateFasterPct": 95.2565770968355,
+          "mountWallFasterPct": 87.9557734999054,
+          "updatesWallFasterPct": 92.71378738775957,
+          "updateWallPerRenderFasterPct": 92.71378738775957,
+          "profilerUpdateFasterPct": 94.9987393992053,
           "chessiroCanvas": {
-            "updateWallPerUpdateMsMean": 0.15847534722222212,
-            "updateActualAvgMsMean": 0.05607321546958819
+            "updateWallPerUpdateMsMean": 0.16068993055555567,
+            "updateActualAvgMsMean": 0.059541738489896114
           },
           "reactChessboard": {
-            "updateWallPerUpdateMsMean": 2.1651311333333347,
-            "updateActualAvgMsMean": 1.1821255792347696
+            "updateWallPerUpdateMsMean": 2.205397222222223,
+            "updateActualAvgMsMean": 1.1905346120223184
           }
         },
         {
           "id": "promotion-line",
           "name": "Promotion Conversion Sequence",
           "positionsTested": 8,
-          "mountWallFasterPct": 87.61956493838177,
-          "updatesWallFasterPct": 92.14042603143159,
-          "updateWallPerRenderFasterPct": 92.14042603143157,
-          "profilerUpdateFasterPct": 94.60422461876897,
+          "mountWallFasterPct": 88.2302147802997,
+          "updatesWallFasterPct": 92.35985439693515,
+          "updateWallPerRenderFasterPct": 92.35985439693515,
+          "profilerUpdateFasterPct": 94.80286199895558,
           "chessiroCanvas": {
-            "updateWallPerUpdateMsMean": 0.16785173611111126,
-            "updateActualAvgMsMean": 0.0627970515653773
+            "updateWallPerUpdateMsMean": 0.1690971055555565,
+            "updateActualAvgMsMean": 0.062441887661137986
           },
           "reactChessboard": {
-            "updateWallPerUpdateMsMean": 2.1356340277777766,
-            "updateActualAvgMsMean": 1.1638188606555813
+            "updateWallPerUpdateMsMean": 2.213270719444444,
+            "updateActualAvgMsMean": 1.2014668005465596
           }
         }
       ]

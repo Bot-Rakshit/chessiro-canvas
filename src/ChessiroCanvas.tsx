@@ -1,7 +1,10 @@
-import { forwardRef, useCallback, useImperativeHandle, useMemo, useRef } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef } from 'react';
 import type {
   ChessiroCanvasProps, ChessiroCanvasRef, BoardTheme,
   AnimateMoveOptions, PulseSquareOptions, PromotionPiece, Square,
+  CameraController, CameraDriftOptions, CameraShakeOptions, CameraTiltOptions, CameraZoomOptions,
+  CinematicMoveOptions, CinematicPlayback, CinematicStep, PlayCinematicOptions,
+  PopBadgeOptions, SquareBurstOptions,
 } from './types';
 import { INITIAL_FEN, readFen } from './utils/fen';
 import { screenPos2square } from './utils/coords';
@@ -13,6 +16,9 @@ import { PiecesLayer, type PiecesLayerRef } from './render/Pieces';
 import { GhostPiecesLayer } from './render/GhostPieces';
 import { SquareLabelsLayer } from './render/SquareLabels';
 import { TeachingLayer, type TeachingLayerRef } from './render/TeachingLayer';
+import { CinematicLayer, type CinematicLayerRef } from './render/CinematicLayer';
+import { createCameraController } from './cinematics/camera';
+import { playCinematicScript } from './cinematics/director';
 import { ArrowsLayer } from './render/Arrows';
 import { Notation } from './render/Notation';
 import { PromotionDialog } from './render/Promotion';
@@ -116,7 +122,32 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
     const boardRef = useRef<HTMLDivElement>(null);
     const piecesLayerRef = useRef<PiecesLayerRef>(null);
     const teachingRef = useRef<TeachingLayerRef>(null);
+    const cinematicRef = useRef<CinematicLayerRef>(null);
+    const cameraControllerRef = useRef<CameraController | null>(null);
+    const playbackRef = useRef<CinematicPlayback | null>(null);
     const { bounds, getFreshBounds } = useBoardSize(boardRef);
+
+    const orientationRef = useRef(orientation);
+    orientationRef.current = orientation;
+
+    // Lazy: the camera controller (and any camera animation) only exists
+    // after the first camera call, so idle boards pay nothing.
+    const getCameraController = useCallback((): CameraController => {
+      if (!cameraControllerRef.current) {
+        cameraControllerRef.current = createCameraController(
+          () => boardRef.current,
+          () => orientationRef.current === 'white',
+        );
+      }
+      return cameraControllerRef.current;
+    }, []);
+
+    useEffect(() => {
+      return () => {
+        playbackRef.current?.cancel();
+        playbackRef.current = null;
+      };
+    }, []);
 
     const piecesMap = useMemo(() => readFen(position || INITIAL_FEN), [position]);
 
@@ -257,7 +288,44 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
       clearTeachingEffects() {
         teachingRef.current?.clearEffects();
       },
-    }), [bounds, orientation, getFreshDomRect]);
+      cinematicMove(from: Square, to: Square, options?: CinematicMoveOptions) {
+        return cinematicRef.current?.cinematicMove(from, to, options) ?? Promise.resolve();
+      },
+      squareBurst(square: Square, options?: SquareBurstOptions) {
+        return cinematicRef.current?.squareBurst(square, options) ?? Promise.resolve();
+      },
+      popBadge(square: Square, options: PopBadgeOptions) {
+        return cinematicRef.current?.popBadge(square, options) ?? Promise.resolve();
+      },
+      clearCinematics() {
+        playbackRef.current?.cancel();
+        playbackRef.current = null;
+        cinematicRef.current?.clearCinematics();
+        cameraControllerRef.current?.reset();
+      },
+      playCinematic(steps: CinematicStep[], options?: PlayCinematicOptions) {
+        playbackRef.current?.cancel();
+        const playback = playCinematicScript(
+          {
+            getLayer: () => cinematicRef.current,
+            getCamera: getCameraController,
+            peekCamera: () => cameraControllerRef.current,
+          },
+          steps,
+          options,
+        );
+        playbackRef.current = playback;
+        return playback;
+      },
+      camera: {
+        zoomTo: (square: Square, options?: CameraZoomOptions) => getCameraController().zoomTo(square, options),
+        zoomOut: (options?: CameraZoomOptions) => getCameraController().zoomOut(options),
+        tilt: (options?: CameraTiltOptions) => getCameraController().tilt(options),
+        shake: (options?: CameraShakeOptions) => getCameraController().shake(options),
+        drift: (options?: CameraDriftOptions) => getCameraController().drift(options),
+        reset: () => cameraControllerRef.current?.reset(),
+      },
+    }), [bounds, orientation, getFreshDomRect, getCameraController]);
 
     const hasValidSize = bounds && bounds.width > 0;
     const boardWidth = bounds?.width ?? 0;
@@ -370,6 +438,16 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
 
               <TeachingLayer
                 ref={teachingRef}
+                orientation={orientation}
+                pieces={piecesMap}
+                pieceSet={pieceSet}
+                customPieces={customPieces}
+                flipPieces={flipPieces}
+                getPieceElement={getPieceElement}
+              />
+
+              <CinematicLayer
+                ref={cinematicRef}
                 orientation={orientation}
                 pieces={piecesMap}
                 pieceSet={pieceSet}

@@ -2204,6 +2204,976 @@ var TeachingLayer = memo(forwardRef(function TeachingLayer2({
     ))
   ] });
 }));
+
+// src/cinematics/motion.ts
+function canAnimate2(el) {
+  return typeof el.animate === "function";
+}
+function waitForAnimation(anim, fallbackMs) {
+  if (!anim) {
+    return new Promise((resolve) => setTimeout(resolve, fallbackMs));
+  }
+  return new Promise((resolve) => {
+    let settled = false;
+    const settle = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(watchdog);
+      resolve();
+    };
+    const watchdog = setTimeout(settle, fallbackMs * 2 + 1e3);
+    const finished = anim.finished;
+    if (finished && typeof finished.then === "function") {
+      finished.then(settle, settle);
+      return;
+    }
+    try {
+      anim.onfinish = settle;
+      anim.oncancel = settle;
+    } catch {
+    }
+  });
+}
+var reducedMotionQuery;
+function prefersReducedMotion() {
+  if (reducedMotionQuery === void 0) {
+    reducedMotionQuery = typeof window !== "undefined" && typeof window.matchMedia === "function" ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
+  }
+  return reducedMotionQuery?.matches ?? false;
+}
+var BRILLIANT_TEAL = "#26c2a3";
+var DEFAULT_BURST_COLOR = "#ffd65a";
+var DEFAULT_BURST_DURATION_MS = 650;
+var SHOCKWAVE_DURATION_MS = 500;
+var DEFAULT_BADGE_DURATION_MS = 1600;
+var MOVE_BADGE_DURATION_MS = 1400;
+var FLIGHT_SAMPLES = 24;
+var SLOWMO_EXPONENT = Math.log(0.2) / Math.log(0.4);
+var STYLE_PRESETS = {
+  brilliant: {
+    durationMs: 2e3,
+    spins: 1.5,
+    arcHeight: 1.6,
+    liftScale: 1.35,
+    glowColor: BRILLIANT_TEAL,
+    glowMaxPx: 18,
+    sparkles: true,
+    shockwave: true,
+    slowMoLanding: true,
+    squash: 0.15,
+    liftEnd: 0.15,
+    landStart: 0.7,
+    slam: false
+  },
+  great: {
+    durationMs: 1400,
+    spins: 1,
+    arcHeight: 0.9,
+    liftScale: 1.26,
+    glowColor: "#5ea2d9",
+    glowMaxPx: 10,
+    sparkles: true,
+    shockwave: false,
+    slowMoLanding: false,
+    squash: 0.12,
+    liftEnd: 0.15,
+    landStart: 0.72,
+    slam: false
+  },
+  smooth: {
+    durationMs: 900,
+    spins: 0,
+    arcHeight: 0.35,
+    liftScale: 1.12,
+    glowColor: "rgba(0, 0, 0, 0)",
+    glowMaxPx: 0,
+    sparkles: false,
+    shockwave: false,
+    slowMoLanding: false,
+    squash: 0.04,
+    liftEnd: 0.15,
+    landStart: 0.85,
+    slam: false
+  },
+  slam: {
+    durationMs: 1100,
+    spins: 0,
+    arcHeight: 0,
+    liftScale: 1.6,
+    glowColor: DEFAULT_BURST_COLOR,
+    glowMaxPx: 12,
+    sparkles: false,
+    shockwave: true,
+    slowMoLanding: false,
+    squash: 0.3,
+    liftEnd: 0.25,
+    landStart: 0.7,
+    slam: true
+  }
+};
+function squareColRow5(sq2, asWhite) {
+  const f = sq2.charCodeAt(0) - 97;
+  const r = sq2.charCodeAt(1) - 49;
+  return [asWhite ? f : 7 - f, asWhite ? 7 - r : r];
+}
+function isValidSquare4(sq2) {
+  return typeof sq2 === "string" && /^[a-h][1-8]$/.test(sq2);
+}
+function positionTransform(col, row) {
+  return `translate(${col * 100}%, ${row * 100}%)`;
+}
+function easeInOutQuad(u) {
+  return u < 0.5 ? 2 * u * u : 1 - (-2 * u + 2) ** 2 / 2;
+}
+function clamp(v, min, max) {
+  return Math.max(min, Math.min(max, v));
+}
+function resolveMoveOptions(options, reduced) {
+  const preset = STYLE_PRESETS[options?.style ?? "brilliant"];
+  const base = {
+    durationMs: Math.max(100, options?.durationMs ?? preset.durationMs),
+    spins: Math.max(0, options?.spins ?? preset.spins),
+    arcHeight: Math.max(0, options?.arcHeight ?? preset.arcHeight),
+    liftScale: options?.liftScale ?? preset.liftScale,
+    glowColor: options?.glowColor ?? preset.glowColor,
+    glowMaxPx: options?.glowColor ? Math.max(preset.glowMaxPx, 12) : preset.glowMaxPx,
+    sparkles: options?.sparkles ?? preset.sparkles,
+    shockwave: options?.shockwave ?? preset.shockwave,
+    badge: options?.badge,
+    badgeColor: options?.badgeColor,
+    slowMoLanding: options?.slowMoLanding ?? preset.slowMoLanding,
+    squash: preset.squash,
+    liftEnd: preset.liftEnd,
+    landStart: preset.landStart,
+    slam: preset.slam
+  };
+  if (!reduced) return base;
+  return {
+    ...base,
+    durationMs: Math.min(base.durationMs, 900),
+    spins: 0,
+    arcHeight: 0,
+    liftScale: 1.18,
+    glowMaxPx: 0,
+    sparkles: false,
+    shockwave: false,
+    badge: void 0,
+    slowMoLanding: false,
+    squash: 0,
+    liftEnd: 0.15,
+    landStart: 0.85,
+    slam: false
+  };
+}
+function buildPositionKeyframes(e) {
+  const o = e.opts;
+  const frames = [{ transform: positionTransform(e.fromCol, e.fromRow), offset: 0 }];
+  if (o.liftEnd > 0) {
+    frames.push({ transform: positionTransform(e.fromCol, e.fromRow), offset: o.liftEnd });
+  }
+  const cx = (e.fromCol + e.toCol) / 2;
+  let cy = (e.fromRow + e.toRow) / 2 - 2 * o.arcHeight;
+  cy = Math.max(cy, (-0.6 - e.fromRow - e.toRow) / 2);
+  for (let i = 1; i <= FLIGHT_SAMPLES; i++) {
+    const u = i / FLIGHT_SAMPLES;
+    const p = o.slowMoLanding ? 1 - (1 - u) ** SLOWMO_EXPONENT : easeInOutQuad(u);
+    const inv = 1 - p;
+    const x = inv * inv * e.fromCol + 2 * inv * p * cx + p * p * e.toCol;
+    const y = inv * inv * e.fromRow + 2 * inv * p * cy + p * p * e.toRow;
+    frames.push({
+      transform: positionTransform(x, y),
+      offset: o.liftEnd + (o.landStart - o.liftEnd) * u
+    });
+  }
+  frames.push({ transform: positionTransform(e.toCol, e.toRow), offset: 1 });
+  return frames;
+}
+function att(offset, pose, glowColor, easing2) {
+  const { z = 0, ry = 0, rx = 0, sx = 1, sy = 1, shadow = 2, glow = 0 } = pose;
+  const frame = {
+    offset,
+    transform: `rotateZ(${z}deg) rotateY(${ry}deg) rotateX(${rx}deg) scaleX(${sx}) scaleY(${sy})`,
+    filter: `drop-shadow(0 ${shadow}px ${Math.max(2, shadow)}px rgba(0, 0, 0, 0.3)) drop-shadow(0 0 ${glow}px ${glowColor})`
+  };
+  if (easing2) frame.easing = easing2;
+  return frame;
+}
+function buildAttitudeKeyframes(e) {
+  const o = e.opts;
+  const g = o.glowMaxPx;
+  const c = o.glowColor;
+  const lift = o.liftScale;
+  const land = 1 - o.landStart;
+  const squashAt = o.landStart + land * (o.slam ? 0.4 : 0.3);
+  const reboundAt = o.landStart + land * 0.65;
+  const frames = [att(0, {}, c)];
+  let restRy = 0;
+  if (o.slam) {
+    frames.push(att(o.liftEnd, { sx: lift, sy: lift, shadow: 20, glow: g * 0.5 }, c));
+    frames.push(att(o.landStart, { sx: lift, sy: lift, shadow: 20, glow: g }, c, "cubic-bezier(0.6, 0, 1, 0.4)"));
+    if (o.squash > 0) {
+      frames.push(att(squashAt, { sx: 1 + o.squash, sy: 1 - o.squash, shadow: 2, glow: g * 0.6 }, c));
+    }
+  } else {
+    const flightRy = o.spins * 360;
+    restRy = Math.ceil(flightRy / 360 - 1e-3) * 360;
+    const tiltZ = o.spins > 0 ? -6 : 0;
+    const wobble = o.spins > 0 ? 14 : 0;
+    frames.push(att(o.liftEnd, { z: tiltZ, sx: lift, sy: lift, shadow: 10, glow: g * 0.35 }, c));
+    const flight = o.landStart - o.liftEnd;
+    for (const [u, w] of [[0.25, 1], [0.5, 0], [0.75, -1]]) {
+      frames.push(att(o.liftEnd + flight * u, {
+        z: tiltZ * (1 - u),
+        ry: flightRy * u,
+        rx: wobble * w,
+        sx: lift,
+        sy: lift,
+        shadow: 12,
+        glow: g * (0.35 + 0.65 * u)
+      }, c));
+    }
+    frames.push(att(o.landStart, { ry: flightRy, sx: lift, sy: lift, shadow: 12, glow: g }, c));
+    if (o.squash > 0) {
+      frames.push(att(squashAt, { ry: restRy, sx: 1 + o.squash, sy: 1 - o.squash, shadow: 3, glow: g * 0.6 }, c));
+    }
+  }
+  if (o.squash > 0) {
+    frames.push(att(reboundAt, {
+      ry: restRy,
+      sx: 1 - o.squash * 0.25,
+      sy: 1 + o.squash * 0.2,
+      shadow: 2,
+      glow: g * 0.3
+    }, c));
+  }
+  frames.push(att(1, { ry: restRy, shadow: 2 }, c));
+  return frames;
+}
+var CinematicLayer = memo(forwardRef(function CinematicLayer2({
+  orientation,
+  pieces,
+  pieceSet,
+  customPieces,
+  flipPieces = false,
+  getPieceElement
+}, ref) {
+  const asWhite = orientation === "white";
+  const [moves, setMoves] = useState([]);
+  const [bursts, setBursts] = useState([]);
+  const [badges, setBadges] = useState([]);
+  const movesRef = useRef(moves);
+  movesRef.current = moves;
+  const idRef = useRef(0);
+  const piecesRef = useRef(pieces);
+  piecesRef.current = pieces;
+  const asWhiteRef = useRef(asWhite);
+  asWhiteRef.current = asWhite;
+  const getPieceElementRef = useRef(getPieceElement);
+  getPieceElementRef.current = getPieceElement;
+  const resolversRef = useRef(/* @__PURE__ */ new Map());
+  const landingResolversRef = useRef(/* @__PURE__ */ new Map());
+  const animationsRef = useRef(/* @__PURE__ */ new Map());
+  const timeoutsRef = useRef(/* @__PURE__ */ new Map());
+  const startedRef = useRef(/* @__PURE__ */ new Set());
+  const finishedRef = useRef(/* @__PURE__ */ new Set());
+  const finishMove = useCallback((entry) => {
+    if (finishedRef.current.has(entry.id)) return;
+    finishedRef.current.add(entry.id);
+    const resolve = resolversRef.current.get(entry.id);
+    resolversRef.current.delete(entry.id);
+    landingResolversRef.current.delete(entry.id);
+    resolve?.();
+    const cleanup = () => {
+      const tid = timeoutsRef.current.get(entry.id);
+      if (tid !== void 0) {
+        clearTimeout(tid);
+        timeoutsRef.current.delete(entry.id);
+      }
+      animationsRef.current.delete(entry.id);
+      startedRef.current.delete(entry.id);
+      finishedRef.current.delete(entry.id);
+      if (entry.hiddenSquare) {
+        const orig = getPieceElementRef.current(entry.hiddenSquare);
+        if (orig) orig.style.opacity = "";
+      }
+      setMoves((prev) => prev.filter((m) => m.id !== entry.id));
+    };
+    if (typeof requestAnimationFrame === "function") {
+      requestAnimationFrame(() => requestAnimationFrame(cleanup));
+    } else {
+      cleanup();
+    }
+  }, []);
+  const finishBurst = useCallback((entry) => {
+    const resolve = resolversRef.current.get(entry.id);
+    resolversRef.current.delete(entry.id);
+    animationsRef.current.delete(entry.id);
+    startedRef.current.delete(entry.id);
+    setBursts((prev) => prev.filter((b) => b.id !== entry.id));
+    resolve?.();
+  }, []);
+  const finishBadge = useCallback((entry) => {
+    const resolve = resolversRef.current.get(entry.id);
+    resolversRef.current.delete(entry.id);
+    animationsRef.current.delete(entry.id);
+    startedRef.current.delete(entry.id);
+    setBadges((prev) => prev.filter((b) => b.id !== entry.id));
+    resolve?.();
+  }, []);
+  const spawnBurst = useCallback((square, options) => {
+    const [col, row] = squareColRow5(square, asWhiteRef.current);
+    const kind = options?.kind ?? "both";
+    const durationMs = Math.max(100, options?.durationMs ?? DEFAULT_BURST_DURATION_MS);
+    const particles = [];
+    if (kind !== "shockwave") {
+      const count = clamp(Math.round(options?.particleCount ?? 12), 4, 24);
+      for (let i = 0; i < count; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const dist = (0.4 + Math.random() * 0.7) * 100;
+        particles.push({
+          dx: Math.cos(angle) * dist,
+          dy: Math.sin(angle) * dist,
+          size: 6 + Math.random() * 4,
+          delayMs: Math.random() * 80,
+          rotateDeg: (Math.random() * 2 - 1) * 180
+        });
+      }
+    }
+    const entry = {
+      id: ++idRef.current,
+      col,
+      row,
+      kind,
+      color: options?.color ?? DEFAULT_BURST_COLOR,
+      durationMs,
+      particles
+    };
+    return new Promise((resolve) => {
+      resolversRef.current.set(entry.id, resolve);
+      setBursts((prev) => [...prev, entry]);
+    });
+  }, []);
+  const spawnBadge = useCallback((square, options) => {
+    const [col, row] = squareColRow5(square, asWhiteRef.current);
+    const entry = {
+      id: ++idRef.current,
+      col,
+      row,
+      text: options.text,
+      color: options.color ?? "#ffffff",
+      background: options.background ?? BRILLIANT_TEAL,
+      durationMs: Math.max(400, options.durationMs ?? DEFAULT_BADGE_DURATION_MS),
+      corner: options.corner ?? "topRight"
+    };
+    return new Promise((resolve) => {
+      resolversRef.current.set(entry.id, resolve);
+      setBadges((prev) => [...prev, entry]);
+    });
+  }, []);
+  const startMoveAnimation = useCallback((outer, entry) => {
+    if (startedRef.current.has(entry.id)) return;
+    startedRef.current.add(entry.id);
+    if (!canAnimate2(outer)) {
+      finishMove(entry);
+      return;
+    }
+    const o = entry.opts;
+    const anims = [];
+    const waits = [];
+    const pos = outer.animate(buildPositionKeyframes(entry), {
+      duration: o.durationMs,
+      easing: "linear",
+      fill: "forwards"
+    });
+    anims.push(pos);
+    waits.push(waitForAnimation(pos, o.durationMs));
+    const attitude = outer.firstElementChild?.firstElementChild;
+    if (attitude && canAnimate2(attitude)) {
+      const spin = attitude.animate(buildAttitudeKeyframes(entry), {
+        duration: o.durationMs,
+        easing: "linear",
+        fill: "forwards"
+      });
+      anims.push(spin);
+      waits.push(waitForAnimation(spin, o.durationMs));
+    }
+    animationsRef.current.set(entry.id, anims);
+    if (o.sparkles || o.shockwave || o.badge) {
+      waits.push(new Promise((resolveLanding) => {
+        landingResolversRef.current.set(entry.id, resolveLanding);
+        const touchdownMs = Math.round(o.durationMs * (o.landStart + (1 - o.landStart) * (o.slam ? 0.4 : 0.25)));
+        const tid = setTimeout(() => {
+          timeoutsRef.current.delete(entry.id);
+          const fx = [];
+          if (o.sparkles || o.shockwave) {
+            fx.push(spawnBurst(entry.toSquare, {
+              kind: o.sparkles && o.shockwave ? "both" : o.sparkles ? "sparkles" : "shockwave",
+              color: o.glowMaxPx > 0 ? o.glowColor : void 0
+            }));
+          }
+          if (o.badge) {
+            fx.push(spawnBadge(entry.toSquare, {
+              text: o.badge,
+              background: o.badgeColor,
+              durationMs: MOVE_BADGE_DURATION_MS
+            }));
+          }
+          Promise.all(fx).then(() => {
+            landingResolversRef.current.delete(entry.id);
+            resolveLanding();
+          });
+        }, touchdownMs);
+        timeoutsRef.current.set(entry.id, tid);
+      }));
+    }
+    Promise.all(waits).then(() => finishMove(entry));
+  }, [finishMove, spawnBurst, spawnBadge]);
+  const startBurstAnimation = useCallback((container, entry) => {
+    if (startedRef.current.has(entry.id)) return;
+    startedRef.current.add(entry.id);
+    const children = Array.from(container.children);
+    const anims = [];
+    const waits = [];
+    let idx = 0;
+    if (entry.kind !== "sparkles") {
+      const ring = children[idx++];
+      if (ring && canAnimate2(ring)) {
+        const anim = ring.animate(
+          [
+            { transform: "scale(0.3)", opacity: 0.9 },
+            { transform: "scale(2.2)", opacity: 0 }
+          ],
+          { duration: SHOCKWAVE_DURATION_MS, easing: "ease-out", fill: "forwards" }
+        );
+        anims.push(anim);
+        waits.push(waitForAnimation(anim, SHOCKWAVE_DURATION_MS));
+      }
+    }
+    if (entry.kind !== "shockwave") {
+      for (const p of entry.particles) {
+        const el = children[idx++];
+        if (!el || !canAnimate2(el)) continue;
+        const anim = el.animate(
+          [
+            { transform: "translate(0%, 0%) rotate(0deg) scale(1)", opacity: 1 },
+            { transform: `translate(${p.dx}%, ${p.dy}%) rotate(${p.rotateDeg}deg) scale(0)`, opacity: 0 }
+          ],
+          { duration: entry.durationMs, delay: p.delayMs, easing: "cubic-bezier(0.12, 0.6, 0.3, 1)", fill: "both" }
+        );
+        anims.push(anim);
+        waits.push(waitForAnimation(anim, entry.durationMs + p.delayMs));
+      }
+    }
+    if (anims.length === 0) {
+      finishBurst(entry);
+      return;
+    }
+    animationsRef.current.set(entry.id, anims);
+    Promise.all(waits).then(() => finishBurst(entry));
+  }, [finishBurst]);
+  const startBadgeAnimation = useCallback((el, entry) => {
+    if (startedRef.current.has(entry.id)) return;
+    startedRef.current.add(entry.id);
+    if (!canAnimate2(el)) {
+      finishBadge(entry);
+      return;
+    }
+    const duration = entry.durationMs;
+    const pop = Math.min(0.4, 350 / duration);
+    const fadeStart = Math.max(pop, 1 - 300 / duration);
+    const anim = el.animate(
+      [
+        { transform: "scale(0)", opacity: 0, offset: 0, easing: "cubic-bezier(0.34, 1.56, 0.64, 1)" },
+        { transform: "scale(1.25)", opacity: 1, offset: pop * 0.6 },
+        { transform: "scale(0.95)", opacity: 1, offset: pop * 0.85 },
+        { transform: "scale(1)", opacity: 1, offset: pop },
+        { transform: "scale(1)", opacity: 1, offset: fadeStart },
+        { transform: "scale(0.85)", opacity: 0, offset: 1 }
+      ],
+      { duration, easing: "ease-out", fill: "forwards" }
+    );
+    animationsRef.current.set(entry.id, [anim]);
+    waitForAnimation(anim, duration).then(() => finishBadge(entry));
+  }, [finishBadge]);
+  const cinematicMove = useCallback((from, to, options) => {
+    if (!isValidSquare4(from) || !isValidSquare4(to) || from === to) {
+      return Promise.resolve();
+    }
+    const existing = piecesRef.current.get(from);
+    const pieceKey = options?.piece ?? (existing ? `${existing.color}${existing.role.toUpperCase()}` : void 0);
+    if (!pieceKey) return Promise.resolve();
+    const reduced = prefersReducedMotion() && !options?.force;
+    const white = asWhiteRef.current;
+    const [fromCol, fromRow] = squareColRow5(from, white);
+    const [toCol, toRow] = squareColRow5(to, white);
+    const entry = {
+      id: ++idRef.current,
+      pieceKey,
+      fromCol,
+      fromRow,
+      toCol,
+      toRow,
+      toSquare: to,
+      hiddenSquare: existing ? from : null,
+      opts: resolveMoveOptions(options, reduced)
+    };
+    if (entry.hiddenSquare) {
+      const orig = getPieceElementRef.current(entry.hiddenSquare);
+      if (orig) orig.style.opacity = "0";
+    }
+    return new Promise((resolve) => {
+      resolversRef.current.set(entry.id, resolve);
+      setMoves((prev) => [...prev, entry]);
+    });
+  }, []);
+  const squareBurst = useCallback((square, options) => {
+    if (!isValidSquare4(square)) return Promise.resolve();
+    if (prefersReducedMotion() && !options?.force) return Promise.resolve();
+    return spawnBurst(square, options);
+  }, [spawnBurst]);
+  const popBadge = useCallback((square, options) => {
+    if (!isValidSquare4(square) || !options?.text) return Promise.resolve();
+    if (prefersReducedMotion() && !options?.force) return Promise.resolve();
+    return spawnBadge(square, options);
+  }, [spawnBadge]);
+  const clearCinematics = useCallback(() => {
+    for (const anims of Array.from(animationsRef.current.values())) {
+      for (const anim of anims) anim.cancel();
+    }
+    animationsRef.current.clear();
+    for (const tid of timeoutsRef.current.values()) clearTimeout(tid);
+    timeoutsRef.current.clear();
+    for (const entry of movesRef.current) {
+      if (entry.hiddenSquare) {
+        const orig = getPieceElementRef.current(entry.hiddenSquare);
+        if (orig) orig.style.opacity = "";
+      }
+    }
+    const landingResolvers = Array.from(landingResolversRef.current.values());
+    landingResolversRef.current.clear();
+    const resolvers = Array.from(resolversRef.current.values());
+    resolversRef.current.clear();
+    startedRef.current.clear();
+    finishedRef.current.clear();
+    setMoves([]);
+    setBursts([]);
+    setBadges([]);
+    for (const resolve of landingResolvers) resolve();
+    for (const resolve of resolvers) resolve();
+  }, []);
+  useImperativeHandle(ref, () => ({
+    cinematicMove,
+    squareBurst,
+    popBadge,
+    clearCinematics
+  }), [cinematicMove, squareBurst, popBadge, clearCinematics]);
+  useEffect(() => {
+    return () => {
+      for (const anims of animationsRef.current.values()) {
+        for (const anim of anims) anim.cancel();
+      }
+      animationsRef.current.clear();
+      for (const tid of timeoutsRef.current.values()) clearTimeout(tid);
+      timeoutsRef.current.clear();
+      for (const resolve of landingResolversRef.current.values()) resolve();
+      landingResolversRef.current.clear();
+      for (const resolve of resolversRef.current.values()) resolve();
+      resolversRef.current.clear();
+    };
+  }, []);
+  if (moves.length === 0 && bursts.length === 0 && badges.length === 0) return null;
+  return /* @__PURE__ */ jsxs("div", { style: { position: "absolute", inset: 0, pointerEvents: "none", overflow: "hidden", zIndex: 10 }, children: [
+    bursts.map((b) => /* @__PURE__ */ jsxs(
+      "div",
+      {
+        ref: (el) => {
+          if (el) startBurstAnimation(el, b);
+        },
+        style: {
+          position: "absolute",
+          width: "12.5%",
+          height: "12.5%",
+          transform: positionTransform(b.col, b.row),
+          pointerEvents: "none",
+          zIndex: 4
+        },
+        children: [
+          b.kind !== "sparkles" && /* @__PURE__ */ jsx(
+            "div",
+            {
+              style: {
+                position: "absolute",
+                inset: "8%",
+                borderRadius: "50%",
+                border: `3px solid ${b.color}`,
+                boxShadow: `0 0 10px ${b.color}`,
+                opacity: 0,
+                willChange: "transform, opacity"
+              }
+            }
+          ),
+          b.kind !== "shockwave" && b.particles.map((p, i) => /* @__PURE__ */ jsx(
+            "div",
+            {
+              style: { position: "absolute", inset: 0, opacity: 0, willChange: "transform, opacity" },
+              children: /* @__PURE__ */ jsx(
+                "div",
+                {
+                  style: {
+                    position: "absolute",
+                    left: "50%",
+                    top: "50%",
+                    width: `${p.size}%`,
+                    height: `${p.size}%`,
+                    marginLeft: `${-p.size / 2}%`,
+                    marginTop: `${-p.size / 2}%`,
+                    borderRadius: "50%",
+                    background: b.color,
+                    boxShadow: `0 0 6px ${b.color}`
+                  }
+                }
+              )
+            },
+            i
+          ))
+        ]
+      },
+      `burst-${b.id}`
+    )),
+    badges.map((bd) => /* @__PURE__ */ jsx(
+      "div",
+      {
+        style: {
+          position: "absolute",
+          width: "12.5%",
+          height: "12.5%",
+          transform: positionTransform(bd.col, bd.row),
+          pointerEvents: "none",
+          zIndex: 5
+        },
+        children: /* @__PURE__ */ jsx(
+          "span",
+          {
+            style: {
+              position: "absolute",
+              ...bd.corner === "center" ? { top: "50%", left: "50%", transform: "translate(-50%, -50%)" } : { top: "-6%", right: "-6%" }
+            },
+            children: /* @__PURE__ */ jsx(
+              "span",
+              {
+                ref: (el) => {
+                  if (el) startBadgeAnimation(el, bd);
+                },
+                style: {
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  minWidth: "1.6em",
+                  height: "1.6em",
+                  padding: "0 0.3em",
+                  borderRadius: "999px",
+                  background: bd.background,
+                  color: bd.color,
+                  fontSize: "clamp(10px, 2.4vmin, 20px)",
+                  fontWeight: 800,
+                  fontFamily: "system-ui, sans-serif",
+                  lineHeight: 1,
+                  boxShadow: "0 2px 6px rgba(0, 0, 0, 0.35)",
+                  opacity: 0,
+                  willChange: "transform, opacity"
+                },
+                children: bd.text
+              }
+            )
+          }
+        )
+      },
+      `badge-${bd.id}`
+    )),
+    moves.map((m) => /* @__PURE__ */ jsx(
+      "div",
+      {
+        ref: (el) => {
+          if (el) startMoveAnimation(el, m);
+        },
+        style: {
+          position: "absolute",
+          width: "12.5%",
+          height: "12.5%",
+          transform: positionTransform(m.fromCol, m.fromRow),
+          willChange: "transform",
+          pointerEvents: "none",
+          zIndex: 3
+        },
+        children: /* @__PURE__ */ jsx("div", { style: { width: "100%", height: "100%", perspective: 800 }, children: /* @__PURE__ */ jsx(
+          "div",
+          {
+            style: {
+              width: "100%",
+              height: "100%",
+              transformOrigin: "center center",
+              transformStyle: "preserve-3d",
+              willChange: "transform, filter"
+            },
+            children: /* @__PURE__ */ jsx(
+              "div",
+              {
+                style: {
+                  width: "100%",
+                  height: "100%",
+                  transform: flipPieces ? "rotate(180deg)" : void 0,
+                  transformOrigin: "center center"
+                },
+                children: /* @__PURE__ */ jsx(PieceGlyph, { pieceKey: m.pieceKey, pieceSet, customPieces })
+              }
+            )
+          }
+        ) })
+      },
+      `cine-${m.id}`
+    ))
+  ] });
+}));
+
+// src/cinematics/camera.ts
+var DEFAULT_ZOOM_SCALE = 1.6;
+var DEFAULT_ZOOM_DURATION_MS = 600;
+var DEFAULT_ZOOM_EASING = "cubic-bezier(0.22, 1, 0.36, 1)";
+var DEFAULT_TILT_DEG = 18;
+var DEFAULT_SHAKE_INTENSITY_PX = 6;
+var DEFAULT_SHAKE_DURATION_MS = 400;
+var DEFAULT_DRIFT_SCALE = 1.06;
+var DEFAULT_DRIFT_DURATION_MS = 6e3;
+function squareColRow6(sq2, asWhite) {
+  const f = sq2.charCodeAt(0) - 97;
+  const r = sq2.charCodeAt(1) - 49;
+  return [asWhite ? f : 7 - f, asWhite ? 7 - r : r];
+}
+function isValidSquare5(sq2) {
+  return typeof sq2 === "string" && /^[a-h][1-8]$/.test(sq2);
+}
+function createCameraController(getRoot, getAsWhite) {
+  const state = { scale: 1, rotateX: 0, rotateY: 0 };
+  const active = /* @__PURE__ */ new Set();
+  const composeTransform = () => {
+    const parts = [];
+    if (state.rotateX !== 0 || state.rotateY !== 0) {
+      parts.push("perspective(1000px)");
+      if (state.rotateX !== 0) parts.push(`rotateX(${state.rotateX}deg)`);
+      if (state.rotateY !== 0) parts.push(`rotateY(${state.rotateY}deg)`);
+    }
+    if (state.scale !== 1) parts.push(`scale(${state.scale})`);
+    return parts.length > 0 ? parts.join(" ") : "none";
+  };
+  const applyEndState = (root, target) => {
+    root.style.transform = target === "none" ? "" : target;
+  };
+  const animateTo = (root, target, durationMs, easing2) => {
+    if (!canAnimate2(root) || durationMs <= 0) {
+      applyEndState(root, target);
+      return Promise.resolve();
+    }
+    const from = typeof getComputedStyle === "function" && getComputedStyle(root).transform || "none";
+    const anim = root.animate(
+      [{ transform: from }, { transform: target }],
+      { duration: durationMs, easing: easing2 }
+    );
+    active.add(anim);
+    return waitForAnimation(anim, durationMs).then(() => {
+      if (active.has(anim)) {
+        active.delete(anim);
+        applyEndState(root, target);
+        anim.cancel();
+      }
+    });
+  };
+  const skip = (force) => prefersReducedMotion() && !force;
+  return {
+    zoomTo(square, options) {
+      const root = getRoot();
+      if (!root || !isValidSquare5(square) || skip(options?.force)) return Promise.resolve();
+      const [col, row] = squareColRow6(square, getAsWhite());
+      root.style.transformOrigin = `${(col + 0.5) * 12.5}% ${(row + 0.5) * 12.5}%`;
+      state.scale = options?.scale ?? DEFAULT_ZOOM_SCALE;
+      return animateTo(
+        root,
+        composeTransform(),
+        options?.durationMs ?? DEFAULT_ZOOM_DURATION_MS,
+        options?.easing ?? DEFAULT_ZOOM_EASING
+      );
+    },
+    zoomOut(options) {
+      const root = getRoot();
+      if (!root || skip(options?.force)) return Promise.resolve();
+      state.scale = 1;
+      return animateTo(
+        root,
+        composeTransform(),
+        options?.durationMs ?? DEFAULT_ZOOM_DURATION_MS,
+        options?.easing ?? DEFAULT_ZOOM_EASING
+      );
+    },
+    tilt(options) {
+      const root = getRoot();
+      if (!root || skip(options?.force)) return Promise.resolve();
+      state.rotateX = options?.rotateX ?? DEFAULT_TILT_DEG;
+      state.rotateY = options?.rotateY ?? 0;
+      return animateTo(
+        root,
+        composeTransform(),
+        options?.durationMs ?? DEFAULT_ZOOM_DURATION_MS,
+        options?.easing ?? DEFAULT_ZOOM_EASING
+      );
+    },
+    shake(options) {
+      const root = getRoot();
+      if (!root || !canAnimate2(root) || skip(options?.force)) return Promise.resolve();
+      const intensity = options?.intensity ?? DEFAULT_SHAKE_INTENSITY_PX;
+      const durationMs = options?.durationMs ?? DEFAULT_SHAKE_DURATION_MS;
+      const steps = 6;
+      const frames = [{ transform: "translate(0px, 0px)" }];
+      for (let i = 1; i <= steps; i++) {
+        const amp = intensity * (1 - i / (steps + 1));
+        const sign = i % 2 === 0 ? 1 : -1;
+        frames.push({ transform: `translate(${sign * amp}px, ${-sign * amp * 0.6}px)` });
+      }
+      frames.push({ transform: "translate(0px, 0px)" });
+      let anim;
+      try {
+        anim = root.animate(frames, { duration: durationMs, easing: "ease-out", composite: "add" });
+      } catch {
+        anim = root.animate(frames, { duration: durationMs, easing: "ease-out" });
+      }
+      active.add(anim);
+      return waitForAnimation(anim, durationMs).then(() => {
+        active.delete(anim);
+      });
+    },
+    drift(options) {
+      const root = getRoot();
+      if (!root || !canAnimate2(root) || skip(options?.force)) return { stop: () => {
+      } };
+      const scale = options?.scale ?? DEFAULT_DRIFT_SCALE;
+      const durationMs = options?.durationMs ?? DEFAULT_DRIFT_DURATION_MS;
+      const base = composeTransform();
+      const prefix = base === "none" ? "" : `${base} `;
+      const wander = (scale - 1) * 100;
+      const anim = root.animate(
+        [
+          { transform: `${prefix}translate(0%, 0%) scale(1)` },
+          { transform: `${prefix}translate(${-wander / 2}%, ${wander / 3}%) scale(${scale})` }
+        ],
+        { duration: Math.max(500, durationMs), easing: "ease-in-out", direction: "alternate", iterations: Infinity }
+      );
+      active.add(anim);
+      return {
+        stop: () => {
+          if (active.has(anim)) {
+            active.delete(anim);
+            anim.cancel();
+          }
+        }
+      };
+    },
+    reset() {
+      for (const anim of Array.from(active)) anim.cancel();
+      active.clear();
+      state.scale = 1;
+      state.rotateX = 0;
+      state.rotateY = 0;
+      const root = getRoot();
+      if (root) {
+        root.style.transform = "";
+        root.style.transformOrigin = "";
+      }
+    }
+  };
+}
+
+// src/cinematics/director.ts
+function playCinematicScript(ctx, steps, options) {
+  let cancelled = false;
+  const cancelHooks = /* @__PURE__ */ new Set();
+  const force = options?.force;
+  const wait = (ms) => new Promise((resolve) => {
+    const hook = () => {
+      clearTimeout(tid);
+      resolve();
+    };
+    const tid = setTimeout(() => {
+      cancelHooks.delete(hook);
+      resolve();
+    }, ms);
+    cancelHooks.add(hook);
+  });
+  const runStep = async (step) => {
+    if (cancelled) return;
+    switch (step.type) {
+      case "move": {
+        await ctx.getLayer()?.cinematicMove(step.from, step.to, { force, ...step.options });
+        break;
+      }
+      case "camera": {
+        const opts = step.options;
+        switch (step.action) {
+          case "zoomTo":
+            if (step.square) {
+              await ctx.getCamera().zoomTo(step.square, { force, ...opts });
+            }
+            break;
+          case "zoomOut":
+            await ctx.getCamera().zoomOut({ force, ...opts });
+            break;
+          case "tilt":
+            await ctx.getCamera().tilt({ force, ...opts });
+            break;
+          case "shake":
+            await ctx.getCamera().shake({ force, ...opts });
+            break;
+          case "reset":
+            ctx.peekCamera()?.reset();
+            break;
+        }
+        break;
+      }
+      case "burst": {
+        await ctx.getLayer()?.squareBurst(step.square, { force, ...step.options });
+        break;
+      }
+      case "badge": {
+        await ctx.getLayer()?.popBadge(step.square, { force, ...step.options });
+        break;
+      }
+      case "wait": {
+        await wait(step.ms);
+        break;
+      }
+      case "parallel": {
+        await Promise.all(step.steps.map(runStep));
+        break;
+      }
+      case "call": {
+        await step.fn();
+        break;
+      }
+    }
+  };
+  const finished = (async () => {
+    for (const step of steps) {
+      if (cancelled) break;
+      await runStep(step);
+    }
+  })();
+  const cancel = () => {
+    if (cancelled) return;
+    cancelled = true;
+    for (const hook of Array.from(cancelHooks)) hook();
+    cancelHooks.clear();
+    ctx.getLayer()?.clearCinematics();
+    ctx.peekCamera()?.reset();
+  };
+  return { finished, cancel };
+}
 function pos2user(fileIdx, rankIdx, asWhite, boardWidth, boardHeight) {
   const f = asWhite ? fileIdx : 7 - fileIdx;
   const r = asWhite ? rankIdx : 7 - rankIdx;
@@ -3131,7 +4101,27 @@ var ChessiroCanvas = forwardRef(
     const boardRef = useRef(null);
     const piecesLayerRef = useRef(null);
     const teachingRef = useRef(null);
+    const cinematicRef = useRef(null);
+    const cameraControllerRef = useRef(null);
+    const playbackRef = useRef(null);
     const { bounds, getFreshBounds } = useBoardSize(boardRef);
+    const orientationRef = useRef(orientation);
+    orientationRef.current = orientation;
+    const getCameraController = useCallback(() => {
+      if (!cameraControllerRef.current) {
+        cameraControllerRef.current = createCameraController(
+          () => boardRef.current,
+          () => orientationRef.current === "white"
+        );
+      }
+      return cameraControllerRef.current;
+    }, []);
+    useEffect(() => {
+      return () => {
+        playbackRef.current?.cancel();
+        playbackRef.current = null;
+      };
+    }, []);
     const piecesMap = useMemo(() => readFen(position || INITIAL_FEN), [position]);
     const boundsToDomRect = useCallback((b) => {
       return {
@@ -3258,8 +4248,45 @@ var ChessiroCanvas = forwardRef(
       },
       clearTeachingEffects() {
         teachingRef.current?.clearEffects();
+      },
+      cinematicMove(from, to, options) {
+        return cinematicRef.current?.cinematicMove(from, to, options) ?? Promise.resolve();
+      },
+      squareBurst(square, options) {
+        return cinematicRef.current?.squareBurst(square, options) ?? Promise.resolve();
+      },
+      popBadge(square, options) {
+        return cinematicRef.current?.popBadge(square, options) ?? Promise.resolve();
+      },
+      clearCinematics() {
+        playbackRef.current?.cancel();
+        playbackRef.current = null;
+        cinematicRef.current?.clearCinematics();
+        cameraControllerRef.current?.reset();
+      },
+      playCinematic(steps, options) {
+        playbackRef.current?.cancel();
+        const playback = playCinematicScript(
+          {
+            getLayer: () => cinematicRef.current,
+            getCamera: getCameraController,
+            peekCamera: () => cameraControllerRef.current
+          },
+          steps,
+          options
+        );
+        playbackRef.current = playback;
+        return playback;
+      },
+      camera: {
+        zoomTo: (square, options) => getCameraController().zoomTo(square, options),
+        zoomOut: (options) => getCameraController().zoomOut(options),
+        tilt: (options) => getCameraController().tilt(options),
+        shake: (options) => getCameraController().shake(options),
+        drift: (options) => getCameraController().drift(options),
+        reset: () => cameraControllerRef.current?.reset()
       }
-    }), [bounds, orientation, getFreshDomRect]);
+    }), [bounds, orientation, getFreshDomRect, getCameraController]);
     const hasValidSize = bounds && bounds.width > 0;
     const boardWidth = bounds?.width ?? 0;
     const boardHeight = bounds?.height ?? 0;
@@ -3376,6 +4403,18 @@ var ChessiroCanvas = forwardRef(
                             TeachingLayer,
                             {
                               ref: teachingRef,
+                              orientation,
+                              pieces: piecesMap,
+                              pieceSet,
+                              customPieces,
+                              flipPieces,
+                              getPieceElement
+                            }
+                          ),
+                          /* @__PURE__ */ jsx(
+                            CinematicLayer,
+                            {
+                              ref: cinematicRef,
                               orientation,
                               pieces: piecesMap,
                               pieceSet,

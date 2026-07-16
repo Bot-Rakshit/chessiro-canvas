@@ -353,6 +353,163 @@ export interface SquareLabel {
   corner?: 'topLeft' | 'topRight' | 'bottomLeft' | 'bottomRight' | 'center';
 }
 
+// ── Cinematic effects ──────────────────────────────────────────────
+
+/** Preset choreography for `cinematicMove`. */
+export type CinematicStyle = 'brilliant' | 'great' | 'smooth' | 'slam';
+
+export interface CinematicMoveOptions {
+  /** Choreography preset. Default: 'brilliant'. */
+  style?: CinematicStyle;
+  /** Total duration in ms. Default depends on style (brilliant: 2000). */
+  durationMs?: number;
+  /** Full rotateY turns during flight. Default depends on style. */
+  spins?: number;
+  /** Vertical arc peak in squares. Default depends on style. */
+  arcHeight?: number;
+  /** Scale applied while the piece is airborne. Default depends on style. */
+  liftScale?: number;
+  /** Glow color for the in-flight drop-shadow. Default depends on style. */
+  glowColor?: string;
+  /** Sparkle burst on landing. Default depends on style. */
+  sparkles?: boolean;
+  /** Expanding shockwave ring on landing. Default depends on style. */
+  shockwave?: boolean;
+  /** Badge text popped at the destination on landing (e.g. '!!'). */
+  badge?: string;
+  /** Badge background color. Default: '#26c2a3'. */
+  badgeColor?: string;
+  /** Compress the end of the flight so the final approach plays in slow motion. */
+  slowMoLanding?: boolean;
+  /** Piece key like 'wQ' to animate when the origin square is empty. */
+  piece?: string;
+  /** Play the full choreography even when the user prefers reduced motion. */
+  force?: boolean;
+}
+
+export interface SquareBurstOptions {
+  /** What to spawn. Default: 'both'. */
+  kind?: 'sparkles' | 'shockwave' | 'both';
+  /** Particle / ring color. Default: '#ffd65a'. */
+  color?: string;
+  /** Number of sparkle particles (clamped to 4..24). Default: 12. */
+  particleCount?: number;
+  /** Sparkle flight duration in ms. Default: 650. */
+  durationMs?: number;
+  /** Play even when the user prefers reduced motion. */
+  force?: boolean;
+}
+
+export interface PopBadgeOptions {
+  /** Badge text, e.g. '!!'. */
+  text: string;
+  /** Text color. Default: '#ffffff'. */
+  color?: string;
+  /** Badge background. Default: '#26c2a3'. */
+  background?: string;
+  /** Total lifetime (pop + hold + fade) in ms. Default: 1600. */
+  durationMs?: number;
+  /** Placement inside the square. Default: 'topRight'. */
+  corner?: 'topRight' | 'center';
+  /** Play even when the user prefers reduced motion. */
+  force?: boolean;
+}
+
+export interface CameraZoomOptions {
+  /** Zoom scale. Default: 1.6. */
+  scale?: number;
+  /** Duration in ms. Default: 600. */
+  durationMs?: number;
+  /** CSS easing. Default: a gentle ease-out. */
+  easing?: string;
+  /** Animate even when the user prefers reduced motion. */
+  force?: boolean;
+}
+
+export interface CameraTiltOptions {
+  /** 3D tilt around the X axis in degrees. Default: 18. */
+  rotateX?: number;
+  /** 3D tilt around the Y axis in degrees. Default: 0. */
+  rotateY?: number;
+  /** Duration in ms. Default: 600. */
+  durationMs?: number;
+  /** CSS easing. Default: a gentle ease-out. */
+  easing?: string;
+  /** Animate even when the user prefers reduced motion. */
+  force?: boolean;
+}
+
+export interface CameraShakeOptions {
+  /** Peak jitter in px. Default: 6. */
+  intensity?: number;
+  /** Duration in ms. Default: 400. */
+  durationMs?: number;
+  /** Animate even when the user prefers reduced motion. */
+  force?: boolean;
+}
+
+export interface CameraDriftOptions {
+  /** Peak Ken Burns scale. Default: 1.06. */
+  scale?: number;
+  /** One drift half-cycle in ms. Default: 6000. */
+  durationMs?: number;
+  /** Animate even when the user prefers reduced motion. */
+  force?: boolean;
+}
+
+/**
+ * WAAPI-driven "camera" that transforms the board root element.
+ *
+ * IMPORTANT: camera transforms change getBoundingClientRect, so
+ * pointer-to-square math is wrong while zoomed/tilted — cinematics are meant
+ * for non-interactive replay boards (`interactive={false}`). `reset()`
+ * restores correctness. Board METRICS (square sizes, piece positions) are
+ * unaffected because the board measures itself via offsetWidth/offsetHeight.
+ */
+export interface CameraController {
+  /** Zoom toward a square (transform-origin at its center). */
+  zoomTo: (square: Square, options?: CameraZoomOptions) => Promise<void>;
+  /** Zoom back to identity scale. */
+  zoomOut: (options?: CameraZoomOptions) => Promise<void>;
+  /** Tilt the board in 3D (perspective + rotateX/rotateY). */
+  tilt: (options?: CameraTiltOptions) => Promise<void>;
+  /** Impact shake: decaying translate jitter. */
+  shake: (options?: CameraShakeOptions) => Promise<void>;
+  /** Slow Ken Burns wander. Runs until stopped. */
+  drift: (options?: CameraDriftOptions) => { stop: () => void };
+  /** Cancel all camera animations and clear transforms. */
+  reset: () => void;
+}
+
+/** One step of a `playCinematic` script. */
+export type CinematicStep =
+  | { type: 'move'; from: Square; to: Square; options?: CinematicMoveOptions }
+  | {
+      type: 'camera';
+      action: 'zoomTo' | 'zoomOut' | 'tilt' | 'shake' | 'reset';
+      square?: Square;
+      options?: Record<string, number | string>;
+    }
+  | { type: 'burst'; square: Square; options?: SquareBurstOptions }
+  | { type: 'badge'; square: Square; options: PopBadgeOptions }
+  | { type: 'wait'; ms: number }
+  /** Run children concurrently and await them all. */
+  | { type: 'parallel'; steps: CinematicStep[] }
+  /** App hook, e.g. commit the position after a 'move' step. */
+  | { type: 'call'; fn: () => void | Promise<void> };
+
+export interface PlayCinematicOptions {
+  /** Play the full script even when the user prefers reduced motion. */
+  force?: boolean;
+}
+
+export interface CinematicPlayback {
+  /** Resolves when the script completes or is cancelled. */
+  finished: Promise<void>;
+  /** Stop mid-sequence: clears all cinematic effects and resets the camera. */
+  cancel: () => void;
+}
+
 /** A move the student is expected to play in guided (drill) mode. */
 export interface ExpectedMove {
   from: string;
@@ -513,4 +670,29 @@ export interface ChessiroCanvasRef {
   shakePiece: (square: string) => Promise<void>;
   /** Cancel all in-flight teaching effects (demos and pulses). */
   clearTeachingEffects: () => void;
+  /**
+   * Choreographed cinematic flight of the piece on `from` to `to` (spins,
+   * arcs, glow, landing effects). Resolves after the landing effects finish.
+   * Like `animateMove`, it does not call onMove — commit the move (update
+   * `position`) yourself when it resolves. Meant for non-interactive replay
+   * boards ("share game" screens).
+   */
+  cinematicMove: (from: Square, to: Square, options?: CinematicMoveOptions) => Promise<void>;
+  /** Sparkle burst and/or shockwave ring centered on a square. */
+  squareBurst: (square: Square, options?: SquareBurstOptions) => Promise<void>;
+  /** Pop an annotation badge ('!!', '?', ...) on a square. */
+  popBadge: (square: Square, options: PopBadgeOptions) => Promise<void>;
+  /**
+   * Cancel the running cinematic script and every cinematic effect: WAAPI
+   * animations are cancelled, hidden pieces restored, overlay nodes
+   * unmounted and the camera reset.
+   */
+  clearCinematics: () => void;
+  /**
+   * Run a cinematic script (moves, camera work, bursts, badges, waits).
+   * Starting a new script cancels the previous one.
+   */
+  playCinematic: (steps: CinematicStep[], options?: PlayCinematicOptions) => CinematicPlayback;
+  /** Cinematic camera: zoom, tilt, shake and drift the whole board. */
+  camera: CameraController;
 }

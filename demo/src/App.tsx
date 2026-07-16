@@ -14,6 +14,8 @@ import {
   type ChessiroCanvasRef,
   type GhostPiece,
   type SquareLabel,
+  type Square,
+  type CinematicStep,
 } from 'chessiro-canvas';
 import { Chess } from 'chessops/chess';
 import { chessgroundDests } from 'chessops/compat';
@@ -67,6 +69,7 @@ const SECTION_LINKS = [
   { id: 'studio', label: 'Arrows & Premove Studio' },
   { id: 'teaching', label: 'Teaching Toolkit' },
   { id: 'drills', label: 'Interactive Drills' },
+  { id: 'cinematics', label: 'Cinematic Studio' },
   { id: 'quick-start', label: 'Quick Start' },
   { id: 'customization', label: 'Customization' },
   { id: 'props', label: 'Props' },
@@ -584,6 +587,19 @@ export function App() {
               <GuidedDrill theme={theme} />
               <ForkTrainer theme={theme} />
             </div>
+          </section>
+
+          <section id="cinematics" className="mb-16">
+            <div className="mb-8">
+              <h2 className="text-2xl font-bold text-white mb-2">Cinematic Studio</h2>
+              <p className="text-slate-400">
+                Replay primitives for "share game" screens: brilliant moves fly with 3D spins and arcs, the camera
+                zooms and shakes, sparkles and badges pop on landing. Scripted with{' '}
+                <code className="text-amber-400">playCinematic</code> — and completely free when unused: no DOM, no
+                listeners, no rAF loops while idle.
+              </p>
+            </div>
+            <CinematicStudio theme={theme} />
           </section>
 
           <section id="quick-start" className="mb-16">
@@ -1722,6 +1738,247 @@ function ForkTrainer({ theme }: { theme: BoardTheme }) {
           }}
         />
       )}
+    </div>
+  );
+}
+
+// ── Cinematic studio: replay effects for "share game" screens ───────
+
+const CINEMATIC_FEN = 'r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5Q2/PPPP1PPP/RNB1K1NR w KQkq - 0 1';
+
+function createCinematicPos() {
+  return Chess.fromSetup(parseFen(CINEMATIC_FEN).unwrap()).unwrap();
+}
+
+const CINEMATIC_CODE = `const boardRef = useRef<ChessiroCanvasRef>(null);
+
+// Script a brilliant-move replay: zoom in, fly the queen with 3D spins,
+// commit the position, shake the camera, zoom back out.
+const playback = boardRef.current.playCinematic([
+  { type: 'camera', action: 'zoomTo', square: 'f7', options: { scale: 1.5 } },
+  { type: 'move', from: 'f3', to: 'f7', options: { style: 'brilliant', badge: '!!' } },
+  { type: 'call', fn: () => commitMove('f3', 'f7') }, // your position update
+  { type: 'camera', action: 'shake' },
+  { type: 'wait', ms: 400 },
+  { type: 'camera', action: 'zoomOut' },
+]);
+await playback.finished;   // or playback.cancel() to stop mid-sequence
+
+// One-off primitives, outside a script:
+await boardRef.current.cinematicMove('g1', 'f3', { style: 'slam' });
+await boardRef.current.squareBurst('e4', { kind: 'both' });
+await boardRef.current.popBadge('f7', { text: '!!' });
+await boardRef.current.camera.tilt({ rotateX: 18 });
+const drift = boardRef.current.camera.drift(); // Ken Burns wander
+drift.stop();
+boardRef.current.clearCinematics(); // cancel everything + reset camera
+
+// Respects prefers-reduced-motion (degrades to a plain glide);
+// pass { force: true } to override. Use interactive={false} —
+// camera transforms break pointer-to-square math until reset().`;
+
+function CinematicStudio({ theme }: { theme: BoardTheme }) {
+  const boardRef = useRef<ChessiroCanvasRef>(null);
+  const [pos, setPos] = useState(createCinematicPos);
+  const [lastMove, setLastMove] = useState<{ from: string; to: string } | null>(null);
+  const [instant, setInstant] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState('Idle — pick a cinematic. The board is non-interactive, like a replay screen.');
+  const driftRef = useRef<{ stop: () => void } | null>(null);
+
+  const posRef = useRef(pos);
+  posRef.current = pos;
+
+  const fen = useMemo(() => makeFen(pos.toSetup()), [pos]);
+
+  // Commit a move with piece animations suppressed for one tick so the
+  // position update doesn't animate on top of the cinematic landing.
+  const commitInstant = useCallback((from: string, to: string) => {
+    const move = parseUci(`${from}${to}`);
+    const current = posRef.current;
+    if (!move || !current.isLegal(move)) return;
+    const next = current.clone();
+    next.play(move);
+    setInstant(true);
+    setPos(next);
+    setLastMove({ from, to });
+    window.setTimeout(() => setInstant(false), 80);
+  }, []);
+
+  const resetTo = useCallback((factory: () => ReturnType<typeof createCinematicPos>) => {
+    driftRef.current?.stop();
+    driftRef.current = null;
+    boardRef.current?.clearCinematics();
+    setPos(factory());
+    setLastMove(null);
+  }, []);
+
+  const playBrilliant = useCallback(async () => {
+    if (busy || !boardRef.current) return;
+    setBusy(true);
+    setStatus('Qxf7!! — camera zooms in, the queen flies with 1.5 spins and lands with sparkles.');
+    try {
+      resetTo(createCinematicPos);
+      await sleep(400);
+      const playback = boardRef.current.playCinematic([
+        { type: 'camera', action: 'zoomTo', square: 'f7', options: { scale: 1.5 } },
+        { type: 'move', from: 'f3', to: 'f7', options: { style: 'brilliant', badge: '!!' } },
+        { type: 'call', fn: () => commitInstant('f3', 'f7') },
+        { type: 'camera', action: 'shake' },
+        { type: 'wait', ms: 400 },
+        { type: 'camera', action: 'zoomOut' },
+      ]);
+      await playback.finished;
+      setStatus('Scholar\u2019s Mate, cinematically. Every step is a plain CinematicStep object.');
+    } finally {
+      setBusy(false);
+    }
+  }, [busy, resetTo, commitInstant]);
+
+  const playSlam = useCallback(async () => {
+    if (busy || !boardRef.current) return;
+    setBusy(true);
+    setStatus('Slam: the knight rises toward the viewer, hangs, then slams down with a shockwave.');
+    try {
+      resetTo(createInitialPosition);
+      await sleep(400);
+      const playback = boardRef.current.playCinematic([
+        { type: 'move', from: 'g1', to: 'f3', options: { style: 'slam' } },
+        { type: 'call', fn: () => commitInstant('g1', 'f3') },
+        { type: 'camera', action: 'shake', options: { intensity: 8 } },
+      ]);
+      await playback.finished;
+      setStatus('Nf3, slammed.');
+    } finally {
+      setBusy(false);
+    }
+  }, [busy, resetTo, commitInstant]);
+
+  const playSmoothReplay = useCallback(async () => {
+    if (busy || !boardRef.current) return;
+    setBusy(true);
+    setStatus('Smooth replay: gentle arcs, no landing effects — for the non-highlight moves.');
+    try {
+      resetTo(createInitialPosition);
+      await sleep(400);
+      const moves: Array<[Square, Square]> = [['e2', 'e4'], ['e7', 'e5'], ['g1', 'f3']];
+      const playback = boardRef.current.playCinematic(
+        moves.flatMap<CinematicStep>(([from, to]) => [
+          { type: 'move', from, to, options: { style: 'smooth' } },
+          { type: 'call', fn: () => commitInstant(from, to) },
+          { type: 'wait', ms: 120 },
+        ]),
+      );
+      await playback.finished;
+      setStatus('Three smooth replay moves, sequenced with playCinematic.');
+    } finally {
+      setBusy(false);
+    }
+  }, [busy, resetTo, commitInstant]);
+
+  const playSparkles = useCallback(() => {
+    setStatus('squareBurst: sparkles + shockwave on e4.');
+    boardRef.current?.squareBurst('e4', { kind: 'both' });
+  }, []);
+
+  const playBadge = useCallback(() => {
+    setStatus('popBadge: chess.com-style \u201C!!\u201D annotation on f7.');
+    boardRef.current?.popBadge('f7', { text: '!!' });
+  }, []);
+
+  const playTiltDrift = useCallback(async () => {
+    if (!boardRef.current) return;
+    setStatus('camera.tilt + camera.drift: 3D tilt, then a slow Ken Burns wander until reset.');
+    driftRef.current?.stop();
+    await boardRef.current.camera.tilt({ rotateX: 18 });
+    driftRef.current = boardRef.current.camera.drift();
+  }, []);
+
+  const resetAll = useCallback(() => {
+    resetTo(createCinematicPos);
+    setStatus('Reset: cinematics cancelled, camera restored, position back to the start.');
+  }, [resetTo]);
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px] gap-6">
+      <div className="space-y-4">
+        <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-6 flex items-start justify-center overflow-hidden">
+          <div style={{ width: '92%' }}>
+            <ChessiroCanvas
+              ref={boardRef}
+              position={fen}
+              lastMove={lastMove}
+              interactive={false}
+              theme={theme}
+              showAnimations={!instant}
+              showNotation
+              showMargin
+            />
+          </div>
+        </div>
+        <div className="p-3 rounded-lg bg-slate-900/50 border border-slate-800 text-sm text-amber-400 min-h-[42px]">
+          {status}
+        </div>
+      </div>
+
+      <div className="space-y-4">
+        <ControlCard title="Scripted sequences (playCinematic)">
+          <button
+            onClick={playBrilliant}
+            disabled={busy}
+            className="w-full px-3 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-900 font-semibold text-sm transition-colors"
+          >
+            {busy ? 'Playing…' : 'Brilliant move (Qxf7!!)'}
+          </button>
+          <button
+            onClick={playSlam}
+            disabled={busy}
+            className="w-full px-3 py-2 rounded-lg border border-slate-700 hover:bg-slate-800 disabled:opacity-50 text-sm"
+          >
+            Slam (Nf3)
+          </button>
+          <button
+            onClick={playSmoothReplay}
+            disabled={busy}
+            className="w-full px-3 py-2 rounded-lg border border-slate-700 hover:bg-slate-800 disabled:opacity-50 text-sm"
+          >
+            Smooth replay (3 quick moves)
+          </button>
+          <p className="text-xs text-slate-500">
+            Scripts are arrays of steps: <code className="text-amber-400">move</code>,{' '}
+            <code className="text-amber-400">camera</code>, <code className="text-amber-400">burst</code>,{' '}
+            <code className="text-amber-400">badge</code>, <code className="text-amber-400">wait</code>,{' '}
+            <code className="text-amber-400">parallel</code> and <code className="text-amber-400">call</code>{' '}
+            (commit your position after a move lands).
+          </p>
+        </ControlCard>
+
+        <ControlCard title="Primitives">
+          <button onClick={playSparkles} className="w-full px-3 py-2 rounded-lg border border-slate-700 hover:bg-slate-800 text-sm">
+            Sparkles (squareBurst)
+          </button>
+          <button onClick={playBadge} className="w-full px-3 py-2 rounded-lg border border-slate-700 hover:bg-slate-800 text-sm">
+            Badge (popBadge)
+          </button>
+          <button onClick={playTiltDrift} className="w-full px-3 py-2 rounded-lg border border-slate-700 hover:bg-slate-800 text-sm">
+            Tilt + drift (camera)
+          </button>
+          <p className="text-xs text-slate-500">
+            All effects run on the GPU compositor via WAAPI (transform/opacity/filter only) — zero React state
+            updates per frame. <code className="text-amber-400">prefers-reduced-motion</code> degrades flights to a
+            plain glide.
+          </p>
+        </ControlCard>
+
+        <button onClick={resetAll} className="w-full px-3 py-2 rounded-lg border border-slate-700 hover:bg-slate-800 text-sm">
+          Reset / Cancel (clearCinematics)
+        </button>
+      </div>
+
+      <div className="lg:col-span-2">
+        <h3 className="text-sm font-medium text-slate-400 mb-3">Cinematic API</h3>
+        <CodeBlock code={CINEMATIC_CODE} language="tsx" />
+      </div>
     </div>
   );
 }
