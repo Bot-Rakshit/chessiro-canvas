@@ -5,6 +5,8 @@ import type {
   CameraController, CameraDriftOptions, CameraShakeOptions, CameraTiltOptions, CameraZoomOptions,
   CelebrateOptions, CinematicMoveOptions, CinematicPlayback, CinematicStep,
   PlayCinematicOptions, PopBadgeOptions, PopBannerOptions, SquareBurstOptions,
+  PromotionBeamOptions, ImplodeOptions, CastleSwapOptions, SpotlightOptions,
+  SpotlightHandle, LaserOptions,
 } from './types';
 import { INITIAL_FEN, readFen } from './utils/fen';
 import { screenPos2square } from './utils/coords';
@@ -306,6 +308,21 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
       },
       popBanner(options: PopBannerOptions) {
         return cinematicRef.current?.popBanner(options) ?? Promise.resolve();
+      },
+      promotionBeam(square: Square, options?: PromotionBeamOptions) {
+        return cinematicRef.current?.promotionBeam(square, options) ?? Promise.resolve();
+      },
+      implode(square: Square, options?: ImplodeOptions) {
+        return cinematicRef.current?.implode(square, options) ?? Promise.resolve();
+      },
+      castleSwap(kingFrom: Square, kingTo: Square, rookFrom: Square, rookTo: Square, options?: CastleSwapOptions) {
+        return cinematicRef.current?.castleSwap(kingFrom, kingTo, rookFrom, rookTo, options) ?? Promise.resolve();
+      },
+      spotlight(squares: Square[], options?: SpotlightOptions): SpotlightHandle {
+        return cinematicRef.current?.spotlight(squares, options) ?? { clear: () => Promise.resolve() };
+      },
+      drawLaser(from: Square, to: Square, options?: LaserOptions) {
+        return cinematicRef.current?.drawLaser(from, to, options) ?? Promise.resolve();
       },
       clearCinematics() {
         playbackRef.current?.cancel();

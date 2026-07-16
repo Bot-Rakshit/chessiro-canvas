@@ -10,7 +10,8 @@ import {
 import type {
   Orientation, Pieces, PieceSet, PieceRenderer, Square,
   CinematicMoveOptions, CinematicStyle, SquareBurstOptions, PopBadgeOptions,
-  CelebrateOptions, PopBannerOptions,
+  CelebrateOptions, PopBannerOptions, PromotionBeamOptions, ImplodeOptions,
+  CastleSwapOptions, SpotlightOptions, SpotlightHandle, LaserOptions,
 } from '../types';
 import { PieceGlyph } from './PieceGlyph';
 import { canAnimate, prefersReducedMotion, waitForAnimation } from '../cinematics/motion';
@@ -21,6 +22,11 @@ export interface CinematicLayerRef {
   popBadge: (square: Square, options: PopBadgeOptions) => Promise<void>;
   celebrate: (options?: CelebrateOptions) => Promise<void>;
   popBanner: (options: PopBannerOptions) => Promise<void>;
+  promotionBeam: (square: Square, options?: PromotionBeamOptions) => Promise<void>;
+  implode: (square: Square, options?: ImplodeOptions) => Promise<void>;
+  castleSwap: (kingFrom: Square, kingTo: Square, rookFrom: Square, rookTo: Square, options?: CastleSwapOptions) => Promise<void>;
+  spotlight: (squares: Square[], options?: SpotlightOptions) => SpotlightHandle;
+  drawLaser: (from: Square, to: Square, options?: LaserOptions) => Promise<void>;
   clearCinematics: () => void;
 }
 
@@ -151,6 +157,54 @@ interface BannerEntry {
   durationMs: number;
 }
 
+interface PromoEntry {
+  id: number;
+  col: number;
+  row: number;
+  color: string;
+  durationMs: number;
+  fromPieceKey?: string;
+  toPieceKey?: string;
+}
+
+interface ImplodeEntry {
+  id: number;
+  col: number;
+  row: number;
+  color: string;
+  durationMs: number;
+  pieceKey?: string;
+}
+
+interface SpotHole {
+  cx: number;
+  cy: number;
+  r: number;
+}
+
+interface SpotlightEntry {
+  id: number;
+  holes: SpotHole[];
+  color: string;
+  durationMs: number;
+}
+
+interface LaserEntry {
+  id: number;
+  sx: number;
+  sy: number;
+  ex: number;
+  ey: number;
+  dist: number;
+  angle: number;
+  color: string;
+  glowColor: string;
+  widthPx: number;
+  durationMs: number;
+  persist: boolean;
+  holdMs: number;
+}
+
 const BRILLIANT_TEAL = '#26c2a3';
 const DEFAULT_BURST_COLOR = '#ffd65a';
 const DEFAULT_BURST_DURATION_MS = 650;
@@ -161,6 +215,21 @@ const VICTIM_BLAST_DURATION_MS = 700;
 const FLASH_DURATION_MS = 380;
 const DEFAULT_CELEBRATE_DURATION_MS = 2200;
 const DEFAULT_BANNER_DURATION_MS = 1800;
+const DEFAULT_PROMOTION_BEAM_DURATION_MS = 1500;
+const DEFAULT_PROMOTION_BEAM_COLOR = '#ffe27a';
+const DEFAULT_IMPLODE_DURATION_MS = 750;
+const DEFAULT_IMPLODE_COLOR = '#b07bff';
+const DEFAULT_CASTLE_SWAP_DURATION_MS = 1100;
+const DEFAULT_CASTLE_SWAP_GLOW = '#8fd0ff';
+const DEFAULT_SPOTLIGHT_DURATION_MS = 420;
+const DEFAULT_SPOTLIGHT_COLOR = 'rgba(3, 7, 15, 0.74)';
+const DEFAULT_SPOTLIGHT_RADIUS = 0.72;
+const DEFAULT_LASER_COLOR = '#ff3b3b';
+const DEFAULT_LASER_DURATION_MS = 500;
+const DEFAULT_LASER_WIDTH_PX = 4;
+const DEFAULT_LASER_HOLD_MS = 400;
+const LASER_FADE_MS = 250;
+const HEX6 = /^#[0-9a-f]{6}$/i;
 const TRAIL_GAP_MS = 55;
 const FLIGHT_SAMPLES = 24;
 const CELEBRATE_COLORS = [BRILLIANT_TEAL, '#ffd65a', '#ff6b6b', '#5ea2d9', '#b78bff', '#7ee081'];
@@ -487,6 +556,10 @@ export const CinematicLayer = memo(forwardRef<CinematicLayerRef, CinematicLayerP
   const [flashes, setFlashes] = useState<FlashEntry[]>([]);
   const [confetti, setConfetti] = useState<ConfettiEntry[]>([]);
   const [banners, setBanners] = useState<BannerEntry[]>([]);
+  const [promos, setPromos] = useState<PromoEntry[]>([]);
+  const [implodes, setImplodes] = useState<ImplodeEntry[]>([]);
+  const [spotlights, setSpotlights] = useState<SpotlightEntry[]>([]);
+  const [lasers, setLasers] = useState<LaserEntry[]>([]);
   const movesRef = useRef<MoveEntry[]>(moves);
   movesRef.current = moves;
 
@@ -504,6 +577,8 @@ export const CinematicLayer = memo(forwardRef<CinematicLayerRef, CinematicLayerP
   const animationsRef = useRef<Map<number, Animation[]>>(new Map());
   const timeoutsRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
   const hiddenVictimsRef = useRef<Map<number, string>>(new Map());
+  const hiddenSquaresRef = useRef<Map<number, string>>(new Map());
+  const spotlightElsRef = useRef<Map<number, HTMLElement>>(new Map());
   const startedRef = useRef<Set<number>>(new Set());
   const finishedRef = useRef<Set<number>>(new Set());
 
@@ -560,12 +635,54 @@ export const CinematicLayer = memo(forwardRef<CinematicLayerRef, CinematicLayerP
     resolve?.();
   }, []);
 
+  // Like makeFinisher but for effects that hide a real board piece: resolves
+  // first, then restores the hidden piece a couple of frames later (double
+  // rAF + timer fallback + cleaned guard) so frameless/backgrounded captures
+  // never leak the hidden piece — mirrors finishMove's cleanup.
+  const makeHiddenFinisher = useCallback(<T extends { id: number },>(
+    setEntries: (updater: (prev: T[]) => T[]) => void,
+  ) => (entry: T) => {
+    if (finishedRef.current.has(entry.id)) return;
+    finishedRef.current.add(entry.id);
+
+    const resolve = resolversRef.current.get(entry.id);
+    resolversRef.current.delete(entry.id);
+    resolve?.();
+
+    let cleaned = false;
+    const cleanup = () => {
+      if (cleaned) return;
+      cleaned = true;
+      const anims = animationsRef.current.get(entry.id);
+      if (anims) for (const anim of anims) anim.cancel();
+      animationsRef.current.delete(entry.id);
+      startedRef.current.delete(entry.id);
+      finishedRef.current.delete(entry.id);
+      const square = hiddenSquaresRef.current.get(entry.id);
+      if (square) {
+        hiddenSquaresRef.current.delete(entry.id);
+        const el = getPieceElementRef.current(square);
+        if (el) el.style.opacity = '';
+      }
+      setEntries(prev => prev.filter(e => e.id !== entry.id));
+    };
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(() => requestAnimationFrame(cleanup));
+      setTimeout(cleanup, 150);
+    } else {
+      cleanup();
+    }
+  }, []);
+
   const finishBurst = useRef(makeFinisher<BurstEntry>(setBursts)).current;
   const finishBadge = useRef(makeFinisher<BadgeEntry>(setBadges)).current;
   const finishBlast = useRef(makeFinisher<BlastEntry>(setBlasts)).current;
   const finishFlash = useRef(makeFinisher<FlashEntry>(setFlashes)).current;
   const finishConfetti = useRef(makeFinisher<ConfettiEntry>(setConfetti)).current;
   const finishBanner = useRef(makeFinisher<BannerEntry>(setBanners)).current;
+  const finishPromo = useRef(makeHiddenFinisher<PromoEntry>(setPromos)).current;
+  const finishImplode = useRef(makeHiddenFinisher<ImplodeEntry>(setImplodes)).current;
+  const finishLaser = useRef(makeFinisher<LaserEntry>(setLasers)).current;
 
   const spawnBurst = useCallback((square: Square, options?: SquareBurstOptions): Promise<void> => {
     const [col, row] = squareColRow(square, asWhiteRef.current);
@@ -954,6 +1071,252 @@ export const CinematicLayer = memo(forwardRef<CinematicLayerRef, CinematicLayerP
     waitForAnimation(anim, duration).then(() => finishBanner(entry));
   }, [finishBanner]);
 
+  const startPromotionAnimation = useCallback((container: HTMLDivElement, entry: PromoEntry) => {
+    if (startedRef.current.has(entry.id)) return;
+    startedRef.current.add(entry.id);
+
+    const c = entry.color;
+    const d = entry.durationMs;
+    const anims: Animation[] = [];
+    const waits: Promise<void>[] = [];
+
+    const pillar = container.querySelector<HTMLElement>('[data-promo-pillar]');
+    if (pillar && canAnimate(pillar)) {
+      const anim = pillar.animate(
+        [
+          { transform: 'scaleX(0.8) scaleY(0)', opacity: 0, offset: 0 },
+          { transform: 'scaleX(1.1) scaleY(1)', opacity: 0.95, offset: 0.4 },
+          { transform: 'scaleX(0.9) scaleY(1)', opacity: 0.85, offset: 0.7 },
+          { transform: 'scaleX(0.7) scaleY(1.05)', opacity: 0, offset: 1 },
+        ],
+        { duration: d, easing: 'ease-out', fill: 'forwards' },
+      );
+      anims.push(anim);
+      waits.push(waitForAnimation(anim, d));
+    }
+
+    const ring = container.querySelector<HTMLElement>('[data-promo-ring]');
+    if (ring && canAnimate(ring)) {
+      const ringMs = Math.max(50, Math.round(d * 0.55));
+      const anim = ring.animate(
+        [
+          { transform: 'scale(0.3)', opacity: 0.9 },
+          { transform: 'scale(2.2)', opacity: 0 },
+        ],
+        { duration: ringMs, easing: 'ease-out', fill: 'forwards' },
+      );
+      anims.push(anim);
+      waits.push(waitForAnimation(anim, ringMs));
+    }
+
+    const flash = container.querySelector<HTMLElement>('[data-promo-flash]');
+    if (flash && canAnimate(flash)) {
+      const anim = flash.animate(
+        [
+          { opacity: 0, offset: 0 },
+          { opacity: 0, offset: 0.38 },
+          { opacity: 0.6, offset: 0.46 },
+          { opacity: 0, offset: 0.6 },
+          { opacity: 0, offset: 1 },
+        ],
+        { duration: d, easing: 'ease-out', fill: 'forwards' },
+      );
+      anims.push(anim);
+      waits.push(waitForAnimation(anim, d));
+    }
+
+    const oldPiece = container.querySelector<HTMLElement>('[data-promo-old]');
+    if (oldPiece && canAnimate(oldPiece)) {
+      const oldMs = Math.max(50, Math.round(d * 0.45));
+      const anim = oldPiece.animate(
+        [
+          { transform: 'scaleX(1) scaleY(1) rotateZ(0deg)', opacity: 1 },
+          { transform: 'scaleX(0.2) scaleY(0.2) rotateZ(180deg)', opacity: 0 },
+        ],
+        { duration: oldMs, easing: 'ease-in', fill: 'forwards' },
+      );
+      anims.push(anim);
+      waits.push(waitForAnimation(anim, oldMs));
+    }
+
+    const newPiece = container.querySelector<HTMLElement>('[data-promo-new]');
+    if (newPiece && canAnimate(newPiece)) {
+      const anim = newPiece.animate(
+        [
+          { transform: 'scale(0) rotateY(0deg)', opacity: 0, filter: `drop-shadow(0 0 0px ${c})`, offset: 0 },
+          { transform: 'scale(0) rotateY(0deg)', opacity: 0, filter: `drop-shadow(0 0 0px ${c})`, offset: 0.4 },
+          { transform: 'scale(1.2) rotateY(720deg)', opacity: 1, filter: `drop-shadow(0 0 20px ${c})`, offset: 0.62 },
+          { transform: 'scale(1) rotateY(720deg)', opacity: 1, filter: `drop-shadow(0 0 4px ${c})`, offset: 1 },
+        ],
+        { duration: d, easing: 'ease-out', fill: 'forwards' },
+      );
+      anims.push(anim);
+      waits.push(waitForAnimation(anim, d));
+    }
+
+    if (anims.length === 0) {
+      finishPromo(entry);
+      return;
+    }
+    animationsRef.current.set(entry.id, anims);
+    Promise.all(waits).then(() => finishPromo(entry));
+  }, [finishPromo]);
+
+  const startImplodeAnimation = useCallback((container: HTMLDivElement, entry: ImplodeEntry) => {
+    if (startedRef.current.has(entry.id)) return;
+    startedRef.current.add(entry.id);
+
+    const d = entry.durationMs;
+    const anims: Animation[] = [];
+    const waits: Promise<void>[] = [];
+
+    const rings = container.querySelectorAll<HTMLElement>('[data-implode-ring]');
+    rings.forEach((ringEl, i) => {
+      if (!canAnimate(ringEl)) return;
+      const dir = i % 2 === 0 ? 1 : -1;
+      const anim = ringEl.animate(
+        [
+          { transform: `scale(1.6) rotateZ(0deg)`, opacity: 0, offset: 0 },
+          { transform: `scale(1) rotateZ(${dir * 180}deg)`, opacity: 0.9, offset: 0.4 },
+          { transform: `scale(0) rotateZ(${dir * 360}deg)`, opacity: 0, offset: 1 },
+        ],
+        { duration: d, easing: 'ease-in', fill: 'forwards' },
+      );
+      anims.push(anim);
+      waits.push(waitForAnimation(anim, d));
+    });
+
+    const core = container.querySelector<HTMLElement>('[data-implode-core]');
+    if (core && canAnimate(core)) {
+      const anim = core.animate(
+        [
+          { transform: 'scale(0)', opacity: 0, offset: 0 },
+          { transform: 'scale(1.4)', opacity: 0.95, offset: 0.7 },
+          { transform: 'scale(0)', opacity: 0, offset: 1 },
+        ],
+        { duration: d, easing: 'ease-in', fill: 'forwards' },
+      );
+      anims.push(anim);
+      waits.push(waitForAnimation(anim, d));
+    }
+
+    const piece = container.querySelector<HTMLElement>('[data-implode-piece]');
+    if (piece && canAnimate(piece)) {
+      const anim = piece.animate(
+        [
+          { transform: 'scaleX(1) scaleY(1) rotateZ(0deg)', opacity: 1, offset: 0 },
+          { transform: 'scaleX(0.5) scaleY(0.6) rotateZ(360deg)', opacity: 0.9, offset: 0.6 },
+          { transform: 'scaleX(0.05) scaleY(0.25) rotateZ(720deg)', opacity: 0, offset: 1 },
+        ],
+        { duration: d, easing: 'ease-in', fill: 'forwards' },
+      );
+      anims.push(anim);
+      waits.push(waitForAnimation(anim, d));
+    }
+
+    const flash = container.querySelector<HTMLElement>('[data-implode-flash]');
+    if (flash && canAnimate(flash)) {
+      const anim = flash.animate(
+        [
+          { opacity: 0, offset: 0 },
+          { opacity: 0, offset: 0.8 },
+          { opacity: 0.5, offset: 0.9 },
+          { opacity: 0, offset: 1 },
+        ],
+        { duration: d, easing: 'ease-out', fill: 'forwards' },
+      );
+      anims.push(anim);
+      waits.push(waitForAnimation(anim, d));
+    }
+
+    if (anims.length === 0) {
+      finishImplode(entry);
+      return;
+    }
+    animationsRef.current.set(entry.id, anims);
+    Promise.all(waits).then(() => finishImplode(entry));
+  }, [finishImplode]);
+
+  const startSpotlightAnimation = useCallback((el: HTMLDivElement, entry: SpotlightEntry) => {
+    spotlightElsRef.current.set(entry.id, el);
+    if (startedRef.current.has(entry.id)) return;
+    startedRef.current.add(entry.id);
+
+    if (!canAnimate(el)) return;
+    const anim = el.animate(
+      [{ opacity: 0 }, { opacity: 1 }],
+      { duration: entry.durationMs, easing: 'ease-out', fill: 'forwards' },
+    );
+    animationsRef.current.set(entry.id, [anim]);
+  }, []);
+
+  const startLaserAnimation = useCallback((container: HTMLDivElement, entry: LaserEntry) => {
+    if (startedRef.current.has(entry.id)) return;
+    startedRef.current.add(entry.id);
+
+    const beam = container.querySelector<HTMLElement>('[data-laser-beam]');
+    const tip = container.querySelector<HTMLElement>('[data-laser-tip]');
+    if (!beam || !canAnimate(beam)) {
+      finishLaser(entry);
+      return;
+    }
+    const drawMs = entry.durationMs;
+    const anims: Animation[] = [];
+    const beamDraw = beam.animate(
+      [
+        { transform: `rotate(${entry.angle}deg) scaleX(0)`, opacity: 0, offset: 0 },
+        { transform: `rotate(${entry.angle}deg) scaleX(0)`, opacity: 1, offset: 0.1 },
+        { transform: `rotate(${entry.angle}deg) scaleX(1)`, opacity: 1, offset: 1 },
+      ],
+      { duration: drawMs, easing: 'ease-out', fill: 'forwards' },
+    );
+    anims.push(beamDraw);
+    if (tip && canAnimate(tip)) {
+      const tipAnim = tip.animate(
+        [
+          { opacity: 0, offset: 0 },
+          { opacity: 1, offset: 0.5 },
+          { opacity: 0.6, offset: 1 },
+        ],
+        {
+          duration: Math.max(50, Math.round(drawMs * 0.5)),
+          delay: Math.round(drawMs * 0.85),
+          easing: 'ease-out',
+          fill: 'forwards',
+        },
+      );
+      anims.push(tipAnim);
+    }
+    animationsRef.current.set(entry.id, anims);
+
+    waitForAnimation(beamDraw, drawMs).then(() => {
+      // Cleared mid-draw: clearCinematics already resolved the caller.
+      if (!animationsRef.current.has(entry.id) || finishedRef.current.has(entry.id)) return;
+      if (entry.persist) {
+        // Resolve now but leave the beam on the board until clearCinematics.
+        const resolve = resolversRef.current.get(entry.id);
+        resolversRef.current.delete(entry.id);
+        resolve?.();
+        return;
+      }
+      const fadeBeam = beam.animate(
+        [{ opacity: 1 }, { opacity: 0 }],
+        { duration: LASER_FADE_MS, delay: entry.holdMs, easing: 'ease-out', fill: 'forwards' },
+      );
+      const current = animationsRef.current.get(entry.id) ?? [];
+      current.push(fadeBeam);
+      if (tip && canAnimate(tip)) {
+        const fadeTip = tip.animate(
+          [{ opacity: 0.6 }, { opacity: 0 }],
+          { duration: LASER_FADE_MS, delay: entry.holdMs, easing: 'ease-out', fill: 'forwards' },
+        );
+        current.push(fadeTip);
+      }
+      animationsRef.current.set(entry.id, current);
+      waitForAnimation(fadeBeam, LASER_FADE_MS + entry.holdMs).then(() => finishLaser(entry));
+    });
+  }, [finishLaser]);
+
   /**
    * Choreographed flight of the piece on `from` to `to`. The real piece on
    * `from` is hidden during the flight and restored on cleanup. Resolves
@@ -1084,6 +1447,206 @@ export const CinematicLayer = memo(forwardRef<CinematicLayerRef, CinematicLayerP
     });
   }, []);
 
+  /**
+   * "Evolution" pillar of light that morphs the piece on `square` into a new
+   * one. The real piece is hidden and restored on cleanup; the promise
+   * resolves while the revealed piece (fill: forwards) still covers the
+   * square — commit the real promotion then (same contract as cinematicMove).
+   */
+  const promotionBeam = useCallback((square: Square, options?: PromotionBeamOptions): Promise<void> => {
+    if (!isValidSquare(square)) return Promise.resolve();
+    if (prefersReducedMotion() && !options?.force) return Promise.resolve();
+
+    const existing = piecesRef.current.get(square);
+    const fromPieceKey = options?.fromPiece
+      ?? (existing ? `${existing.color}${existing.role.toUpperCase()}` : undefined);
+    const toPieceKey = options?.piece;
+
+    const [col, row] = squareColRow(square, asWhiteRef.current);
+    const entry: PromoEntry = {
+      id: ++idRef.current,
+      col,
+      row,
+      color: options?.color ?? DEFAULT_PROMOTION_BEAM_COLOR,
+      durationMs: Math.max(100, options?.durationMs ?? DEFAULT_PROMOTION_BEAM_DURATION_MS),
+      fromPieceKey,
+      toPieceKey,
+    };
+
+    if (existing) {
+      const orig = getPieceElementRef.current(square);
+      if (orig) {
+        orig.style.opacity = '0';
+        hiddenSquaresRef.current.set(entry.id, square);
+      }
+    }
+
+    return new Promise<void>((resolve) => {
+      resolversRef.current.set(entry.id, resolve);
+      setPromos(prev => [...prev, entry]);
+    });
+  }, []);
+
+  /**
+   * Collapse the piece on `square` into a swirling black-hole vortex. The real
+   * piece is hidden and restored on cleanup; commit the capture/removal when
+   * the promise resolves.
+   */
+  const implode = useCallback((square: Square, options?: ImplodeOptions): Promise<void> => {
+    if (!isValidSquare(square)) return Promise.resolve();
+    if (prefersReducedMotion() && !options?.force) return Promise.resolve();
+
+    const existing = piecesRef.current.get(square);
+    const pieceKey = options?.piece
+      ?? (existing ? `${existing.color}${existing.role.toUpperCase()}` : undefined);
+
+    const [col, row] = squareColRow(square, asWhiteRef.current);
+    const entry: ImplodeEntry = {
+      id: ++idRef.current,
+      col,
+      row,
+      color: options?.color ?? DEFAULT_IMPLODE_COLOR,
+      durationMs: Math.max(100, options?.durationMs ?? DEFAULT_IMPLODE_DURATION_MS),
+      pieceKey,
+    };
+
+    if (existing) {
+      const orig = getPieceElementRef.current(square);
+      if (orig) {
+        orig.style.opacity = '0';
+        hiddenSquaresRef.current.set(entry.id, square);
+      }
+    }
+
+    return new Promise<void>((resolve) => {
+      resolversRef.current.set(entry.id, resolve);
+      setImplodes(prev => [...prev, entry]);
+    });
+  }, []);
+
+  /**
+   * 3D teleport-swap of a castle: king and rook fly simultaneously (the rook
+   * arcs lower so they pass without colliding). A thin wrapper over two
+   * concurrent cinematicMove flights. Commit the real castle when it resolves.
+   */
+  const castleSwap = useCallback((
+    kingFrom: Square, kingTo: Square, rookFrom: Square, rookTo: Square, options?: CastleSwapOptions,
+  ): Promise<void> => {
+    if (![kingFrom, kingTo, rookFrom, rookTo].every(isValidSquare)) return Promise.resolve();
+    if (prefersReducedMotion() && !options?.force) return Promise.resolve();
+
+    const arc = options?.arcHeight ?? 0.9;
+    const common: CinematicMoveOptions = {
+      style: 'great',
+      durationMs: options?.durationMs ?? DEFAULT_CASTLE_SWAP_DURATION_MS,
+      spins: options?.spins ?? 1,
+      glowColor: options?.glowColor ?? DEFAULT_CASTLE_SWAP_GLOW,
+      sparkles: false,
+      shockwave: false,
+      flash: false,
+      victimBlast: false,
+      impactShake: false,
+      trail: false,
+      force: options?.force,
+    };
+    const king = cinematicMove(kingFrom, kingTo, { ...common, arcHeight: arc });
+    const rook = cinematicMove(rookFrom, rookTo, { ...common, arcHeight: arc * 0.4 });
+    return Promise.all([king, rook]).then(() => undefined);
+  }, [cinematicMove]);
+
+  /**
+   * Dim the whole board except spotlight holes over `squares`. Persists until
+   * the returned handle's `clear()` runs (or clearCinematics). Returns a no-op
+   * handle when reduced motion is preferred (unless force).
+   */
+  const spotlight = useCallback((squares: Square[], options?: SpotlightOptions): SpotlightHandle => {
+    if (prefersReducedMotion() && !options?.force) return { clear: () => Promise.resolve() };
+    const valid = squares.filter(isValidSquare);
+    if (valid.length === 0) return { clear: () => Promise.resolve() };
+
+    const white = asWhiteRef.current;
+    const rPct = (options?.radius ?? DEFAULT_SPOTLIGHT_RADIUS) * 12.5;
+    const holes: SpotHole[] = valid.map((sq) => {
+      const [col, row] = squareColRow(sq, white);
+      return { cx: (col + 0.5) * 12.5, cy: (row + 0.5) * 12.5, r: rPct };
+    });
+    const entry: SpotlightEntry = {
+      id: ++idRef.current,
+      holes,
+      color: options?.color ?? DEFAULT_SPOTLIGHT_COLOR,
+      durationMs: Math.max(50, options?.durationMs ?? DEFAULT_SPOTLIGHT_DURATION_MS),
+    };
+    setSpotlights(prev => [...prev, entry]);
+
+    let cleared = false;
+    const clear = (durationMs?: number): Promise<void> => {
+      if (cleared) return Promise.resolve();
+      cleared = true;
+      return new Promise<void>((resolve) => {
+        const fadeMs = Math.max(1, durationMs ?? entry.durationMs);
+        const existing = animationsRef.current.get(entry.id) ?? [];
+        const el = spotlightElsRef.current.get(entry.id);
+        const remove = () => {
+          for (const a of (animationsRef.current.get(entry.id) ?? [])) a.cancel();
+          animationsRef.current.delete(entry.id);
+          startedRef.current.delete(entry.id);
+          spotlightElsRef.current.delete(entry.id);
+          setSpotlights(prev => prev.filter(s => s.id !== entry.id));
+          resolve();
+        };
+        if (el && canAnimate(el)) {
+          const from = (typeof getComputedStyle === 'function' && getComputedStyle(el).opacity) || '1';
+          const fade = el.animate(
+            [{ opacity: from }, { opacity: 0 }],
+            { duration: fadeMs, easing: 'ease-out', fill: 'forwards' },
+          );
+          animationsRef.current.set(entry.id, [...existing, fade]);
+          waitForAnimation(fade, fadeMs).then(remove);
+        } else {
+          remove();
+        }
+      });
+    };
+    return { clear };
+  }, []);
+
+  /** Animated glowing threat beam from `from` to `to` (HTML, no SVG). */
+  const drawLaser = useCallback((from: Square, to: Square, options?: LaserOptions): Promise<void> => {
+    if (!isValidSquare(from) || !isValidSquare(to)) return Promise.resolve();
+    if (prefersReducedMotion() && !options?.force) return Promise.resolve();
+
+    const white = asWhiteRef.current;
+    const [fc, fr] = squareColRow(from, white);
+    const [tc, tr] = squareColRow(to, white);
+    const sx = (fc + 0.5) * 12.5;
+    const sy = (fr + 0.5) * 12.5;
+    const ex = (tc + 0.5) * 12.5;
+    const ey = (tr + 0.5) * 12.5;
+    const dxp = ex - sx;
+    const dyp = ey - sy;
+    const color = options?.color ?? DEFAULT_LASER_COLOR;
+    const entry: LaserEntry = {
+      id: ++idRef.current,
+      sx,
+      sy,
+      ex,
+      ey,
+      dist: Math.hypot(dxp, dyp),
+      angle: Math.atan2(dyp, dxp) * 180 / Math.PI,
+      color,
+      glowColor: options?.glowColor ?? color,
+      widthPx: Math.max(1, options?.widthPx ?? DEFAULT_LASER_WIDTH_PX),
+      durationMs: Math.max(50, options?.durationMs ?? DEFAULT_LASER_DURATION_MS),
+      persist: options?.persist ?? false,
+      holdMs: Math.max(0, options?.holdMs ?? DEFAULT_LASER_HOLD_MS),
+    };
+
+    return new Promise<void>((resolve) => {
+      resolversRef.current.set(entry.id, resolve);
+      setLasers(prev => [...prev, entry]);
+    });
+  }, []);
+
   const clearCinematics = useCallback(() => {
     for (const anims of Array.from(animationsRef.current.values())) {
       for (const anim of anims) anim.cancel();
@@ -1102,6 +1665,12 @@ export const CinematicLayer = memo(forwardRef<CinematicLayerRef, CinematicLayerP
       if (el) el.style.opacity = '';
     }
     hiddenVictimsRef.current.clear();
+    for (const square of hiddenSquaresRef.current.values()) {
+      const el = getPieceElementRef.current(square);
+      if (el) el.style.opacity = '';
+    }
+    hiddenSquaresRef.current.clear();
+    spotlightElsRef.current.clear();
     const resolvers = Array.from(resolversRef.current.values());
     resolversRef.current.clear();
     startedRef.current.clear();
@@ -1113,6 +1682,10 @@ export const CinematicLayer = memo(forwardRef<CinematicLayerRef, CinematicLayerP
     setFlashes([]);
     setConfetti([]);
     setBanners([]);
+    setPromos([]);
+    setImplodes([]);
+    setSpotlights([]);
+    setLasers([]);
     for (const resolve of resolvers) resolve();
   }, []);
 
@@ -1122,8 +1695,13 @@ export const CinematicLayer = memo(forwardRef<CinematicLayerRef, CinematicLayerP
     popBadge,
     celebrate,
     popBanner,
+    promotionBeam,
+    implode,
+    castleSwap,
+    spotlight,
+    drawLaser,
     clearCinematics,
-  }), [cinematicMove, squareBurst, popBadge, celebrate, popBanner, clearCinematics]);
+  }), [cinematicMove, squareBurst, popBadge, celebrate, popBanner, promotionBeam, implode, castleSwap, spotlight, drawLaser, clearCinematics]);
 
   useEffect(() => {
     return () => {
@@ -1133,6 +1711,11 @@ export const CinematicLayer = memo(forwardRef<CinematicLayerRef, CinematicLayerP
       animationsRef.current.clear();
       for (const tid of timeoutsRef.current.values()) clearTimeout(tid);
       timeoutsRef.current.clear();
+      for (const square of hiddenSquaresRef.current.values()) {
+        const el = getPieceElementRef.current(square);
+        if (el) el.style.opacity = '';
+      }
+      hiddenSquaresRef.current.clear();
       for (const resolve of resolversRef.current.values()) resolve();
       resolversRef.current.clear();
     };
@@ -1141,7 +1724,8 @@ export const CinematicLayer = memo(forwardRef<CinematicLayerRef, CinematicLayerP
   if (
     moves.length === 0 && bursts.length === 0 && badges.length === 0
     && blasts.length === 0 && flashes.length === 0 && confetti.length === 0
-    && banners.length === 0
+    && banners.length === 0 && promos.length === 0 && implodes.length === 0
+    && spotlights.length === 0 && lasers.length === 0
   ) return null;
 
   const pieceBox = { width: '12.5%', height: '12.5%' } as const;
@@ -1411,6 +1995,191 @@ export const CinematicLayer = memo(forwardRef<CinematicLayerRef, CinematicLayerP
           </span>
         </div>
       ))}
+      {spotlights.map((s) => {
+        const mask = s.holes
+          .map(h => `radial-gradient(circle at ${h.cx}% ${h.cy}%, transparent 0, transparent ${h.r * 0.7}%, black ${h.r}%)`)
+          .join(', ');
+        return (
+          <div
+            key={`spotlight-${s.id}`}
+            ref={(el) => { if (el) startSpotlightAnimation(el, s); }}
+            style={{
+              position: 'absolute',
+              inset: 0,
+              background: s.color,
+              opacity: 0,
+              pointerEvents: 'none',
+              willChange: 'opacity',
+              zIndex: 1,
+              maskImage: mask,
+              WebkitMaskImage: mask,
+              maskComposite: 'intersect',
+              WebkitMaskComposite: 'source-in',
+            }}
+          />
+        );
+      })}
+      {promos.map((p) => (
+        <div
+          key={`promo-${p.id}`}
+          ref={(el) => { if (el) startPromotionAnimation(el, p); }}
+          style={{
+            position: 'absolute',
+            ...pieceBox,
+            transform: positionTransform(p.col, p.row),
+            pointerEvents: 'none',
+            perspective: 800,
+            zIndex: 4,
+          }}
+        >
+          <div
+            data-promo-pillar
+            style={{
+              position: 'absolute',
+              left: '50%',
+              bottom: '50%',
+              width: '50%',
+              height: '320%',
+              marginLeft: '-25%',
+              background: `linear-gradient(to top, ${p.color} 0%, transparent 85%)`,
+              filter: 'blur(1px)',
+              transformOrigin: 'bottom center',
+              opacity: 0,
+              willChange: 'transform, opacity',
+            }}
+          />
+          <div
+            data-promo-ring
+            style={{
+              position: 'absolute',
+              inset: '8%',
+              borderRadius: '50%',
+              border: `3px solid ${p.color}`,
+              boxShadow: `0 0 10px ${p.color}`,
+              opacity: 0,
+              willChange: 'transform, opacity',
+            }}
+          />
+          {p.fromPieceKey && (
+            <div
+              data-promo-old
+              style={{ position: 'absolute', inset: 0, opacity: 1, transformOrigin: 'center center', willChange: 'transform, opacity' }}
+            >
+              <div style={{ width: '100%', height: '100%', transform: flipPieces ? 'rotate(180deg)' : undefined, transformOrigin: 'center center' }}>
+                <PieceGlyph pieceKey={p.fromPieceKey} pieceSet={pieceSet} customPieces={customPieces} />
+              </div>
+            </div>
+          )}
+          {p.toPieceKey && (
+            <div
+              data-promo-new
+              style={{ position: 'absolute', inset: 0, opacity: 0, transformStyle: 'preserve-3d', transformOrigin: 'center center', willChange: 'transform, opacity, filter' }}
+            >
+              <div style={{ width: '100%', height: '100%', transform: flipPieces ? 'rotate(180deg)' : undefined, transformOrigin: 'center center' }}>
+                <PieceGlyph pieceKey={p.toPieceKey} pieceSet={pieceSet} customPieces={customPieces} />
+              </div>
+            </div>
+          )}
+          <div
+            data-promo-flash
+            style={{
+              position: 'absolute',
+              inset: '-40%',
+              borderRadius: '50%',
+              background: `radial-gradient(circle, #ffffff 0%, ${p.color} 35%, transparent 70%)`,
+              opacity: 0,
+              willChange: 'opacity',
+            }}
+          />
+        </div>
+      ))}
+      {implodes.map((im) => (
+        <div
+          key={`implode-${im.id}`}
+          ref={(el) => { if (el) startImplodeAnimation(el, im); }}
+          style={{
+            position: 'absolute',
+            ...pieceBox,
+            transform: positionTransform(im.col, im.row),
+            pointerEvents: 'none',
+            zIndex: 4,
+          }}
+        >
+          <div
+            data-implode-ring
+            style={{ position: 'absolute', inset: '-12%', borderRadius: '50%', border: `2px solid ${im.color}`, boxShadow: `0 0 10px ${im.color}`, opacity: 0, willChange: 'transform, opacity' }}
+          />
+          <div
+            data-implode-ring
+            style={{ position: 'absolute', inset: '12%', borderRadius: '50%', border: `2px solid ${im.color}`, boxShadow: `0 0 10px ${im.color}`, opacity: 0, willChange: 'transform, opacity' }}
+          />
+          <div
+            data-implode-core
+            style={{ position: 'absolute', inset: '28%', borderRadius: '50%', background: 'radial-gradient(circle, rgba(0, 0, 0, 0.9), transparent 70%)', opacity: 0, willChange: 'transform, opacity' }}
+          />
+          {im.pieceKey && (
+            <div
+              data-implode-piece
+              style={{ position: 'absolute', inset: 0, opacity: 1, transformOrigin: 'center center', willChange: 'transform, opacity' }}
+            >
+              <div style={{ width: '100%', height: '100%', transform: flipPieces ? 'rotate(180deg)' : undefined, transformOrigin: 'center center' }}>
+                <PieceGlyph pieceKey={im.pieceKey} pieceSet={pieceSet} customPieces={customPieces} />
+              </div>
+            </div>
+          )}
+          <div
+            data-implode-flash
+            style={{ position: 'absolute', inset: '-30%', borderRadius: '50%', background: `radial-gradient(circle, #ffffff 0%, ${im.color} 40%, transparent 70%)`, opacity: 0, willChange: 'opacity' }}
+          />
+        </div>
+      ))}
+      {lasers.map((l) => {
+        const gradient = HEX6.test(l.color)
+          ? `linear-gradient(90deg, ${l.color}00 0%, ${l.color} 60%, #ffffff 100%)`
+          : `linear-gradient(90deg, transparent, ${l.color} 60%, #ffffff)`;
+        return (
+          <div
+            key={`laser-${l.id}`}
+            ref={(el) => { if (el) startLaserAnimation(el, l); }}
+            style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 8 }}
+          >
+            <div
+              data-laser-beam
+              style={{
+                position: 'absolute',
+                left: `${l.sx}%`,
+                top: `${l.sy}%`,
+                width: `${l.dist}%`,
+                height: `${l.widthPx}px`,
+                marginTop: `${-l.widthPx / 2}px`,
+                transformOrigin: '0 50%',
+                transform: `rotate(${l.angle}deg)`,
+                background: gradient,
+                borderRadius: `${l.widthPx}px`,
+                boxShadow: `0 0 ${l.widthPx * 2}px ${l.glowColor}, 0 0 ${l.widthPx * 4}px ${l.glowColor}`,
+                opacity: 0,
+                willChange: 'transform, opacity',
+              }}
+            />
+            <div
+              data-laser-tip
+              style={{
+                position: 'absolute',
+                left: `${l.ex}%`,
+                top: `${l.ey}%`,
+                width: `${l.widthPx * 3}px`,
+                height: `${l.widthPx * 3}px`,
+                marginLeft: `${-l.widthPx * 1.5}px`,
+                marginTop: `${-l.widthPx * 1.5}px`,
+                borderRadius: '50%',
+                background: `radial-gradient(circle, #ffffff 0%, ${l.glowColor} 40%, transparent 70%)`,
+                opacity: 0,
+                willChange: 'opacity',
+              }}
+            />
+          </div>
+        );
+      })}
     </div>
   );
 }));

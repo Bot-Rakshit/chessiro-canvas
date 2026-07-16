@@ -2251,6 +2251,21 @@ var VICTIM_BLAST_DURATION_MS = 700;
 var FLASH_DURATION_MS = 380;
 var DEFAULT_CELEBRATE_DURATION_MS = 2200;
 var DEFAULT_BANNER_DURATION_MS = 1800;
+var DEFAULT_PROMOTION_BEAM_DURATION_MS = 1500;
+var DEFAULT_PROMOTION_BEAM_COLOR = "#ffe27a";
+var DEFAULT_IMPLODE_DURATION_MS = 750;
+var DEFAULT_IMPLODE_COLOR = "#b07bff";
+var DEFAULT_CASTLE_SWAP_DURATION_MS = 1100;
+var DEFAULT_CASTLE_SWAP_GLOW = "#8fd0ff";
+var DEFAULT_SPOTLIGHT_DURATION_MS = 420;
+var DEFAULT_SPOTLIGHT_COLOR = "rgba(3, 7, 15, 0.74)";
+var DEFAULT_SPOTLIGHT_RADIUS = 0.72;
+var DEFAULT_LASER_COLOR = "#ff3b3b";
+var DEFAULT_LASER_DURATION_MS = 500;
+var DEFAULT_LASER_WIDTH_PX = 4;
+var DEFAULT_LASER_HOLD_MS = 400;
+var LASER_FADE_MS = 250;
+var HEX6 = /^#[0-9a-f]{6}$/i;
 var TRAIL_GAP_MS = 55;
 var FLIGHT_SAMPLES = 24;
 var CELEBRATE_COLORS = [BRILLIANT_TEAL, "#ffd65a", "#ff6b6b", "#5ea2d9", "#b78bff", "#7ee081"];
@@ -2553,6 +2568,10 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
   const [flashes, setFlashes] = useState([]);
   const [confetti, setConfetti] = useState([]);
   const [banners, setBanners] = useState([]);
+  const [promos, setPromos] = useState([]);
+  const [implodes, setImplodes] = useState([]);
+  const [spotlights, setSpotlights] = useState([]);
+  const [lasers, setLasers] = useState([]);
   const movesRef = useRef(moves);
   movesRef.current = moves;
   const idRef = useRef(0);
@@ -2568,6 +2587,8 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
   const animationsRef = useRef(/* @__PURE__ */ new Map());
   const timeoutsRef = useRef(/* @__PURE__ */ new Map());
   const hiddenVictimsRef = useRef(/* @__PURE__ */ new Map());
+  const hiddenSquaresRef = useRef(/* @__PURE__ */ new Map());
+  const spotlightElsRef = useRef(/* @__PURE__ */ new Map());
   const startedRef = useRef(/* @__PURE__ */ new Set());
   const finishedRef = useRef(/* @__PURE__ */ new Set());
   const finishMove = useCallback((entry) => {
@@ -2612,12 +2633,45 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
     setEntries((prev) => prev.filter((b) => b.id !== entry.id));
     resolve?.();
   }, []);
+  const makeHiddenFinisher = useCallback((setEntries) => (entry) => {
+    if (finishedRef.current.has(entry.id)) return;
+    finishedRef.current.add(entry.id);
+    const resolve = resolversRef.current.get(entry.id);
+    resolversRef.current.delete(entry.id);
+    resolve?.();
+    let cleaned = false;
+    const cleanup = () => {
+      if (cleaned) return;
+      cleaned = true;
+      const anims = animationsRef.current.get(entry.id);
+      if (anims) for (const anim of anims) anim.cancel();
+      animationsRef.current.delete(entry.id);
+      startedRef.current.delete(entry.id);
+      finishedRef.current.delete(entry.id);
+      const square = hiddenSquaresRef.current.get(entry.id);
+      if (square) {
+        hiddenSquaresRef.current.delete(entry.id);
+        const el = getPieceElementRef.current(square);
+        if (el) el.style.opacity = "";
+      }
+      setEntries((prev) => prev.filter((e) => e.id !== entry.id));
+    };
+    if (typeof requestAnimationFrame === "function") {
+      requestAnimationFrame(() => requestAnimationFrame(cleanup));
+      setTimeout(cleanup, 150);
+    } else {
+      cleanup();
+    }
+  }, []);
   const finishBurst = useRef(makeFinisher(setBursts)).current;
   const finishBadge = useRef(makeFinisher(setBadges)).current;
   const finishBlast = useRef(makeFinisher(setBlasts)).current;
   const finishFlash = useRef(makeFinisher(setFlashes)).current;
   const finishConfetti = useRef(makeFinisher(setConfetti)).current;
   const finishBanner = useRef(makeFinisher(setBanners)).current;
+  const finishPromo = useRef(makeHiddenFinisher(setPromos)).current;
+  const finishImplode = useRef(makeHiddenFinisher(setImplodes)).current;
+  const finishLaser = useRef(makeFinisher(setLasers)).current;
   const spawnBurst = useCallback((square, options) => {
     const [col, row] = squareColRow5(square, asWhiteRef.current);
     const kind = options?.kind ?? "both";
@@ -2978,6 +3032,230 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
     animationsRef.current.set(entry.id, [anim]);
     waitForAnimation(anim, duration).then(() => finishBanner(entry));
   }, [finishBanner]);
+  const startPromotionAnimation = useCallback((container, entry) => {
+    if (startedRef.current.has(entry.id)) return;
+    startedRef.current.add(entry.id);
+    const c = entry.color;
+    const d = entry.durationMs;
+    const anims = [];
+    const waits = [];
+    const pillar = container.querySelector("[data-promo-pillar]");
+    if (pillar && canAnimate2(pillar)) {
+      const anim = pillar.animate(
+        [
+          { transform: "scaleX(0.8) scaleY(0)", opacity: 0, offset: 0 },
+          { transform: "scaleX(1.1) scaleY(1)", opacity: 0.95, offset: 0.4 },
+          { transform: "scaleX(0.9) scaleY(1)", opacity: 0.85, offset: 0.7 },
+          { transform: "scaleX(0.7) scaleY(1.05)", opacity: 0, offset: 1 }
+        ],
+        { duration: d, easing: "ease-out", fill: "forwards" }
+      );
+      anims.push(anim);
+      waits.push(waitForAnimation(anim, d));
+    }
+    const ring = container.querySelector("[data-promo-ring]");
+    if (ring && canAnimate2(ring)) {
+      const ringMs = Math.max(50, Math.round(d * 0.55));
+      const anim = ring.animate(
+        [
+          { transform: "scale(0.3)", opacity: 0.9 },
+          { transform: "scale(2.2)", opacity: 0 }
+        ],
+        { duration: ringMs, easing: "ease-out", fill: "forwards" }
+      );
+      anims.push(anim);
+      waits.push(waitForAnimation(anim, ringMs));
+    }
+    const flash = container.querySelector("[data-promo-flash]");
+    if (flash && canAnimate2(flash)) {
+      const anim = flash.animate(
+        [
+          { opacity: 0, offset: 0 },
+          { opacity: 0, offset: 0.38 },
+          { opacity: 0.6, offset: 0.46 },
+          { opacity: 0, offset: 0.6 },
+          { opacity: 0, offset: 1 }
+        ],
+        { duration: d, easing: "ease-out", fill: "forwards" }
+      );
+      anims.push(anim);
+      waits.push(waitForAnimation(anim, d));
+    }
+    const oldPiece = container.querySelector("[data-promo-old]");
+    if (oldPiece && canAnimate2(oldPiece)) {
+      const oldMs = Math.max(50, Math.round(d * 0.45));
+      const anim = oldPiece.animate(
+        [
+          { transform: "scaleX(1) scaleY(1) rotateZ(0deg)", opacity: 1 },
+          { transform: "scaleX(0.2) scaleY(0.2) rotateZ(180deg)", opacity: 0 }
+        ],
+        { duration: oldMs, easing: "ease-in", fill: "forwards" }
+      );
+      anims.push(anim);
+      waits.push(waitForAnimation(anim, oldMs));
+    }
+    const newPiece = container.querySelector("[data-promo-new]");
+    if (newPiece && canAnimate2(newPiece)) {
+      const anim = newPiece.animate(
+        [
+          { transform: "scale(0) rotateY(0deg)", opacity: 0, filter: `drop-shadow(0 0 0px ${c})`, offset: 0 },
+          { transform: "scale(0) rotateY(0deg)", opacity: 0, filter: `drop-shadow(0 0 0px ${c})`, offset: 0.4 },
+          { transform: "scale(1.2) rotateY(720deg)", opacity: 1, filter: `drop-shadow(0 0 20px ${c})`, offset: 0.62 },
+          { transform: "scale(1) rotateY(720deg)", opacity: 1, filter: `drop-shadow(0 0 4px ${c})`, offset: 1 }
+        ],
+        { duration: d, easing: "ease-out", fill: "forwards" }
+      );
+      anims.push(anim);
+      waits.push(waitForAnimation(anim, d));
+    }
+    if (anims.length === 0) {
+      finishPromo(entry);
+      return;
+    }
+    animationsRef.current.set(entry.id, anims);
+    Promise.all(waits).then(() => finishPromo(entry));
+  }, [finishPromo]);
+  const startImplodeAnimation = useCallback((container, entry) => {
+    if (startedRef.current.has(entry.id)) return;
+    startedRef.current.add(entry.id);
+    const d = entry.durationMs;
+    const anims = [];
+    const waits = [];
+    const rings = container.querySelectorAll("[data-implode-ring]");
+    rings.forEach((ringEl, i) => {
+      if (!canAnimate2(ringEl)) return;
+      const dir = i % 2 === 0 ? 1 : -1;
+      const anim = ringEl.animate(
+        [
+          { transform: `scale(1.6) rotateZ(0deg)`, opacity: 0, offset: 0 },
+          { transform: `scale(1) rotateZ(${dir * 180}deg)`, opacity: 0.9, offset: 0.4 },
+          { transform: `scale(0) rotateZ(${dir * 360}deg)`, opacity: 0, offset: 1 }
+        ],
+        { duration: d, easing: "ease-in", fill: "forwards" }
+      );
+      anims.push(anim);
+      waits.push(waitForAnimation(anim, d));
+    });
+    const core = container.querySelector("[data-implode-core]");
+    if (core && canAnimate2(core)) {
+      const anim = core.animate(
+        [
+          { transform: "scale(0)", opacity: 0, offset: 0 },
+          { transform: "scale(1.4)", opacity: 0.95, offset: 0.7 },
+          { transform: "scale(0)", opacity: 0, offset: 1 }
+        ],
+        { duration: d, easing: "ease-in", fill: "forwards" }
+      );
+      anims.push(anim);
+      waits.push(waitForAnimation(anim, d));
+    }
+    const piece = container.querySelector("[data-implode-piece]");
+    if (piece && canAnimate2(piece)) {
+      const anim = piece.animate(
+        [
+          { transform: "scaleX(1) scaleY(1) rotateZ(0deg)", opacity: 1, offset: 0 },
+          { transform: "scaleX(0.5) scaleY(0.6) rotateZ(360deg)", opacity: 0.9, offset: 0.6 },
+          { transform: "scaleX(0.05) scaleY(0.25) rotateZ(720deg)", opacity: 0, offset: 1 }
+        ],
+        { duration: d, easing: "ease-in", fill: "forwards" }
+      );
+      anims.push(anim);
+      waits.push(waitForAnimation(anim, d));
+    }
+    const flash = container.querySelector("[data-implode-flash]");
+    if (flash && canAnimate2(flash)) {
+      const anim = flash.animate(
+        [
+          { opacity: 0, offset: 0 },
+          { opacity: 0, offset: 0.8 },
+          { opacity: 0.5, offset: 0.9 },
+          { opacity: 0, offset: 1 }
+        ],
+        { duration: d, easing: "ease-out", fill: "forwards" }
+      );
+      anims.push(anim);
+      waits.push(waitForAnimation(anim, d));
+    }
+    if (anims.length === 0) {
+      finishImplode(entry);
+      return;
+    }
+    animationsRef.current.set(entry.id, anims);
+    Promise.all(waits).then(() => finishImplode(entry));
+  }, [finishImplode]);
+  const startSpotlightAnimation = useCallback((el, entry) => {
+    spotlightElsRef.current.set(entry.id, el);
+    if (startedRef.current.has(entry.id)) return;
+    startedRef.current.add(entry.id);
+    if (!canAnimate2(el)) return;
+    const anim = el.animate(
+      [{ opacity: 0 }, { opacity: 1 }],
+      { duration: entry.durationMs, easing: "ease-out", fill: "forwards" }
+    );
+    animationsRef.current.set(entry.id, [anim]);
+  }, []);
+  const startLaserAnimation = useCallback((container, entry) => {
+    if (startedRef.current.has(entry.id)) return;
+    startedRef.current.add(entry.id);
+    const beam = container.querySelector("[data-laser-beam]");
+    const tip = container.querySelector("[data-laser-tip]");
+    if (!beam || !canAnimate2(beam)) {
+      finishLaser(entry);
+      return;
+    }
+    const drawMs = entry.durationMs;
+    const anims = [];
+    const beamDraw = beam.animate(
+      [
+        { transform: `rotate(${entry.angle}deg) scaleX(0)`, opacity: 0, offset: 0 },
+        { transform: `rotate(${entry.angle}deg) scaleX(0)`, opacity: 1, offset: 0.1 },
+        { transform: `rotate(${entry.angle}deg) scaleX(1)`, opacity: 1, offset: 1 }
+      ],
+      { duration: drawMs, easing: "ease-out", fill: "forwards" }
+    );
+    anims.push(beamDraw);
+    if (tip && canAnimate2(tip)) {
+      const tipAnim = tip.animate(
+        [
+          { opacity: 0, offset: 0 },
+          { opacity: 1, offset: 0.5 },
+          { opacity: 0.6, offset: 1 }
+        ],
+        {
+          duration: Math.max(50, Math.round(drawMs * 0.5)),
+          delay: Math.round(drawMs * 0.85),
+          easing: "ease-out",
+          fill: "forwards"
+        }
+      );
+      anims.push(tipAnim);
+    }
+    animationsRef.current.set(entry.id, anims);
+    waitForAnimation(beamDraw, drawMs).then(() => {
+      if (!animationsRef.current.has(entry.id) || finishedRef.current.has(entry.id)) return;
+      if (entry.persist) {
+        const resolve = resolversRef.current.get(entry.id);
+        resolversRef.current.delete(entry.id);
+        resolve?.();
+        return;
+      }
+      const fadeBeam = beam.animate(
+        [{ opacity: 1 }, { opacity: 0 }],
+        { duration: LASER_FADE_MS, delay: entry.holdMs, easing: "ease-out", fill: "forwards" }
+      );
+      const current = animationsRef.current.get(entry.id) ?? [];
+      current.push(fadeBeam);
+      if (tip && canAnimate2(tip)) {
+        const fadeTip = tip.animate(
+          [{ opacity: 0.6 }, { opacity: 0 }],
+          { duration: LASER_FADE_MS, delay: entry.holdMs, easing: "ease-out", fill: "forwards" }
+        );
+        current.push(fadeTip);
+      }
+      animationsRef.current.set(entry.id, current);
+      waitForAnimation(fadeBeam, LASER_FADE_MS + entry.holdMs).then(() => finishLaser(entry));
+    });
+  }, [finishLaser]);
   const cinematicMove = useCallback((from, to, options) => {
     if (!isValidSquare4(from) || !isValidSquare4(to) || from === to) {
       return Promise.resolve();
@@ -3088,6 +3366,162 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
       setBanners((prev) => [...prev, entry]);
     });
   }, []);
+  const promotionBeam = useCallback((square, options) => {
+    if (!isValidSquare4(square)) return Promise.resolve();
+    if (prefersReducedMotion() && !options?.force) return Promise.resolve();
+    const existing = piecesRef.current.get(square);
+    const fromPieceKey = options?.fromPiece ?? (existing ? `${existing.color}${existing.role.toUpperCase()}` : void 0);
+    const toPieceKey = options?.piece;
+    const [col, row] = squareColRow5(square, asWhiteRef.current);
+    const entry = {
+      id: ++idRef.current,
+      col,
+      row,
+      color: options?.color ?? DEFAULT_PROMOTION_BEAM_COLOR,
+      durationMs: Math.max(100, options?.durationMs ?? DEFAULT_PROMOTION_BEAM_DURATION_MS),
+      fromPieceKey,
+      toPieceKey
+    };
+    if (existing) {
+      const orig = getPieceElementRef.current(square);
+      if (orig) {
+        orig.style.opacity = "0";
+        hiddenSquaresRef.current.set(entry.id, square);
+      }
+    }
+    return new Promise((resolve) => {
+      resolversRef.current.set(entry.id, resolve);
+      setPromos((prev) => [...prev, entry]);
+    });
+  }, []);
+  const implode = useCallback((square, options) => {
+    if (!isValidSquare4(square)) return Promise.resolve();
+    if (prefersReducedMotion() && !options?.force) return Promise.resolve();
+    const existing = piecesRef.current.get(square);
+    const pieceKey = options?.piece ?? (existing ? `${existing.color}${existing.role.toUpperCase()}` : void 0);
+    const [col, row] = squareColRow5(square, asWhiteRef.current);
+    const entry = {
+      id: ++idRef.current,
+      col,
+      row,
+      color: options?.color ?? DEFAULT_IMPLODE_COLOR,
+      durationMs: Math.max(100, options?.durationMs ?? DEFAULT_IMPLODE_DURATION_MS),
+      pieceKey
+    };
+    if (existing) {
+      const orig = getPieceElementRef.current(square);
+      if (orig) {
+        orig.style.opacity = "0";
+        hiddenSquaresRef.current.set(entry.id, square);
+      }
+    }
+    return new Promise((resolve) => {
+      resolversRef.current.set(entry.id, resolve);
+      setImplodes((prev) => [...prev, entry]);
+    });
+  }, []);
+  const castleSwap = useCallback((kingFrom, kingTo, rookFrom, rookTo, options) => {
+    if (![kingFrom, kingTo, rookFrom, rookTo].every(isValidSquare4)) return Promise.resolve();
+    if (prefersReducedMotion() && !options?.force) return Promise.resolve();
+    const arc = options?.arcHeight ?? 0.9;
+    const common = {
+      style: "great",
+      durationMs: options?.durationMs ?? DEFAULT_CASTLE_SWAP_DURATION_MS,
+      spins: options?.spins ?? 1,
+      glowColor: options?.glowColor ?? DEFAULT_CASTLE_SWAP_GLOW,
+      sparkles: false,
+      shockwave: false,
+      flash: false,
+      victimBlast: false,
+      impactShake: false,
+      trail: false,
+      force: options?.force
+    };
+    const king = cinematicMove(kingFrom, kingTo, { ...common, arcHeight: arc });
+    const rook = cinematicMove(rookFrom, rookTo, { ...common, arcHeight: arc * 0.4 });
+    return Promise.all([king, rook]).then(() => void 0);
+  }, [cinematicMove]);
+  const spotlight = useCallback((squares, options) => {
+    if (prefersReducedMotion() && !options?.force) return { clear: () => Promise.resolve() };
+    const valid = squares.filter(isValidSquare4);
+    if (valid.length === 0) return { clear: () => Promise.resolve() };
+    const white = asWhiteRef.current;
+    const rPct = (options?.radius ?? DEFAULT_SPOTLIGHT_RADIUS) * 12.5;
+    const holes = valid.map((sq2) => {
+      const [col, row] = squareColRow5(sq2, white);
+      return { cx: (col + 0.5) * 12.5, cy: (row + 0.5) * 12.5, r: rPct };
+    });
+    const entry = {
+      id: ++idRef.current,
+      holes,
+      color: options?.color ?? DEFAULT_SPOTLIGHT_COLOR,
+      durationMs: Math.max(50, options?.durationMs ?? DEFAULT_SPOTLIGHT_DURATION_MS)
+    };
+    setSpotlights((prev) => [...prev, entry]);
+    let cleared = false;
+    const clear = (durationMs) => {
+      if (cleared) return Promise.resolve();
+      cleared = true;
+      return new Promise((resolve) => {
+        const fadeMs = Math.max(1, durationMs ?? entry.durationMs);
+        const existing = animationsRef.current.get(entry.id) ?? [];
+        const el = spotlightElsRef.current.get(entry.id);
+        const remove = () => {
+          for (const a of animationsRef.current.get(entry.id) ?? []) a.cancel();
+          animationsRef.current.delete(entry.id);
+          startedRef.current.delete(entry.id);
+          spotlightElsRef.current.delete(entry.id);
+          setSpotlights((prev) => prev.filter((s) => s.id !== entry.id));
+          resolve();
+        };
+        if (el && canAnimate2(el)) {
+          const from = typeof getComputedStyle === "function" && getComputedStyle(el).opacity || "1";
+          const fade = el.animate(
+            [{ opacity: from }, { opacity: 0 }],
+            { duration: fadeMs, easing: "ease-out", fill: "forwards" }
+          );
+          animationsRef.current.set(entry.id, [...existing, fade]);
+          waitForAnimation(fade, fadeMs).then(remove);
+        } else {
+          remove();
+        }
+      });
+    };
+    return { clear };
+  }, []);
+  const drawLaser = useCallback((from, to, options) => {
+    if (!isValidSquare4(from) || !isValidSquare4(to)) return Promise.resolve();
+    if (prefersReducedMotion() && !options?.force) return Promise.resolve();
+    const white = asWhiteRef.current;
+    const [fc, fr] = squareColRow5(from, white);
+    const [tc, tr] = squareColRow5(to, white);
+    const sx = (fc + 0.5) * 12.5;
+    const sy = (fr + 0.5) * 12.5;
+    const ex = (tc + 0.5) * 12.5;
+    const ey = (tr + 0.5) * 12.5;
+    const dxp = ex - sx;
+    const dyp = ey - sy;
+    const color = options?.color ?? DEFAULT_LASER_COLOR;
+    const entry = {
+      id: ++idRef.current,
+      sx,
+      sy,
+      ex,
+      ey,
+      dist: Math.hypot(dxp, dyp),
+      angle: Math.atan2(dyp, dxp) * 180 / Math.PI,
+      color,
+      glowColor: options?.glowColor ?? color,
+      widthPx: Math.max(1, options?.widthPx ?? DEFAULT_LASER_WIDTH_PX),
+      durationMs: Math.max(50, options?.durationMs ?? DEFAULT_LASER_DURATION_MS),
+      persist: options?.persist ?? false,
+      holdMs: Math.max(0, options?.holdMs ?? DEFAULT_LASER_HOLD_MS)
+    };
+    return new Promise((resolve) => {
+      resolversRef.current.set(entry.id, resolve);
+      setLasers((prev) => [...prev, entry]);
+    });
+  }, []);
   const clearCinematics = useCallback(() => {
     for (const anims of Array.from(animationsRef.current.values())) {
       for (const anim of anims) anim.cancel();
@@ -3106,6 +3540,12 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
       if (el) el.style.opacity = "";
     }
     hiddenVictimsRef.current.clear();
+    for (const square of hiddenSquaresRef.current.values()) {
+      const el = getPieceElementRef.current(square);
+      if (el) el.style.opacity = "";
+    }
+    hiddenSquaresRef.current.clear();
+    spotlightElsRef.current.clear();
     const resolvers = Array.from(resolversRef.current.values());
     resolversRef.current.clear();
     startedRef.current.clear();
@@ -3117,6 +3557,10 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
     setFlashes([]);
     setConfetti([]);
     setBanners([]);
+    setPromos([]);
+    setImplodes([]);
+    setSpotlights([]);
+    setLasers([]);
     for (const resolve of resolvers) resolve();
   }, []);
   useImperativeHandle(ref, () => ({
@@ -3125,8 +3569,13 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
     popBadge,
     celebrate,
     popBanner,
+    promotionBeam,
+    implode,
+    castleSwap,
+    spotlight,
+    drawLaser,
     clearCinematics
-  }), [cinematicMove, squareBurst, popBadge, celebrate, popBanner, clearCinematics]);
+  }), [cinematicMove, squareBurst, popBadge, celebrate, popBanner, promotionBeam, implode, castleSwap, spotlight, drawLaser, clearCinematics]);
   useEffect(() => {
     return () => {
       for (const anims of animationsRef.current.values()) {
@@ -3135,11 +3584,16 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
       animationsRef.current.clear();
       for (const tid of timeoutsRef.current.values()) clearTimeout(tid);
       timeoutsRef.current.clear();
+      for (const square of hiddenSquaresRef.current.values()) {
+        const el = getPieceElementRef.current(square);
+        if (el) el.style.opacity = "";
+      }
+      hiddenSquaresRef.current.clear();
       for (const resolve of resolversRef.current.values()) resolve();
       resolversRef.current.clear();
     };
   }, []);
-  if (moves.length === 0 && bursts.length === 0 && badges.length === 0 && blasts.length === 0 && flashes.length === 0 && confetti.length === 0 && banners.length === 0) return null;
+  if (moves.length === 0 && bursts.length === 0 && badges.length === 0 && blasts.length === 0 && flashes.length === 0 && confetti.length === 0 && banners.length === 0 && promos.length === 0 && implodes.length === 0 && spotlights.length === 0 && lasers.length === 0) return null;
   const pieceBox = { width: "12.5%", height: "12.5%" };
   return /* @__PURE__ */ jsxs("div", { "data-cine-overlay": true, style: { position: "absolute", inset: 0, pointerEvents: "none", overflow: "hidden", zIndex: 10 }, children: [
     flashes.map((f) => /* @__PURE__ */ jsx(
@@ -3442,7 +3896,224 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
         )
       },
       `banner-${bn.id}`
-    ))
+    )),
+    spotlights.map((s) => {
+      const mask = s.holes.map((h) => `radial-gradient(circle at ${h.cx}% ${h.cy}%, transparent 0, transparent ${h.r * 0.7}%, black ${h.r}%)`).join(", ");
+      return /* @__PURE__ */ jsx(
+        "div",
+        {
+          ref: (el) => {
+            if (el) startSpotlightAnimation(el, s);
+          },
+          style: {
+            position: "absolute",
+            inset: 0,
+            background: s.color,
+            opacity: 0,
+            pointerEvents: "none",
+            willChange: "opacity",
+            zIndex: 1,
+            maskImage: mask,
+            WebkitMaskImage: mask,
+            maskComposite: "intersect",
+            WebkitMaskComposite: "source-in"
+          }
+        },
+        `spotlight-${s.id}`
+      );
+    }),
+    promos.map((p) => /* @__PURE__ */ jsxs(
+      "div",
+      {
+        ref: (el) => {
+          if (el) startPromotionAnimation(el, p);
+        },
+        style: {
+          position: "absolute",
+          ...pieceBox,
+          transform: positionTransform(p.col, p.row),
+          pointerEvents: "none",
+          perspective: 800,
+          zIndex: 4
+        },
+        children: [
+          /* @__PURE__ */ jsx(
+            "div",
+            {
+              "data-promo-pillar": true,
+              style: {
+                position: "absolute",
+                left: "50%",
+                bottom: "50%",
+                width: "50%",
+                height: "320%",
+                marginLeft: "-25%",
+                background: `linear-gradient(to top, ${p.color} 0%, transparent 85%)`,
+                filter: "blur(1px)",
+                transformOrigin: "bottom center",
+                opacity: 0,
+                willChange: "transform, opacity"
+              }
+            }
+          ),
+          /* @__PURE__ */ jsx(
+            "div",
+            {
+              "data-promo-ring": true,
+              style: {
+                position: "absolute",
+                inset: "8%",
+                borderRadius: "50%",
+                border: `3px solid ${p.color}`,
+                boxShadow: `0 0 10px ${p.color}`,
+                opacity: 0,
+                willChange: "transform, opacity"
+              }
+            }
+          ),
+          p.fromPieceKey && /* @__PURE__ */ jsx(
+            "div",
+            {
+              "data-promo-old": true,
+              style: { position: "absolute", inset: 0, opacity: 1, transformOrigin: "center center", willChange: "transform, opacity" },
+              children: /* @__PURE__ */ jsx("div", { style: { width: "100%", height: "100%", transform: flipPieces ? "rotate(180deg)" : void 0, transformOrigin: "center center" }, children: /* @__PURE__ */ jsx(PieceGlyph, { pieceKey: p.fromPieceKey, pieceSet, customPieces }) })
+            }
+          ),
+          p.toPieceKey && /* @__PURE__ */ jsx(
+            "div",
+            {
+              "data-promo-new": true,
+              style: { position: "absolute", inset: 0, opacity: 0, transformStyle: "preserve-3d", transformOrigin: "center center", willChange: "transform, opacity, filter" },
+              children: /* @__PURE__ */ jsx("div", { style: { width: "100%", height: "100%", transform: flipPieces ? "rotate(180deg)" : void 0, transformOrigin: "center center" }, children: /* @__PURE__ */ jsx(PieceGlyph, { pieceKey: p.toPieceKey, pieceSet, customPieces }) })
+            }
+          ),
+          /* @__PURE__ */ jsx(
+            "div",
+            {
+              "data-promo-flash": true,
+              style: {
+                position: "absolute",
+                inset: "-40%",
+                borderRadius: "50%",
+                background: `radial-gradient(circle, #ffffff 0%, ${p.color} 35%, transparent 70%)`,
+                opacity: 0,
+                willChange: "opacity"
+              }
+            }
+          )
+        ]
+      },
+      `promo-${p.id}`
+    )),
+    implodes.map((im) => /* @__PURE__ */ jsxs(
+      "div",
+      {
+        ref: (el) => {
+          if (el) startImplodeAnimation(el, im);
+        },
+        style: {
+          position: "absolute",
+          ...pieceBox,
+          transform: positionTransform(im.col, im.row),
+          pointerEvents: "none",
+          zIndex: 4
+        },
+        children: [
+          /* @__PURE__ */ jsx(
+            "div",
+            {
+              "data-implode-ring": true,
+              style: { position: "absolute", inset: "-12%", borderRadius: "50%", border: `2px solid ${im.color}`, boxShadow: `0 0 10px ${im.color}`, opacity: 0, willChange: "transform, opacity" }
+            }
+          ),
+          /* @__PURE__ */ jsx(
+            "div",
+            {
+              "data-implode-ring": true,
+              style: { position: "absolute", inset: "12%", borderRadius: "50%", border: `2px solid ${im.color}`, boxShadow: `0 0 10px ${im.color}`, opacity: 0, willChange: "transform, opacity" }
+            }
+          ),
+          /* @__PURE__ */ jsx(
+            "div",
+            {
+              "data-implode-core": true,
+              style: { position: "absolute", inset: "28%", borderRadius: "50%", background: "radial-gradient(circle, rgba(0, 0, 0, 0.9), transparent 70%)", opacity: 0, willChange: "transform, opacity" }
+            }
+          ),
+          im.pieceKey && /* @__PURE__ */ jsx(
+            "div",
+            {
+              "data-implode-piece": true,
+              style: { position: "absolute", inset: 0, opacity: 1, transformOrigin: "center center", willChange: "transform, opacity" },
+              children: /* @__PURE__ */ jsx("div", { style: { width: "100%", height: "100%", transform: flipPieces ? "rotate(180deg)" : void 0, transformOrigin: "center center" }, children: /* @__PURE__ */ jsx(PieceGlyph, { pieceKey: im.pieceKey, pieceSet, customPieces }) })
+            }
+          ),
+          /* @__PURE__ */ jsx(
+            "div",
+            {
+              "data-implode-flash": true,
+              style: { position: "absolute", inset: "-30%", borderRadius: "50%", background: `radial-gradient(circle, #ffffff 0%, ${im.color} 40%, transparent 70%)`, opacity: 0, willChange: "opacity" }
+            }
+          )
+        ]
+      },
+      `implode-${im.id}`
+    )),
+    lasers.map((l) => {
+      const gradient = HEX6.test(l.color) ? `linear-gradient(90deg, ${l.color}00 0%, ${l.color} 60%, #ffffff 100%)` : `linear-gradient(90deg, transparent, ${l.color} 60%, #ffffff)`;
+      return /* @__PURE__ */ jsxs(
+        "div",
+        {
+          ref: (el) => {
+            if (el) startLaserAnimation(el, l);
+          },
+          style: { position: "absolute", inset: 0, pointerEvents: "none", zIndex: 8 },
+          children: [
+            /* @__PURE__ */ jsx(
+              "div",
+              {
+                "data-laser-beam": true,
+                style: {
+                  position: "absolute",
+                  left: `${l.sx}%`,
+                  top: `${l.sy}%`,
+                  width: `${l.dist}%`,
+                  height: `${l.widthPx}px`,
+                  marginTop: `${-l.widthPx / 2}px`,
+                  transformOrigin: "0 50%",
+                  transform: `rotate(${l.angle}deg)`,
+                  background: gradient,
+                  borderRadius: `${l.widthPx}px`,
+                  boxShadow: `0 0 ${l.widthPx * 2}px ${l.glowColor}, 0 0 ${l.widthPx * 4}px ${l.glowColor}`,
+                  opacity: 0,
+                  willChange: "transform, opacity"
+                }
+              }
+            ),
+            /* @__PURE__ */ jsx(
+              "div",
+              {
+                "data-laser-tip": true,
+                style: {
+                  position: "absolute",
+                  left: `${l.ex}%`,
+                  top: `${l.ey}%`,
+                  width: `${l.widthPx * 3}px`,
+                  height: `${l.widthPx * 3}px`,
+                  marginLeft: `${-l.widthPx * 1.5}px`,
+                  marginTop: `${-l.widthPx * 1.5}px`,
+                  borderRadius: "50%",
+                  background: `radial-gradient(circle, #ffffff 0%, ${l.glowColor} 40%, transparent 70%)`,
+                  opacity: 0,
+                  willChange: "opacity"
+                }
+              }
+            )
+          ]
+        },
+        `laser-${l.id}`
+      );
+    })
   ] });
 }));
 
@@ -3606,6 +4277,7 @@ function playCinematicScript(ctx, steps, options) {
   let cancelled = false;
   const cancelHooks = /* @__PURE__ */ new Set();
   const force = options?.force;
+  let activeSpotlight = null;
   const wait = (ms) => new Promise((resolve) => {
     const hook = () => {
       clearTimeout(tid);
@@ -3663,6 +4335,31 @@ function playCinematicScript(ctx, steps, options) {
         await ctx.getLayer()?.popBanner({ force, ...step.options });
         break;
       }
+      case "promotionBeam": {
+        await ctx.getLayer()?.promotionBeam(step.square, { force, ...step.options });
+        break;
+      }
+      case "implode": {
+        await ctx.getLayer()?.implode(step.square, { force, ...step.options });
+        break;
+      }
+      case "castleSwap": {
+        await ctx.getLayer()?.castleSwap(step.kingFrom, step.kingTo, step.rookFrom, step.rookTo, { force, ...step.options });
+        break;
+      }
+      case "spotlight": {
+        activeSpotlight = ctx.getLayer()?.spotlight(step.squares, { force, ...step.options }) ?? null;
+        break;
+      }
+      case "clearSpotlight": {
+        await activeSpotlight?.clear();
+        activeSpotlight = null;
+        break;
+      }
+      case "laser": {
+        await ctx.getLayer()?.drawLaser(step.from, step.to, { force, ...step.options });
+        break;
+      }
       case "wait": {
         await wait(step.ms);
         break;
@@ -3688,6 +4385,8 @@ function playCinematicScript(ctx, steps, options) {
     cancelled = true;
     for (const hook of Array.from(cancelHooks)) hook();
     cancelHooks.clear();
+    activeSpotlight?.clear();
+    activeSpotlight = null;
     ctx.getLayer()?.clearCinematics();
     ctx.peekCamera()?.reset();
   };
@@ -4785,6 +5484,21 @@ var ChessiroCanvas = forwardRef(
       },
       popBanner(options) {
         return cinematicRef.current?.popBanner(options) ?? Promise.resolve();
+      },
+      promotionBeam(square, options) {
+        return cinematicRef.current?.promotionBeam(square, options) ?? Promise.resolve();
+      },
+      implode(square, options) {
+        return cinematicRef.current?.implode(square, options) ?? Promise.resolve();
+      },
+      castleSwap(kingFrom, kingTo, rookFrom, rookTo, options) {
+        return cinematicRef.current?.castleSwap(kingFrom, kingTo, rookFrom, rookTo, options) ?? Promise.resolve();
+      },
+      spotlight(squares, options) {
+        return cinematicRef.current?.spotlight(squares, options) ?? { clear: () => Promise.resolve() };
+      },
+      drawLaser(from, to, options) {
+        return cinematicRef.current?.drawLaser(from, to, options) ?? Promise.resolve();
       },
       clearCinematics() {
         playbackRef.current?.cancel();

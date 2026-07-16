@@ -273,6 +273,86 @@ await sleep(120);
 assert(countNodes() === preCount, 'reduced-motion move cleaned up');
 reducedMotion = false;
 
+console.log('\n-- promotionBeam (pillar of light + morph) --');
+const promoPromise = ref.current.promotionBeam('a7', { fromPiece: 'wP', piece: 'wQ', durationMs: 300, force: true });
+await sleep(60);
+assert(countNodes() > baseline, 'promotionBeam overlay mounted');
+assert(
+  [...container.querySelectorAll('[data-cine-overlay] *')].length > 0,
+  'promotionBeam rendered beam nodes',
+);
+await withTimeout(promoPromise, 4000, 'promotionBeam resolved');
+await sleep(200);
+assert(countNodes() === baseline, 'promotionBeam overlay unmounted');
+assert(hiddenPieceCount() === 0, 'promotionBeam restored the morphed square');
+
+console.log('\n-- implode (black hole) --');
+const implodePromise = ref.current.implode('b8', { durationMs: 250, force: true });
+await sleep(50);
+assert(countNodes() > baseline, 'implode overlay mounted');
+assert(hiddenPieceCount() === 1, 'implode hid the victim piece');
+await withTimeout(implodePromise, 3000, 'implode resolved');
+await sleep(200);
+assert(countNodes() === baseline, 'implode overlay unmounted');
+assert(hiddenPieceCount() === 0, 'implode restored the hidden square');
+
+console.log('\n-- castleSwap (king + rook fly together) --');
+const castlePromise = ref.current.castleSwap('e1', 'g1', 'h1', 'f1', { durationMs: 200, force: true });
+await sleep(60);
+assert(hiddenPieceCount() === 2, 'castleSwap hides both king and rook origins');
+await withTimeout(castlePromise, 4000, 'castleSwap resolved');
+await sleep(200);
+assert(countNodes() === baseline, 'castleSwap overlay unmounted');
+assert(hiddenPieceCount() === 0, 'castleSwap restored both pieces');
+
+console.log('\n-- drawLaser (animated threat beam) --');
+const laserPromise = ref.current.drawLaser('c1', 'h6', { durationMs: 150, holdMs: 50, force: true });
+await sleep(60);
+const laserBeams = () => container.querySelectorAll('[data-laser-beam]').length;
+assert(laserBeams() === 1, 'laser beam mounted while drawing');
+await withTimeout(laserPromise, 3000, 'drawLaser resolved (draw + hold + fade)');
+await sleep(150);
+assert(countNodes() === baseline, 'laser overlay unmounted after fade');
+
+console.log('\n-- drawLaser persist + clearCinematics --');
+const persistLaser = ref.current.drawLaser('a1', 'a8', { durationMs: 100, persist: true, force: true });
+await withTimeout(persistLaser, 2000, 'persistent laser resolved after draw');
+assert(container.querySelectorAll('[data-laser-beam]').length === 1, 'persistent laser stays on board');
+ref.current.clearCinematics();
+await sleep(80);
+assert(countNodes() === baseline, 'clearCinematics removed the persistent laser');
+
+console.log('\n-- spotlight (dim vignette) + clear --');
+const spot = ref.current.spotlight(['c4', 'f7'], { durationMs: 80, force: true });
+await sleep(40);
+const dimNodes = () => [...container.querySelectorAll('[data-cine-overlay] > div')].filter(
+  (d) => String(d.style.maskImage || d.style.webkitMaskImage).includes('radial-gradient'),
+).length;
+assert(dimNodes() === 1, 'spotlight dim overlay mounted with mask holes');
+await withTimeout(spot.clear(60), 2000, 'spotlight clear() resolved');
+await sleep(80);
+assert(countNodes() === baseline, 'spotlight overlay unmounted after clear');
+
+console.log('\n-- spotlight cleared by clearCinematics --');
+ref.current.spotlight(['e4'], { durationMs: 80, force: true });
+await sleep(40);
+assert(dimNodes() === 1, 'second spotlight mounted');
+ref.current.clearCinematics();
+await sleep(60);
+assert(countNodes() === baseline, 'clearCinematics removed the spotlight');
+
+console.log('\n-- new effects under reduced motion --');
+reducedMotion = true;
+const rmCount = countNodes();
+await withTimeout(ref.current.promotionBeam('a7', { piece: 'wQ' }), 200, 'reduced-motion promotionBeam resolved immediately');
+await withTimeout(ref.current.implode('b8'), 200, 'reduced-motion implode resolved immediately');
+await withTimeout(ref.current.castleSwap('e1', 'g1', 'h1', 'f1'), 200, 'reduced-motion castleSwap resolved immediately');
+await withTimeout(ref.current.drawLaser('c1', 'h6'), 200, 'reduced-motion drawLaser resolved immediately');
+const rmSpot = ref.current.spotlight(['e4']);
+await withTimeout(rmSpot.clear(), 200, 'reduced-motion spotlight handle is a no-op');
+assert(countNodes() === rmCount, 'reduced-motion new effects mounted nothing');
+reducedMotion = false;
+
 console.log('\n-- unmount safety --');
 const pendingAtUnmount = ref.current.cinematicMove('e2', 'e4', { durationMs: 5000, force: true });
 await sleep(30);

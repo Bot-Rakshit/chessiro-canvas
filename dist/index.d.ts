@@ -303,6 +303,70 @@ interface CinematicMoveOptions {
     /** Play the full choreography even when the user prefers reduced motion. */
     force?: boolean;
 }
+interface PromotionBeamOptions {
+    /** Final piece revealed (e.g. 'wQ'). When omitted the square's current piece stays. */
+    piece?: string;
+    /** Piece shown before the morph. Defaults to the piece currently on the square. */
+    fromPiece?: string;
+    /** Beam / glow color. Default: '#ffe27a' (gold). */
+    color?: string;
+    /** Total duration in ms. Default: 1500. */
+    durationMs?: number;
+    /** Play even when the user prefers reduced motion. */
+    force?: boolean;
+}
+interface ImplodeOptions {
+    /** Piece to implode. Defaults to the piece currently on the square. */
+    piece?: string;
+    /** Vortex / glow color. Default: '#b07bff' (violet). */
+    color?: string;
+    /** Total duration in ms. Default: 750. */
+    durationMs?: number;
+    /** Play even when the user prefers reduced motion. */
+    force?: boolean;
+}
+interface CastleSwapOptions {
+    /** Total duration in ms. Default: 1100. */
+    durationMs?: number;
+    /** Full rotateY turns each piece performs mid-swap. Default: 1. */
+    spins?: number;
+    /** Arc height in squares for the king lift (rook arcs lower). Default: 0.9. */
+    arcHeight?: number;
+    /** Glow color. Default: '#8fd0ff'. */
+    glowColor?: string;
+    /** Play even when the user prefers reduced motion. */
+    force?: boolean;
+}
+interface SpotlightOptions {
+    /** Dim overlay color. Default: 'rgba(3,7,15,0.74)'. */
+    color?: string;
+    /** Fade-in duration in ms. Default: 420. */
+    durationMs?: number;
+    /** Radius of each spotlight hole in squares. Default: 0.72. */
+    radius?: number;
+    /** Play even when the user prefers reduced motion. */
+    force?: boolean;
+}
+interface SpotlightHandle {
+    /** Fade the dim overlay out and remove it. Resolves when gone. */
+    clear: (durationMs?: number) => Promise<void>;
+}
+interface LaserOptions {
+    /** Beam color. Default: '#ff3b3b'. */
+    color?: string;
+    /** Glow color behind the beam. Default: matches color. */
+    glowColor?: string;
+    /** Draw duration in ms. Default: 500. */
+    durationMs?: number;
+    /** Beam thickness in px. Default: 4. */
+    widthPx?: number;
+    /** Keep the beam until clearCinematics instead of auto-fading. Default: false. */
+    persist?: boolean;
+    /** Hold time before auto-fade when not persisted, in ms. Default: 400. */
+    holdMs?: number;
+    /** Play even when the user prefers reduced motion. */
+    force?: boolean;
+}
 interface CelebrateOptions {
     /** What to spawn. Default: 'both'. */
     kind?: 'confetti' | 'fireworks' | 'both';
@@ -441,6 +505,32 @@ type CinematicStep = {
 } | {
     type: 'banner';
     options: PopBannerOptions;
+} | {
+    type: 'promotionBeam';
+    square: Square;
+    options?: PromotionBeamOptions;
+} | {
+    type: 'implode';
+    square: Square;
+    options?: ImplodeOptions;
+} | {
+    type: 'castleSwap';
+    kingFrom: Square;
+    kingTo: Square;
+    rookFrom: Square;
+    rookTo: Square;
+    options?: CastleSwapOptions;
+} | {
+    type: 'spotlight';
+    squares: Square[];
+    options?: SpotlightOptions;
+} | {
+    type: 'clearSpotlight';
+} | {
+    type: 'laser';
+    from: Square;
+    to: Square;
+    options?: LaserOptions;
 } | {
     type: 'wait';
     ms: number;
@@ -605,6 +695,31 @@ interface ChessiroCanvasRef {
     /** Big glowing text banner across the board ('BRILLIANT!!', 'CHECKMATE'). */
     popBanner: (options: PopBannerOptions) => Promise<void>;
     /**
+     * "Evolution" pillar of light that morphs the piece on `square` into a new
+     * one (e.g. a pawn into a queen). Like `cinematicMove`, it does not commit
+     * the position — apply the real promotion yourself when it resolves.
+     */
+    promotionBeam: (square: Square, options?: PromotionBeamOptions) => Promise<void>;
+    /**
+     * Collapse the piece on `square` into a swirling black-hole vortex. Does not
+     * commit the position — remove/capture the real piece when it resolves.
+     */
+    implode: (square: Square, options?: ImplodeOptions) => Promise<void>;
+    /**
+     * 3D teleport-swap the king and rook of a castle. Both pieces fly at once
+     * (the rook arcs lower so they pass without colliding). Does not commit the
+     * position — apply the real castle when it resolves.
+     */
+    castleSwap: (kingFrom: Square, kingTo: Square, rookFrom: Square, rookTo: Square, options?: CastleSwapOptions) => Promise<void>;
+    /**
+     * Dim the whole board except for spotlight holes over the given squares.
+     * Persists until the returned handle's `clear()` is called (or
+     * `clearCinematics`).
+     */
+    spotlight: (squares: Square[], options?: SpotlightOptions) => SpotlightHandle;
+    /** Draw an animated glowing threat beam from one square to another. */
+    drawLaser: (from: Square, to: Square, options?: LaserOptions) => Promise<void>;
+    /**
      * Cancel the running cinematic script and every cinematic effect: WAAPI
      * animations are cancelled, hidden pieces restored, overlay nodes
      * unmounted and the camera reset.
@@ -640,4 +755,4 @@ declare function premoveDests(square: Square, pieces: Pieces, color: PieceColor)
 
 declare function resolvePieceImageSrc(pieceKey: string, piecePath?: string): string;
 
-export { type AnimateMoveOptions, type AnimationEvent, type Arrow, type ArrowBrush, type ArrowBrushes, type ArrowHeadShape, type ArrowVisuals, type BoardTheme, type CameraController, type CameraDriftOptions, type CameraShakeOptions, type CameraTiltOptions, type CameraZoomOptions, type CelebrateOptions, ChessiroCanvas, type ChessiroCanvasProps, type ChessiroCanvasRef, type CinematicMoveOptions, type CinematicPlayback, type CinematicStep, type CinematicStyle, DEFAULT_ARROW_BRUSHES, type Dests, type ExpectedMove, type GhostPiece, INITIAL_FEN, INITIAL_GAME_FEN, type MoveQualityBadge, type NotationVisuals, type Orientation, type OverlayVisuals, type Piece, type PieceColor, type PieceRenderer, type PieceRole, type PieceSet, type PlayCinematicOptions, type PopBadgeOptions, type PopBannerOptions, type PremoveConfig, type PromotionContext, type PromotionPiece, type PromotionVisuals, type PulseSquareOptions, type Square, type SquareBurstOptions, type SquareLabel, type SquareVisuals, type TextOverlay, preloadPieceSet, premoveDests, readFen, resolvePieceImageSrc, writeFen };
+export { type AnimateMoveOptions, type AnimationEvent, type Arrow, type ArrowBrush, type ArrowBrushes, type ArrowHeadShape, type ArrowVisuals, type BoardTheme, type CameraController, type CameraDriftOptions, type CameraShakeOptions, type CameraTiltOptions, type CameraZoomOptions, type CastleSwapOptions, type CelebrateOptions, ChessiroCanvas, type ChessiroCanvasProps, type ChessiroCanvasRef, type CinematicMoveOptions, type CinematicPlayback, type CinematicStep, type CinematicStyle, DEFAULT_ARROW_BRUSHES, type Dests, type ExpectedMove, type GhostPiece, INITIAL_FEN, INITIAL_GAME_FEN, type ImplodeOptions, type LaserOptions, type MoveQualityBadge, type NotationVisuals, type Orientation, type OverlayVisuals, type Piece, type PieceColor, type PieceRenderer, type PieceRole, type PieceSet, type PlayCinematicOptions, type PopBadgeOptions, type PopBannerOptions, type PremoveConfig, type PromotionBeamOptions, type PromotionContext, type PromotionPiece, type PromotionVisuals, type PulseSquareOptions, type SpotlightHandle, type SpotlightOptions, type Square, type SquareBurstOptions, type SquareLabel, type SquareVisuals, type TextOverlay, preloadPieceSet, premoveDests, readFen, resolvePieceImageSrc, writeFen };

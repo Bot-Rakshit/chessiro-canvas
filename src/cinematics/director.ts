@@ -1,6 +1,6 @@
 import type {
   CameraController, CameraShakeOptions, CameraTiltOptions, CameraZoomOptions,
-  CinematicPlayback, CinematicStep, PlayCinematicOptions,
+  CinematicPlayback, CinematicStep, PlayCinematicOptions, SpotlightHandle,
 } from '../types';
 import type { CinematicLayerRef } from '../render/CinematicLayer';
 
@@ -26,6 +26,7 @@ export function playCinematicScript(
   let cancelled = false;
   const cancelHooks = new Set<() => void>();
   const force = options?.force;
+  let activeSpotlight: SpotlightHandle | null = null;
 
   const wait = (ms: number): Promise<void> => new Promise<void>((resolve) => {
     const hook = () => {
@@ -85,6 +86,31 @@ export function playCinematicScript(
         await ctx.getLayer()?.popBanner({ force, ...step.options });
         break;
       }
+      case 'promotionBeam': {
+        await ctx.getLayer()?.promotionBeam(step.square, { force, ...step.options });
+        break;
+      }
+      case 'implode': {
+        await ctx.getLayer()?.implode(step.square, { force, ...step.options });
+        break;
+      }
+      case 'castleSwap': {
+        await ctx.getLayer()?.castleSwap(step.kingFrom, step.kingTo, step.rookFrom, step.rookTo, { force, ...step.options });
+        break;
+      }
+      case 'spotlight': {
+        activeSpotlight = ctx.getLayer()?.spotlight(step.squares, { force, ...step.options }) ?? null;
+        break;
+      }
+      case 'clearSpotlight': {
+        await activeSpotlight?.clear();
+        activeSpotlight = null;
+        break;
+      }
+      case 'laser': {
+        await ctx.getLayer()?.drawLaser(step.from, step.to, { force, ...step.options });
+        break;
+      }
       case 'wait': {
         await wait(step.ms);
         break;
@@ -112,6 +138,8 @@ export function playCinematicScript(
     cancelled = true;
     for (const hook of Array.from(cancelHooks)) hook();
     cancelHooks.clear();
+    activeSpotlight?.clear();
+    activeSpotlight = null;
     ctx.getLayer()?.clearCinematics();
     ctx.peekCamera()?.reset();
   };

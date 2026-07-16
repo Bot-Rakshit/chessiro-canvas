@@ -1746,8 +1746,20 @@ function ForkTrainer({ theme }: { theme: BoardTheme }) {
 
 const CINEMATIC_FEN = 'r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5Q2/PPPP1PPP/RNB1K1NR w KQkq - 0 1';
 
+// Minimal positions that set up each showcase effect.
+const PROMO_FEN = 'k7/4P3/8/8/8/8/8/4K3 w - - 0 1';
+const PROMO_DONE_FEN = 'k3Q3/8/8/8/8/8/8/4K3 b - - 0 1';
+const ENPASSANT_FEN = '4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 1';
+const ENPASSANT_DONE_FEN = '4k3/8/3P4/8/8/8/8/4K3 b - - 0 1';
+const CASTLE_FEN = 'r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1';
+const CASTLE_DONE_FEN = 'r3k2r/8/8/8/8/8/8/R4RK1 b kq - 1 1';
+
+function posFromFen(f: string) {
+  return Chess.fromSetup(parseFen(f).unwrap()).unwrap();
+}
+
 function createCinematicPos() {
-  return Chess.fromSetup(parseFen(CINEMATIC_FEN).unwrap()).unwrap();
+  return posFromFen(CINEMATIC_FEN);
 }
 
 const CINEMATIC_CODE = `const boardRef = useRef<ChessiroCanvasRef>(null);
@@ -1776,6 +1788,15 @@ await boardRef.current.squareBurst('e4', { kind: 'both' });
 await boardRef.current.popBadge('f7', { text: '!!' });
 await boardRef.current.popBanner({ text: 'CHECKMATE' });
 await boardRef.current.celebrate();     // confetti + fireworks
+
+// Special-move spectacles:
+await boardRef.current.promotionBeam('e8', { fromPiece: 'wP', piece: 'wQ' }); // pillar of light + morph
+await boardRef.current.implode('d5');   // en passant "black hole"
+await boardRef.current.castleSwap('e1', 'g1', 'h1', 'f1'); // king+rook 3D teleport swap
+await boardRef.current.drawLaser('c4', 'f7', { persist: true }); // animated threat beam
+const spot = boardRef.current.spotlight(['c4', 'f7']); // dim all but these squares
+spot.clear();
+
 await boardRef.current.camera.tilt({ rotateX: 18 });
 const drift = boardRef.current.camera.drift(); // Ken Burns wander
 drift.stop();
@@ -1926,6 +1947,106 @@ function CinematicStudio({ theme }: { theme: BoardTheme }) {
     }
   }, [busy]);
 
+  // Commit straight to a known FEN (for special moves — promotion, en
+  // passant, castling — where a plain from/to commit is awkward), with piece
+  // animations suppressed for one tick so nothing animates over the landing.
+  const commitFen = useCallback((f: string, move?: { from: string; to: string }) => {
+    setInstant(true);
+    setPos(posFromFen(f));
+    if (move) setLastMove(move);
+    window.setTimeout(() => setInstant(false), 80);
+  }, []);
+
+  const playPromotion = useCallback(async () => {
+    if (busy || !boardRef.current) return;
+    setBusy(true);
+    setStatus('Promotion Evolution: the pawn advances, then a pillar of light morphs it into a queen.');
+    try {
+      resetTo(() => posFromFen(PROMO_FEN));
+      await sleep(400);
+      const playback = boardRef.current.playCinematic([
+        { type: 'camera', action: 'zoomTo', square: 'e8', options: { scale: 1.6 } },
+        { type: 'move', from: 'e7', to: 'e8', options: { style: 'smooth' } },
+        { type: 'call', fn: () => commitFen(PROMO_DONE_FEN, { from: 'e7', to: 'e8' }) },
+        { type: 'promotionBeam', square: 'e8', options: { fromPiece: 'wP', piece: 'wQ' } },
+        { type: 'badge', square: 'e8', options: { text: '=Q' } },
+        { type: 'wait', ms: 300 },
+        { type: 'camera', action: 'zoomOut' },
+      ]);
+      await playback.finished;
+      setStatus('e8=Q — promotionBeam() shoots a pillar of light and spins the new queen into being.');
+    } finally {
+      setBusy(false);
+    }
+  }, [busy, resetTo, commitFen]);
+
+  const playEnPassant = useCallback(async () => {
+    if (busy || !boardRef.current) return;
+    setBusy(true);
+    setStatus('En passant Implosion: the captured pawn is sucked into a black hole as the pawn slides past.');
+    try {
+      resetTo(() => posFromFen(ENPASSANT_FEN));
+      await sleep(400);
+      const playback = boardRef.current.playCinematic([
+        { type: 'camera', action: 'zoomTo', square: 'd6', options: { scale: 1.7 } },
+        {
+          type: 'parallel',
+          steps: [
+            { type: 'move', from: 'e5', to: 'd6', options: { style: 'great' } },
+            { type: 'implode', square: 'd5' },
+          ],
+        },
+        { type: 'call', fn: () => commitFen(ENPASSANT_DONE_FEN, { from: 'e5', to: 'd6' }) },
+        { type: 'wait', ms: 300 },
+        { type: 'camera', action: 'zoomOut' },
+      ]);
+      await playback.finished;
+      setStatus('exd6 e.p. — implode() collapses the d5 pawn into a swirling vortex on contact.');
+    } finally {
+      setBusy(false);
+    }
+  }, [busy, resetTo, commitFen]);
+
+  const playCastle = useCallback(async () => {
+    if (busy || !boardRef.current) return;
+    setBusy(true);
+    setStatus('Castling Teleport: king and rook lift, spin in 3D and swap places at once.');
+    try {
+      resetTo(() => posFromFen(CASTLE_FEN));
+      await sleep(400);
+      const playback = boardRef.current.playCinematic([
+        { type: 'castleSwap', kingFrom: 'e1', kingTo: 'g1', rookFrom: 'h1', rookTo: 'f1' },
+        { type: 'call', fn: () => commitFen(CASTLE_DONE_FEN, { from: 'e1', to: 'g1' }) },
+        { type: 'burst', square: 'g1', options: { kind: 'sparkles', color: '#8fd0ff' } },
+      ]);
+      await playback.finished;
+      setStatus('O-O — castleSwap() flies both pieces simultaneously (the rook arcs lower so they never collide).');
+    } finally {
+      setBusy(false);
+    }
+  }, [busy, resetTo, commitFen]);
+
+  const playThreatVision = useCallback(async () => {
+    if (busy || !boardRef.current) return;
+    setBusy(true);
+    setStatus('Threat vision: spotlight the mating net, then a laser traces the bishop\u2019s path to f7.');
+    try {
+      resetTo(createCinematicPos);
+      await sleep(400);
+      const b = boardRef.current;
+      const spot = b.spotlight(['c4', 'f3', 'f7'], { radius: 0.85 });
+      await b.drawLaser('c4', 'f7', { persist: true, durationMs: 550 });
+      await b.drawLaser('f3', 'f7', { color: '#ffd65a', persist: true, durationMs: 550 });
+      await b.popBadge('f7', { text: '#', background: '#ff3b3b' });
+      await sleep(900);
+      await spot.clear();
+      b.clearCinematics();
+      setStatus('spotlight() dims all but the key squares; drawLaser() animates a glowing threat arrow.');
+    } finally {
+      setBusy(false);
+    }
+  }, [busy, resetTo]);
+
   const playSparkles = useCallback(() => {
     setStatus('squareBurst: sparkles + shockwave on e4.');
     boardRef.current?.squareBurst('e4', { kind: 'both' });
@@ -2015,6 +2136,43 @@ function CinematicStudio({ theme }: { theme: BoardTheme }) {
             <code className="text-amber-400">celebrate</code>, <code className="text-amber-400">wait</code>,{' '}
             <code className="text-amber-400">parallel</code> and <code className="text-amber-400">call</code>{' '}
             (commit your position after a move lands). Impact effects fire the exact frame the piece drops.
+          </p>
+        </ControlCard>
+
+        <ControlCard title="Special-move effects">
+          <button
+            onClick={playPromotion}
+            disabled={busy}
+            className="w-full px-3 py-2 rounded-lg border border-slate-700 hover:bg-slate-800 disabled:opacity-50 text-sm"
+          >
+            Promotion Evolution (e8=Q)
+          </button>
+          <button
+            onClick={playEnPassant}
+            disabled={busy}
+            className="w-full px-3 py-2 rounded-lg border border-slate-700 hover:bg-slate-800 disabled:opacity-50 text-sm"
+          >
+            En passant Implosion (exd6)
+          </button>
+          <button
+            onClick={playCastle}
+            disabled={busy}
+            className="w-full px-3 py-2 rounded-lg border border-slate-700 hover:bg-slate-800 disabled:opacity-50 text-sm"
+          >
+            Castling Teleport (O-O)
+          </button>
+          <button
+            onClick={playThreatVision}
+            disabled={busy}
+            className="w-full px-3 py-2 rounded-lg border border-slate-700 hover:bg-slate-800 disabled:opacity-50 text-sm"
+          >
+            Threat vision (spotlight + laser)
+          </button>
+          <p className="text-xs text-slate-500">
+            <code className="text-amber-400">promotionBeam</code>, <code className="text-amber-400">implode</code>,{' '}
+            <code className="text-amber-400">castleSwap</code>, <code className="text-amber-400">spotlight</code> and{' '}
+            <code className="text-amber-400">drawLaser</code> — all board-relative WAAPI overlays, usable as{' '}
+            <code className="text-amber-400">playCinematic</code> steps or one-off calls.
           </p>
         </ControlCard>
 
