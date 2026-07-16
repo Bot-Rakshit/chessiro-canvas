@@ -77,6 +77,14 @@ export function playCinematicScript(
         await ctx.getLayer()?.popBadge(step.square, { force, ...step.options });
         break;
       }
+      case 'celebrate': {
+        await ctx.getLayer()?.celebrate({ force, ...step.options });
+        break;
+      }
+      case 'banner': {
+        await ctx.getLayer()?.popBanner({ force, ...step.options });
+        break;
+      }
       case 'wait': {
         await wait(step.ms);
         break;

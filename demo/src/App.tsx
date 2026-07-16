@@ -1753,26 +1753,36 @@ function createCinematicPos() {
 const CINEMATIC_CODE = `const boardRef = useRef<ChessiroCanvasRef>(null);
 
 // Script a brilliant-move replay: zoom in, fly the queen with 3D spins,
-// commit the position, shake the camera, zoom back out.
+// commit the position, zoom back out. Impact effects (shockwave, flash,
+// victim blast, camera shake, onImpact) fire frame-accurately the instant
+// the piece touches the square — the approach animation's finish IS the hit.
 const playback = boardRef.current.playCinematic([
   { type: 'camera', action: 'zoomTo', square: 'f7', options: { scale: 1.5 } },
-  { type: 'move', from: 'f3', to: 'f7', options: { style: 'brilliant', badge: '!!' } },
+  {
+    type: 'move', from: 'f3', to: 'f7',
+    options: { style: 'brilliant', badge: '!!', onImpact: () => thud.play() },
+  },
   { type: 'call', fn: () => commitMove('f3', 'f7') }, // your position update
-  { type: 'camera', action: 'shake' },
-  { type: 'wait', ms: 400 },
+  { type: 'banner', options: { text: 'BRILLIANT!!' } },
+  { type: 'celebrate', options: { kind: 'both' } },
   { type: 'camera', action: 'zoomOut' },
 ]);
 await playback.finished;   // or playback.cancel() to stop mid-sequence
 
 // One-off primitives, outside a script:
 await boardRef.current.cinematicMove('g1', 'f3', { style: 'slam' });
+await boardRef.current.cinematicMove('c4', 'f7', { style: 'meteor' }); // trail + blast
 await boardRef.current.squareBurst('e4', { kind: 'both' });
 await boardRef.current.popBadge('f7', { text: '!!' });
+await boardRef.current.popBanner({ text: 'CHECKMATE' });
+await boardRef.current.celebrate();     // confetti + fireworks
 await boardRef.current.camera.tilt({ rotateX: 18 });
 const drift = boardRef.current.camera.drift(); // Ken Burns wander
 drift.stop();
 boardRef.current.clearCinematics(); // cancel everything + reset camera
 
+// Styles: brilliant | great | smooth | slam | meteor. Tune per move with
+// trail, flash, victimBlast, impactShake and onImpact (sound/haptics hook).
 // Respects prefers-reduced-motion (degrades to a plain glide);
 // pass { force: true } to override. Use interactive={false} —
 // camera transforms break pointer-to-square math until reset().`;
@@ -1824,12 +1834,11 @@ function CinematicStudio({ theme }: { theme: BoardTheme }) {
         { type: 'camera', action: 'zoomTo', square: 'f7', options: { scale: 1.5 } },
         { type: 'move', from: 'f3', to: 'f7', options: { style: 'brilliant', badge: '!!' } },
         { type: 'call', fn: () => commitInstant('f3', 'f7') },
-        { type: 'camera', action: 'shake' },
         { type: 'wait', ms: 400 },
         { type: 'camera', action: 'zoomOut' },
       ]);
       await playback.finished;
-      setStatus('Scholar\u2019s Mate, cinematically. Every step is a plain CinematicStep object.');
+      setStatus('Scholar\u2019s Mate: the pawn blasts away and the camera shakes the instant the queen drops.');
     } finally {
       setBusy(false);
     }
@@ -1845,10 +1854,9 @@ function CinematicStudio({ theme }: { theme: BoardTheme }) {
       const playback = boardRef.current.playCinematic([
         { type: 'move', from: 'g1', to: 'f3', options: { style: 'slam' } },
         { type: 'call', fn: () => commitInstant('g1', 'f3') },
-        { type: 'camera', action: 'shake', options: { intensity: 8 } },
       ]);
       await playback.finished;
-      setStatus('Nf3, slammed.');
+      setStatus('Nf3, slammed — flash, shockwave and camera shake all fire on the contact frame.');
     } finally {
       setBusy(false);
     }
@@ -1875,6 +1883,48 @@ function CinematicStudio({ theme }: { theme: BoardTheme }) {
       setBusy(false);
     }
   }, [busy, resetTo, commitInstant]);
+
+  const playMeteor = useCallback(async () => {
+    if (busy || !boardRef.current) return;
+    setBusy(true);
+    setStatus('Meteor: fiery arc with ghost trail — the f7 pawn is blasted off the board on contact.');
+    try {
+      resetTo(createCinematicPos);
+      await sleep(400);
+      const playback = boardRef.current.playCinematic([
+        { type: 'camera', action: 'zoomTo', square: 'f7', options: { scale: 1.35 } },
+        { type: 'move', from: 'c4', to: 'f7', options: { style: 'meteor', badge: '!' } },
+        { type: 'call', fn: () => commitInstant('c4', 'f7') },
+        { type: 'wait', ms: 400 },
+        { type: 'camera', action: 'zoomOut' },
+      ]);
+      await playback.finished;
+      setStatus('Bxf7+, meteor style: trail, flash, victim blast and a hard camera shake at touchdown.');
+    } finally {
+      setBusy(false);
+    }
+  }, [busy, resetTo, commitInstant]);
+
+  const playCheckmate = useCallback(async () => {
+    if (busy || !boardRef.current) return;
+    setBusy(true);
+    setStatus('Checkmate finale: banner + confetti rain + fireworks, all board-relative overlays.');
+    try {
+      const playback = boardRef.current.playCinematic([
+        {
+          type: 'parallel',
+          steps: [
+            { type: 'banner', options: { text: 'CHECKMATE' } },
+            { type: 'celebrate', options: { kind: 'both' } },
+          ],
+        },
+      ]);
+      await playback.finished;
+      setStatus('GG. celebrate() and popBanner() also work as one-off calls.');
+    } finally {
+      setBusy(false);
+    }
+  }, [busy]);
 
   const playSparkles = useCallback(() => {
     setStatus('squareBurst: sparkles + shockwave on e4.');
@@ -1938,18 +1988,33 @@ function CinematicStudio({ theme }: { theme: BoardTheme }) {
             Slam (Nf3)
           </button>
           <button
+            onClick={playMeteor}
+            disabled={busy}
+            className="w-full px-3 py-2 rounded-lg border border-slate-700 hover:bg-slate-800 disabled:opacity-50 text-sm"
+          >
+            Meteor smash (Bxf7+)
+          </button>
+          <button
             onClick={playSmoothReplay}
             disabled={busy}
             className="w-full px-3 py-2 rounded-lg border border-slate-700 hover:bg-slate-800 disabled:opacity-50 text-sm"
           >
             Smooth replay (3 quick moves)
           </button>
+          <button
+            onClick={playCheckmate}
+            disabled={busy}
+            className="w-full px-3 py-2 rounded-lg border border-slate-700 hover:bg-slate-800 disabled:opacity-50 text-sm"
+          >
+            Checkmate finale (banner + confetti)
+          </button>
           <p className="text-xs text-slate-500">
             Scripts are arrays of steps: <code className="text-amber-400">move</code>,{' '}
             <code className="text-amber-400">camera</code>, <code className="text-amber-400">burst</code>,{' '}
-            <code className="text-amber-400">badge</code>, <code className="text-amber-400">wait</code>,{' '}
+            <code className="text-amber-400">badge</code>, <code className="text-amber-400">banner</code>,{' '}
+            <code className="text-amber-400">celebrate</code>, <code className="text-amber-400">wait</code>,{' '}
             <code className="text-amber-400">parallel</code> and <code className="text-amber-400">call</code>{' '}
-            (commit your position after a move lands).
+            (commit your position after a move lands). Impact effects fire the exact frame the piece drops.
           </p>
         </ControlCard>
 

@@ -116,8 +116,12 @@ await sleep(80);
 
 assert(!!ref.current, 'board ref attached');
 const countNodes = () => container.querySelectorAll('*').length;
+// Board pieces hidden by the layer — overlay nodes (trail ghosts, flashes,
+// confetti) legitimately start at opacity 0 and must not be counted.
 const hiddenPieceCount = () =>
-  [...container.querySelectorAll('div')].filter((d) => d.style.opacity === '0').length;
+  [...container.querySelectorAll('div')].filter(
+    (d) => d.style.opacity === '0' && !d.closest('[data-cine-overlay]'),
+  ).length;
 const baseline = countNodes();
 assert(baseline > 0, 'board rendered');
 assert(hiddenPieceCount() === 0, 'idle board has no hidden pieces');
@@ -160,6 +164,48 @@ await sleep(100);
 assert(countNodes() === baseline, 'clearCinematics unmounted all overlay nodes');
 assert(hiddenPieceCount() === 0, 'clearCinematics restored the hidden piece');
 
+console.log('\n-- frame-accurate impact (trail, flash, victim blast, onImpact) --');
+const t0 = Date.now();
+let impactAt = 0;
+let impactCalls = 0;
+const captureMove = ref.current.cinematicMove('d1', 'd7', {
+  durationMs: 300,
+  force: true,
+  onImpact: () => { impactCalls += 1; impactAt = Date.now(); },
+});
+await sleep(100);
+assert(container.querySelectorAll('[data-cine-trail]').length === 4, 'brilliant move mounts 4 trail ghosts');
+assert(hiddenPieceCount() === 1, 'only origin hidden before impact (victim still standing)');
+await sleep(150); // ~250ms: impact fired at ~210ms (landStart 0.7)
+assert(impactCalls === 1, 'onImpact fired exactly once by touchdown');
+assert(hiddenPieceCount() === 2, 'victim hidden at impact (blast in flight)');
+assert(
+  [...container.querySelectorAll('[data-cine-overlay] div')].some((d) => String(d.style.background).includes('radial-gradient')),
+  'impact flash mounted at touchdown',
+);
+const resolveAt = await withTimeout(captureMove, 4000, 'capture move resolved').then(() => Date.now());
+assert(impactAt > 0 && impactAt - t0 >= 150 && impactAt - t0 <= 450, `impact fired near touchdown (+${impactAt - t0}ms)`);
+assert(resolveAt - impactAt >= 200, 'impact fired well before the move resolved');
+await sleep(150);
+assert(countNodes() === baseline, 'capture move overlay fully unmounted');
+assert(hiddenPieceCount() === 0, 'origin and victim pieces restored');
+
+console.log('\n-- celebrate (confetti + fireworks) --');
+const celebratePromise = ref.current.celebrate({ durationMs: 500, force: true });
+await sleep(60);
+assert(countNodes() > baseline, 'celebration overlay mounted');
+await withTimeout(celebratePromise, 4000, 'celebrate resolved');
+await sleep(150);
+assert(countNodes() === baseline, 'celebration overlay unmounted');
+
+console.log('\n-- popBanner --');
+const bannerPromise = ref.current.popBanner({ text: 'CHECKMATE', durationMs: 500, force: true });
+await sleep(50);
+assert(container.textContent.includes('CHECKMATE'), 'banner text rendered');
+await withTimeout(bannerPromise, 2000, 'popBanner resolved');
+await sleep(100);
+assert(countNodes() === baseline, 'banner unmounted');
+
 console.log('\n-- playCinematic script (camera + move + call + parallel) --');
 let committed = false;
 const boardDivsWithTransform = () =>
@@ -176,6 +222,8 @@ const playback = ref.current.playCinematic([
       { type: 'wait', ms: 50 },
     ],
   },
+  { type: 'banner', options: { text: 'GG', durationMs: 300 } },
+  { type: 'celebrate', options: { kind: 'confetti', durationMs: 300 } },
   { type: 'camera', action: 'shake', options: { durationMs: 40 } },
   { type: 'camera', action: 'reset' },
 ], { force: true });
@@ -212,6 +260,9 @@ const preCount = countNodes();
 await withTimeout(ref.current.squareBurst('e4'), 200, 'reduced-motion burst resolved immediately');
 assert(countNodes() === preCount, 'reduced-motion burst mounted nothing');
 await withTimeout(ref.current.popBadge('e4', { text: '!' }), 200, 'reduced-motion badge resolved immediately');
+await withTimeout(ref.current.celebrate(), 200, 'reduced-motion celebrate resolved immediately');
+await withTimeout(ref.current.popBanner({ text: 'GG' }), 200, 'reduced-motion banner resolved immediately');
+assert(countNodes() === preCount, 'reduced-motion celebrate/banner mounted nothing');
 await withTimeout(ref.current.camera.zoomTo('e4'), 200, 'reduced-motion camera resolved immediately');
 assert(boardDivsWithTransform().length === 0, 'reduced-motion camera did not transform the board');
 const reducedMove = ref.current.cinematicMove('b1', 'c3', { durationMs: 80 });

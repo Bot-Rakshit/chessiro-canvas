@@ -3,8 +3,8 @@ import type {
   ChessiroCanvasProps, ChessiroCanvasRef, BoardTheme,
   AnimateMoveOptions, PulseSquareOptions, PromotionPiece, Square,
   CameraController, CameraDriftOptions, CameraShakeOptions, CameraTiltOptions, CameraZoomOptions,
-  CinematicMoveOptions, CinematicPlayback, CinematicStep, PlayCinematicOptions,
-  PopBadgeOptions, SquareBurstOptions,
+  CelebrateOptions, CinematicMoveOptions, CinematicPlayback, CinematicStep,
+  PlayCinematicOptions, PopBadgeOptions, PopBannerOptions, SquareBurstOptions,
 } from './types';
 import { INITIAL_FEN, readFen } from './utils/fen';
 import { screenPos2square } from './utils/coords';
@@ -141,6 +141,10 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
       }
       return cameraControllerRef.current;
     }, []);
+
+    const handleImpactShake = useCallback((options: { intensity?: number; durationMs?: number }) => {
+      void getCameraController().shake(options);
+    }, [getCameraController]);
 
     useEffect(() => {
       return () => {
@@ -296,6 +300,12 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
       },
       popBadge(square: Square, options: PopBadgeOptions) {
         return cinematicRef.current?.popBadge(square, options) ?? Promise.resolve();
+      },
+      celebrate(options?: CelebrateOptions) {
+        return cinematicRef.current?.celebrate(options) ?? Promise.resolve();
+      },
+      popBanner(options: PopBannerOptions) {
+        return cinematicRef.current?.popBanner(options) ?? Promise.resolve();
       },
       clearCinematics() {
         playbackRef.current?.cancel();
@@ -454,6 +464,7 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
                 customPieces={customPieces}
                 flipPieces={flipPieces}
                 getPieceElement={getPieceElement}
+                onImpactShake={handleImpactShake}
               />
 
               {hasValidSize && (

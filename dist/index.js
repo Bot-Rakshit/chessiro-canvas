@@ -2247,7 +2247,13 @@ var DEFAULT_BURST_DURATION_MS = 650;
 var SHOCKWAVE_DURATION_MS = 500;
 var DEFAULT_BADGE_DURATION_MS = 1600;
 var MOVE_BADGE_DURATION_MS = 1400;
+var VICTIM_BLAST_DURATION_MS = 700;
+var FLASH_DURATION_MS = 380;
+var DEFAULT_CELEBRATE_DURATION_MS = 2200;
+var DEFAULT_BANNER_DURATION_MS = 1800;
+var TRAIL_GAP_MS = 55;
 var FLIGHT_SAMPLES = 24;
+var CELEBRATE_COLORS = [BRILLIANT_TEAL, "#ffd65a", "#ff6b6b", "#5ea2d9", "#b78bff", "#7ee081"];
 var SLOWMO_EXPONENT = Math.log(0.2) / Math.log(0.4);
 var STYLE_PRESETS = {
   brilliant: {
@@ -2260,10 +2266,15 @@ var STYLE_PRESETS = {
     sparkles: true,
     shockwave: true,
     slowMoLanding: true,
+    plunge: false,
     squash: 0.15,
     liftEnd: 0.15,
     landStart: 0.7,
-    slam: false
+    slam: false,
+    trailCount: 4,
+    flash: true,
+    victimBlast: true,
+    impactShake: { intensity: 3, durationMs: 300 }
   },
   great: {
     durationMs: 1400,
@@ -2275,10 +2286,15 @@ var STYLE_PRESETS = {
     sparkles: true,
     shockwave: false,
     slowMoLanding: false,
+    plunge: false,
     squash: 0.12,
     liftEnd: 0.15,
     landStart: 0.72,
-    slam: false
+    slam: false,
+    trailCount: 0,
+    flash: false,
+    victimBlast: false,
+    impactShake: null
   },
   smooth: {
     durationMs: 900,
@@ -2290,10 +2306,15 @@ var STYLE_PRESETS = {
     sparkles: false,
     shockwave: false,
     slowMoLanding: false,
+    plunge: false,
     squash: 0.04,
     liftEnd: 0.15,
     landStart: 0.85,
-    slam: false
+    slam: false,
+    trailCount: 0,
+    flash: false,
+    victimBlast: false,
+    impactShake: null
   },
   slam: {
     durationMs: 1100,
@@ -2305,10 +2326,35 @@ var STYLE_PRESETS = {
     sparkles: false,
     shockwave: true,
     slowMoLanding: false,
+    plunge: false,
     squash: 0.3,
     liftEnd: 0.25,
     landStart: 0.7,
-    slam: true
+    slam: true,
+    trailCount: 0,
+    flash: true,
+    victimBlast: true,
+    impactShake: { intensity: 7, durationMs: 380 }
+  },
+  meteor: {
+    durationMs: 2e3,
+    spins: 2,
+    arcHeight: 2.6,
+    liftScale: 1.5,
+    glowColor: "#ff7a3d",
+    glowMaxPx: 26,
+    sparkles: true,
+    shockwave: true,
+    slowMoLanding: false,
+    plunge: true,
+    squash: 0.28,
+    liftEnd: 0.12,
+    landStart: 0.72,
+    slam: false,
+    trailCount: 5,
+    flash: true,
+    victimBlast: true,
+    impactShake: { intensity: 9, durationMs: 450 }
   }
 };
 function squareColRow5(sq2, asWhite) {
@@ -2328,8 +2374,19 @@ function easeInOutQuad(u) {
 function clamp(v, min, max) {
   return Math.max(min, Math.min(max, v));
 }
+function resolveShake(option, preset) {
+  if (option === false) return null;
+  if (option === void 0) return preset;
+  const base = preset ?? { intensity: 5, durationMs: 350 };
+  if (option === true) return base;
+  return {
+    intensity: option.intensity ?? base.intensity,
+    durationMs: option.durationMs ?? base.durationMs
+  };
+}
 function resolveMoveOptions(options, reduced) {
   const preset = STYLE_PRESETS[options?.style ?? "brilliant"];
+  const trailOpt = options?.trail;
   const base = {
     durationMs: Math.max(100, options?.durationMs ?? preset.durationMs),
     spins: Math.max(0, options?.spins ?? preset.spins),
@@ -2342,10 +2399,17 @@ function resolveMoveOptions(options, reduced) {
     badge: options?.badge,
     badgeColor: options?.badgeColor,
     slowMoLanding: options?.slowMoLanding ?? preset.slowMoLanding,
+    plunge: preset.plunge && !options?.slowMoLanding,
     squash: preset.squash,
     liftEnd: preset.liftEnd,
     landStart: preset.landStart,
-    slam: preset.slam
+    slam: preset.slam,
+    trailCount: trailOpt === void 0 ? preset.trailCount : trailOpt === false ? 0 : trailOpt === true ? Math.max(preset.trailCount, 4) : clamp(Math.round(trailOpt), 0, 8),
+    flash: options?.flash ?? preset.flash,
+    victimBlast: options?.victimBlast ?? preset.victimBlast,
+    impactShake: resolveShake(options?.impactShake, preset.impactShake),
+    onImpact: options?.onImpact,
+    reduced: false
   };
   if (!reduced) return base;
   return {
@@ -2359,34 +2423,54 @@ function resolveMoveOptions(options, reduced) {
     shockwave: false,
     badge: void 0,
     slowMoLanding: false,
+    plunge: false,
     squash: 0,
-    liftEnd: 0.15,
-    landStart: 0.85,
-    slam: false
+    slam: false,
+    trailCount: 0,
+    flash: false,
+    victimBlast: false,
+    impactShake: null,
+    reduced: true
   };
 }
-function buildPositionKeyframes(e) {
+function flightPacing(o, u) {
+  if (o.slowMoLanding) return 1 - (1 - u) ** SLOWMO_EXPONENT;
+  if (o.plunge) return u ** 2.2;
+  return easeInOutQuad(u);
+}
+function buildApproachPositionKeyframes(e) {
   const o = e.opts;
+  const L = o.landStart;
+  const liftFrac = o.liftEnd / L;
+  const arriveFrac = o.slam ? 0.6 : 1;
   const frames = [{ transform: positionTransform(e.fromCol, e.fromRow), offset: 0 }];
   if (o.liftEnd > 0) {
-    frames.push({ transform: positionTransform(e.fromCol, e.fromRow), offset: o.liftEnd });
+    frames.push({ transform: positionTransform(e.fromCol, e.fromRow), offset: liftFrac });
   }
   const cx = (e.fromCol + e.toCol) / 2;
   let cy = (e.fromRow + e.toRow) / 2 - 2 * o.arcHeight;
   cy = Math.max(cy, (-0.6 - e.fromRow - e.toRow) / 2);
   for (let i = 1; i <= FLIGHT_SAMPLES; i++) {
     const u = i / FLIGHT_SAMPLES;
-    const p = o.slowMoLanding ? 1 - (1 - u) ** SLOWMO_EXPONENT : easeInOutQuad(u);
+    const p = flightPacing(o, u);
     const inv = 1 - p;
     const x = inv * inv * e.fromCol + 2 * inv * p * cx + p * p * e.toCol;
     const y = inv * inv * e.fromRow + 2 * inv * p * cy + p * p * e.toRow;
     frames.push({
       transform: positionTransform(x, y),
-      offset: o.liftEnd + (o.landStart - o.liftEnd) * u
+      offset: liftFrac + (arriveFrac - liftFrac) * u
     });
   }
-  frames.push({ transform: positionTransform(e.toCol, e.toRow), offset: 1 });
+  if (arriveFrac < 1) {
+    frames.push({ transform: positionTransform(e.toCol, e.toRow), offset: 1 });
+  }
   return frames;
+}
+function buildReducedGlideKeyframes(e) {
+  return [
+    { transform: positionTransform(e.fromCol, e.fromRow), offset: 0, easing: "ease-in-out" },
+    { transform: positionTransform(e.toCol, e.toRow), offset: 1 }
+  ];
 }
 function att(offset, pose, glowColor, easing2) {
   const { z = 0, ry = 0, rx = 0, sx = 1, sy = 1, shadow = 2, glow = 0 } = pose;
@@ -2398,56 +2482,59 @@ function att(offset, pose, glowColor, easing2) {
   if (easing2) frame.easing = easing2;
   return frame;
 }
-function buildAttitudeKeyframes(e) {
+function attitudePlan(o) {
+  const flightRy = o.slam ? 0 : o.spins * 360;
+  const restRy = Math.ceil(flightRy / 360 - 1e-3) * 360;
+  return { flightRy, restRy };
+}
+function buildApproachAttitudeKeyframes(e) {
   const o = e.opts;
   const g = o.glowMaxPx;
   const c = o.glowColor;
   const lift = o.liftScale;
-  const land = 1 - o.landStart;
-  const squashAt = o.landStart + land * (o.slam ? 0.4 : 0.3);
-  const reboundAt = o.landStart + land * 0.65;
+  const L = o.landStart;
+  const liftFrac = o.liftEnd / L;
+  const { flightRy } = attitudePlan(o);
   const frames = [att(0, {}, c)];
-  let restRy = 0;
   if (o.slam) {
-    frames.push(att(o.liftEnd, { sx: lift, sy: lift, shadow: 20, glow: g * 0.5 }, c));
-    frames.push(att(o.landStart, { sx: lift, sy: lift, shadow: 20, glow: g }, c, "cubic-bezier(0.6, 0, 1, 0.4)"));
-    if (o.squash > 0) {
-      frames.push(att(squashAt, { sx: 1 + o.squash, sy: 1 - o.squash, shadow: 2, glow: g * 0.6 }, c));
-    }
-  } else {
-    const flightRy = o.spins * 360;
-    restRy = Math.ceil(flightRy / 360 - 1e-3) * 360;
-    const tiltZ = o.spins > 0 ? -6 : 0;
-    const wobble = o.spins > 0 ? 14 : 0;
-    frames.push(att(o.liftEnd, { z: tiltZ, sx: lift, sy: lift, shadow: 10, glow: g * 0.35 }, c));
-    const flight = o.landStart - o.liftEnd;
-    for (const [u, w] of [[0.25, 1], [0.5, 0], [0.75, -1]]) {
-      frames.push(att(o.liftEnd + flight * u, {
-        z: tiltZ * (1 - u),
-        ry: flightRy * u,
-        rx: wobble * w,
-        sx: lift,
-        sy: lift,
-        shadow: 12,
-        glow: g * (0.35 + 0.65 * u)
-      }, c));
-    }
-    frames.push(att(o.landStart, { ry: flightRy, sx: lift, sy: lift, shadow: 12, glow: g }, c));
-    if (o.squash > 0) {
-      frames.push(att(squashAt, { ry: restRy, sx: 1 + o.squash, sy: 1 - o.squash, shadow: 3, glow: g * 0.6 }, c));
-    }
+    frames.push(att(liftFrac, { sx: lift, sy: lift, shadow: 22, glow: g * 0.5 }, c));
+    frames.push(att(0.78, { sx: lift, sy: lift, shadow: 22, glow: g }, c, "cubic-bezier(0.7, 0, 1, 0.6)"));
+    frames.push(att(1, { sx: 1.04, sy: 0.96, shadow: 3, glow: g }, c));
+    return frames;
   }
-  if (o.squash > 0) {
-    frames.push(att(reboundAt, {
-      ry: restRy,
-      sx: 1 - o.squash * 0.25,
-      sy: 1 + o.squash * 0.2,
-      shadow: 2,
-      glow: g * 0.3
+  const tiltZ = o.spins > 0 ? -6 : 0;
+  const wobble = o.spins > 0 ? 14 : 0;
+  frames.push(att(liftFrac, { z: tiltZ, sx: lift, sy: lift, shadow: 10, glow: g * 0.35 }, c));
+  const flight = 1 - liftFrac;
+  for (const [u, w] of [[0.25, 1], [0.5, 0], [0.75, -1]]) {
+    frames.push(att(liftFrac + flight * u, {
+      z: tiltZ * (1 - u),
+      ry: flightRy * u,
+      rx: wobble * w,
+      sx: lift,
+      sy: lift,
+      shadow: 12,
+      glow: g * (0.35 + 0.65 * u)
     }, c));
   }
-  frames.push(att(1, { ry: restRy, shadow: 2 }, c));
+  frames.push(att(1, { ry: flightRy, sx: lift, sy: lift, shadow: 12, glow: g }, c));
   return frames;
+}
+function buildSettleAttitudeKeyframes(e) {
+  const o = e.opts;
+  const g = o.glowMaxPx;
+  const c = o.glowColor;
+  const { flightRy, restRy } = attitudePlan(o);
+  const contact = o.slam ? att(0, { sx: 1.04, sy: 0.96, shadow: 3, glow: g }, c) : att(0, { ry: flightRy, sx: o.liftScale, sy: o.liftScale, shadow: 12, glow: g }, c);
+  if (o.squash <= 0) {
+    return [contact, att(1, { ry: restRy, shadow: 2 }, c)];
+  }
+  return [
+    contact,
+    att(o.slam ? 0.22 : 0.28, { ry: restRy, sx: 1 + o.squash, sy: 1 - o.squash, shadow: 2, glow: g * 0.6 }, c),
+    att(0.6, { ry: restRy, sx: 1 - o.squash * 0.25, sy: 1 + o.squash * 0.2, shadow: 2, glow: g * 0.3 }, c),
+    att(1, { ry: restRy, shadow: 2 }, c)
+  ];
 }
 var CinematicLayer = memo(forwardRef(function CinematicLayer2({
   orientation,
@@ -2455,12 +2542,17 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
   pieceSet,
   customPieces,
   flipPieces = false,
-  getPieceElement
+  getPieceElement,
+  onImpactShake
 }, ref) {
   const asWhite = orientation === "white";
   const [moves, setMoves] = useState([]);
   const [bursts, setBursts] = useState([]);
   const [badges, setBadges] = useState([]);
+  const [blasts, setBlasts] = useState([]);
+  const [flashes, setFlashes] = useState([]);
+  const [confetti, setConfetti] = useState([]);
+  const [banners, setBanners] = useState([]);
   const movesRef = useRef(moves);
   movesRef.current = moves;
   const idRef = useRef(0);
@@ -2470,10 +2562,12 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
   asWhiteRef.current = asWhite;
   const getPieceElementRef = useRef(getPieceElement);
   getPieceElementRef.current = getPieceElement;
+  const onImpactShakeRef = useRef(onImpactShake);
+  onImpactShakeRef.current = onImpactShake;
   const resolversRef = useRef(/* @__PURE__ */ new Map());
-  const landingResolversRef = useRef(/* @__PURE__ */ new Map());
   const animationsRef = useRef(/* @__PURE__ */ new Map());
   const timeoutsRef = useRef(/* @__PURE__ */ new Map());
+  const hiddenVictimsRef = useRef(/* @__PURE__ */ new Map());
   const startedRef = useRef(/* @__PURE__ */ new Set());
   const finishedRef = useRef(/* @__PURE__ */ new Set());
   const finishMove = useCallback((entry) => {
@@ -2481,14 +2575,13 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
     finishedRef.current.add(entry.id);
     const resolve = resolversRef.current.get(entry.id);
     resolversRef.current.delete(entry.id);
-    landingResolversRef.current.delete(entry.id);
     resolve?.();
+    let cleaned = false;
     const cleanup = () => {
-      const tid = timeoutsRef.current.get(entry.id);
-      if (tid !== void 0) {
-        clearTimeout(tid);
-        timeoutsRef.current.delete(entry.id);
-      }
+      if (cleaned) return;
+      cleaned = true;
+      const anims = animationsRef.current.get(entry.id);
+      if (anims) for (const anim of anims) anim.cancel();
       animationsRef.current.delete(entry.id);
       startedRef.current.delete(entry.id);
       finishedRef.current.delete(entry.id);
@@ -2496,30 +2589,35 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
         const orig = getPieceElementRef.current(entry.hiddenSquare);
         if (orig) orig.style.opacity = "";
       }
+      const victimSquare = hiddenVictimsRef.current.get(entry.id);
+      if (victimSquare) {
+        hiddenVictimsRef.current.delete(entry.id);
+        const el = getPieceElementRef.current(victimSquare);
+        if (el) el.style.opacity = "";
+      }
       setMoves((prev) => prev.filter((m) => m.id !== entry.id));
     };
     if (typeof requestAnimationFrame === "function") {
       requestAnimationFrame(() => requestAnimationFrame(cleanup));
+      setTimeout(cleanup, 150);
     } else {
       cleanup();
     }
   }, []);
-  const finishBurst = useCallback((entry) => {
+  const makeFinisher = useCallback((setEntries) => (entry) => {
     const resolve = resolversRef.current.get(entry.id);
     resolversRef.current.delete(entry.id);
     animationsRef.current.delete(entry.id);
     startedRef.current.delete(entry.id);
-    setBursts((prev) => prev.filter((b) => b.id !== entry.id));
+    setEntries((prev) => prev.filter((b) => b.id !== entry.id));
     resolve?.();
   }, []);
-  const finishBadge = useCallback((entry) => {
-    const resolve = resolversRef.current.get(entry.id);
-    resolversRef.current.delete(entry.id);
-    animationsRef.current.delete(entry.id);
-    startedRef.current.delete(entry.id);
-    setBadges((prev) => prev.filter((b) => b.id !== entry.id));
-    resolve?.();
-  }, []);
+  const finishBurst = useRef(makeFinisher(setBursts)).current;
+  const finishBadge = useRef(makeFinisher(setBadges)).current;
+  const finishBlast = useRef(makeFinisher(setBlasts)).current;
+  const finishFlash = useRef(makeFinisher(setFlashes)).current;
+  const finishConfetti = useRef(makeFinisher(setConfetti)).current;
+  const finishBanner = useRef(makeFinisher(setBanners)).current;
   const spawnBurst = useCallback((square, options) => {
     const [col, row] = squareColRow5(square, asWhiteRef.current);
     const kind = options?.kind ?? "both";
@@ -2570,64 +2668,151 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
       setBadges((prev) => [...prev, entry]);
     });
   }, []);
-  const startMoveAnimation = useCallback((outer, entry) => {
+  const spawnFlash = useCallback((col, row, color) => {
+    const entry = {
+      id: ++idRef.current,
+      cxPct: (col + 0.5) * 12.5,
+      cyPct: (row + 0.5) * 12.5,
+      color,
+      durationMs: FLASH_DURATION_MS
+    };
+    return new Promise((resolve) => {
+      resolversRef.current.set(entry.id, resolve);
+      setFlashes((prev) => [...prev, entry]);
+    });
+  }, []);
+  const spawnVictimBlast = useCallback((moveId, square) => {
+    const victim = piecesRef.current.get(square);
+    if (!victim) return null;
+    const el = getPieceElementRef.current(square);
+    if (el) {
+      el.style.opacity = "0";
+      hiddenVictimsRef.current.set(moveId, square);
+    }
+    const [col, row] = squareColRow5(square, asWhiteRef.current);
+    const dir = col < 4 ? -1 : 1;
+    const entry = {
+      id: ++idRef.current,
+      pieceKey: `${victim.color}${victim.role.toUpperCase()}`,
+      col,
+      row,
+      dxPct: dir * (120 + Math.random() * 100),
+      risePct: -(90 + Math.random() * 60),
+      rotateDeg: dir * (360 + Math.random() * 360),
+      durationMs: VICTIM_BLAST_DURATION_MS
+    };
+    return new Promise((resolve) => {
+      resolversRef.current.set(entry.id, resolve);
+      setBlasts((prev) => [...prev, entry]);
+    });
+  }, []);
+  const runImpact = useCallback((entry) => {
+    const o = entry.opts;
+    const fx = [];
+    o.onImpact?.();
+    if (o.impactShake) {
+      onImpactShakeRef.current?.({ intensity: o.impactShake.intensity, durationMs: o.impactShake.durationMs });
+    }
+    if (o.victimBlast) {
+      const blast = spawnVictimBlast(entry.id, entry.toSquare);
+      if (blast) fx.push(blast);
+    }
+    if (o.flash) {
+      fx.push(spawnFlash(entry.toCol, entry.toRow, o.glowMaxPx > 0 ? o.glowColor : "#ffffff"));
+    }
+    if (o.sparkles || o.shockwave) {
+      fx.push(spawnBurst(entry.toSquare, {
+        kind: o.sparkles && o.shockwave ? "both" : o.sparkles ? "sparkles" : "shockwave",
+        color: o.glowMaxPx > 0 ? o.glowColor : void 0
+      }));
+    }
+    if (o.badge) {
+      fx.push(spawnBadge(entry.toSquare, {
+        text: o.badge,
+        background: o.badgeColor,
+        durationMs: MOVE_BADGE_DURATION_MS
+      }));
+    }
+    return fx;
+  }, [spawnVictimBlast, spawnFlash, spawnBurst, spawnBadge]);
+  const startMoveAnimation = useCallback((wrapper, entry) => {
     if (startedRef.current.has(entry.id)) return;
     startedRef.current.add(entry.id);
-    if (!canAnimate2(outer)) {
+    const hero = wrapper.querySelector("[data-cine-hero]");
+    if (!hero || !canAnimate2(hero)) {
+      entry.opts.onImpact?.();
       finishMove(entry);
       return;
     }
     const o = entry.opts;
     const anims = [];
-    const waits = [];
-    const pos = outer.animate(buildPositionKeyframes(entry), {
-      duration: o.durationMs,
+    if (o.reduced) {
+      const glide = hero.animate(buildReducedGlideKeyframes(entry), {
+        duration: o.durationMs,
+        fill: "forwards"
+      });
+      animationsRef.current.set(entry.id, [glide]);
+      waitForAnimation(glide, o.durationMs).then(() => finishMove(entry));
+      return;
+    }
+    const approachMs = Math.max(50, Math.round(o.durationMs * o.landStart));
+    const settleMs = Math.max(50, o.durationMs - approachMs);
+    const tailWaits = [];
+    const posApproach = hero.animate(buildApproachPositionKeyframes(entry), {
+      duration: approachMs,
       easing: "linear",
       fill: "forwards"
     });
-    anims.push(pos);
-    waits.push(waitForAnimation(pos, o.durationMs));
-    const attitude = outer.firstElementChild?.firstElementChild;
+    anims.push(posApproach);
+    const attitude = hero.firstElementChild?.firstElementChild;
     if (attitude && canAnimate2(attitude)) {
-      const spin = attitude.animate(buildAttitudeKeyframes(entry), {
-        duration: o.durationMs,
+      const attApproach = attitude.animate(buildApproachAttitudeKeyframes(entry), {
+        duration: approachMs,
         easing: "linear",
         fill: "forwards"
       });
-      anims.push(spin);
-      waits.push(waitForAnimation(spin, o.durationMs));
+      anims.push(attApproach);
+      tailWaits.push(waitForAnimation(attApproach, approachMs));
     }
+    const ghosts = wrapper.querySelectorAll("[data-cine-trail]");
+    ghosts.forEach((ghost, i) => {
+      if (!canAnimate2(ghost)) return;
+      const delay = (i + 1) * TRAIL_GAP_MS;
+      const peak = 0.32 * (1 - i / (ghosts.length + 1));
+      const posGhost = ghost.animate(buildApproachPositionKeyframes(entry), {
+        duration: approachMs,
+        delay,
+        easing: "linear",
+        fill: "both"
+      });
+      const fade = ghost.animate(
+        [
+          { opacity: 0, offset: 0 },
+          { opacity: peak, offset: Math.min(0.35, o.liftEnd / o.landStart + 0.12) },
+          { opacity: peak * 0.7, offset: 0.85 },
+          { opacity: 0, offset: 1 }
+        ],
+        { duration: approachMs, delay, easing: "linear", fill: "both" }
+      );
+      anims.push(posGhost, fade);
+      tailWaits.push(waitForAnimation(posGhost, approachMs + delay));
+    });
     animationsRef.current.set(entry.id, anims);
-    if (o.sparkles || o.shockwave || o.badge) {
-      waits.push(new Promise((resolveLanding) => {
-        landingResolversRef.current.set(entry.id, resolveLanding);
-        const touchdownMs = Math.round(o.durationMs * (o.landStart + (1 - o.landStart) * (o.slam ? 0.4 : 0.25)));
-        const tid = setTimeout(() => {
-          timeoutsRef.current.delete(entry.id);
-          const fx = [];
-          if (o.sparkles || o.shockwave) {
-            fx.push(spawnBurst(entry.toSquare, {
-              kind: o.sparkles && o.shockwave ? "both" : o.sparkles ? "sparkles" : "shockwave",
-              color: o.glowMaxPx > 0 ? o.glowColor : void 0
-            }));
-          }
-          if (o.badge) {
-            fx.push(spawnBadge(entry.toSquare, {
-              text: o.badge,
-              background: o.badgeColor,
-              durationMs: MOVE_BADGE_DURATION_MS
-            }));
-          }
-          Promise.all(fx).then(() => {
-            landingResolversRef.current.delete(entry.id);
-            resolveLanding();
-          });
-        }, touchdownMs);
-        timeoutsRef.current.set(entry.id, tid);
-      }));
-    }
-    Promise.all(waits).then(() => finishMove(entry));
-  }, [finishMove, spawnBurst, spawnBadge]);
+    waitForAnimation(posApproach, approachMs).then(() => {
+      if (!animationsRef.current.has(entry.id) || finishedRef.current.has(entry.id)) return;
+      const fxWaits = runImpact(entry);
+      if (attitude && canAnimate2(attitude)) {
+        const settle = attitude.animate(buildSettleAttitudeKeyframes(entry), {
+          duration: settleMs,
+          easing: "linear",
+          fill: "forwards"
+        });
+        anims.push(settle);
+        tailWaits.push(waitForAnimation(settle, settleMs));
+      }
+      Promise.all([...tailWaits, ...fxWaits]).then(() => finishMove(entry));
+    });
+  }, [finishMove, runImpact]);
   const startBurstAnimation = useCallback((container, entry) => {
     if (startedRef.current.has(entry.id)) return;
     startedRef.current.add(entry.id);
@@ -2695,6 +2880,104 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
     animationsRef.current.set(entry.id, [anim]);
     waitForAnimation(anim, duration).then(() => finishBadge(entry));
   }, [finishBadge]);
+  const startBlastAnimation = useCallback((el, entry) => {
+    if (startedRef.current.has(entry.id)) return;
+    startedRef.current.add(entry.id);
+    if (!canAnimate2(el)) {
+      finishBlast(entry);
+      return;
+    }
+    const anim = el.animate(
+      [
+        { transform: "translate(0%, 0%) rotate(0deg) scale(1)", opacity: 1, offset: 0 },
+        {
+          transform: `translate(${entry.dxPct * 0.5}%, ${entry.risePct}%) rotate(${entry.rotateDeg * 0.45}deg) scale(0.8)`,
+          opacity: 0.95,
+          offset: 0.4
+        },
+        {
+          transform: `translate(${entry.dxPct}%, ${entry.risePct * 0.15}%) rotate(${entry.rotateDeg}deg) scale(0.25)`,
+          opacity: 0,
+          offset: 1
+        }
+      ],
+      { duration: entry.durationMs, easing: "cubic-bezier(0.3, 0.5, 0.5, 1)", fill: "forwards" }
+    );
+    animationsRef.current.set(entry.id, [anim]);
+    waitForAnimation(anim, entry.durationMs).then(() => finishBlast(entry));
+  }, [finishBlast]);
+  const startFlashAnimation = useCallback((el, entry) => {
+    if (startedRef.current.has(entry.id)) return;
+    startedRef.current.add(entry.id);
+    if (!canAnimate2(el)) {
+      finishFlash(entry);
+      return;
+    }
+    const anim = el.animate(
+      [
+        { opacity: 0, offset: 0 },
+        { opacity: 0.55, offset: 0.18 },
+        { opacity: 0, offset: 1 }
+      ],
+      { duration: entry.durationMs, easing: "ease-out", fill: "forwards" }
+    );
+    animationsRef.current.set(entry.id, [anim]);
+    waitForAnimation(anim, entry.durationMs).then(() => finishFlash(entry));
+  }, [finishFlash]);
+  const startConfettiAnimation = useCallback((container, entry) => {
+    if (startedRef.current.has(entry.id)) return;
+    startedRef.current.add(entry.id);
+    const children = Array.from(container.children);
+    const anims = [];
+    const waits = [];
+    entry.flakes.forEach((f, i) => {
+      const el = children[i];
+      if (!el || !canAnimate2(el)) return;
+      const fall = 110 / f.hPct * 100;
+      const sway = f.swayPct / f.wPct * 100;
+      const anim = el.animate(
+        [
+          { transform: "translate(0%, 0%) rotate(0deg)", opacity: 1, offset: 0 },
+          { transform: `translate(${sway}%, ${fall * 0.28}%) rotate(${f.rotateDeg * 0.3}deg)`, opacity: 1, offset: 0.28 },
+          { transform: `translate(${-sway * 0.7}%, ${fall * 0.58}%) rotate(${f.rotateDeg * 0.62}deg)`, opacity: 1, offset: 0.58 },
+          { transform: `translate(${sway * 0.4}%, ${fall * 0.85}%) rotate(${f.rotateDeg * 0.86}deg)`, opacity: 0.9, offset: 0.85 },
+          { transform: `translate(0%, ${fall}%) rotate(${f.rotateDeg}deg)`, opacity: 0, offset: 1 }
+        ],
+        { duration: f.fallMs, delay: f.delayMs, easing: "linear", fill: "both" }
+      );
+      anims.push(anim);
+      waits.push(waitForAnimation(anim, f.fallMs + f.delayMs));
+    });
+    if (anims.length === 0) {
+      finishConfetti(entry);
+      return;
+    }
+    animationsRef.current.set(entry.id, anims);
+    Promise.all(waits).then(() => finishConfetti(entry));
+  }, [finishConfetti]);
+  const startBannerAnimation = useCallback((el, entry) => {
+    if (startedRef.current.has(entry.id)) return;
+    startedRef.current.add(entry.id);
+    if (!canAnimate2(el)) {
+      finishBanner(entry);
+      return;
+    }
+    const duration = entry.durationMs;
+    const popIn = Math.min(0.35, 420 / duration);
+    const holdEnd = Math.max(popIn, 1 - Math.min(0.3, 500 / duration));
+    const anim = el.animate(
+      [
+        { transform: "scale(0.4)", opacity: 0, offset: 0, easing: "cubic-bezier(0.34, 1.56, 0.64, 1)" },
+        { transform: "scale(1.08)", opacity: 1, offset: popIn * 0.7 },
+        { transform: "scale(1)", opacity: 1, offset: popIn },
+        { transform: "scale(1)", opacity: 1, offset: holdEnd },
+        { transform: "scale(1.15)", opacity: 0, offset: 1 }
+      ],
+      { duration, easing: "ease-out", fill: "forwards" }
+    );
+    animationsRef.current.set(entry.id, [anim]);
+    waitForAnimation(anim, duration).then(() => finishBanner(entry));
+  }, [finishBanner]);
   const cinematicMove = useCallback((from, to, options) => {
     if (!isValidSquare4(from) || !isValidSquare4(to) || from === to) {
       return Promise.resolve();
@@ -2736,6 +3019,75 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
     if (prefersReducedMotion() && !options?.force) return Promise.resolve();
     return spawnBadge(square, options);
   }, [spawnBadge]);
+  const celebrate = useCallback((options) => {
+    if (prefersReducedMotion() && !options?.force) return Promise.resolve();
+    const kind = options?.kind ?? "both";
+    const durationMs = Math.max(400, options?.durationMs ?? DEFAULT_CELEBRATE_DURATION_MS);
+    const colors = options?.colors && options.colors.length > 0 ? options.colors : CELEBRATE_COLORS;
+    const scale = durationMs / DEFAULT_CELEBRATE_DURATION_MS;
+    const parts = [];
+    if (kind !== "fireworks") {
+      const flakes = [];
+      for (let i = 0; i < 42; i++) {
+        const wPct = 0.9 + Math.random() * 0.7;
+        flakes.push({
+          leftPct: Math.random() * 98,
+          delayMs: Math.random() * 450 * scale,
+          fallMs: (1300 + Math.random() * 800) * scale,
+          color: colors[i % colors.length],
+          wPct,
+          hPct: 0.5 + Math.random() * 0.6,
+          swayPct: (2 + Math.random() * 5) * (Math.random() < 0.5 ? -1 : 1),
+          rotateDeg: (Math.random() * 2 - 1) * 900,
+          round: Math.random() < 0.35
+        });
+      }
+      const entry = { id: ++idRef.current, flakes };
+      parts.push(new Promise((resolve) => {
+        resolversRef.current.set(entry.id, resolve);
+        setConfetti((prev) => [...prev, entry]);
+      }));
+    }
+    if (kind !== "confetti") {
+      const files = "abcdefgh";
+      const burstCount = 5;
+      for (let i = 0; i < burstCount; i++) {
+        const square = `${files[1 + Math.floor(Math.random() * 6)]}${2 + Math.floor(Math.random() * 6)}`;
+        const color = colors[i % colors.length];
+        parts.push(new Promise((resolve) => {
+          const fwId = ++idRef.current;
+          resolversRef.current.set(fwId, resolve);
+          const tid = setTimeout(() => {
+            timeoutsRef.current.delete(fwId);
+            if (!resolversRef.current.has(fwId)) return;
+            spawnBurst(square, { kind: "both", color, particleCount: 16 }).then(() => {
+              resolversRef.current.delete(fwId);
+              resolve();
+            });
+          }, i * 170 * scale);
+          timeoutsRef.current.set(fwId, tid);
+        }));
+      }
+    }
+    if (parts.length === 0) return Promise.resolve();
+    return Promise.all(parts).then(() => void 0);
+  }, [spawnBurst]);
+  const popBanner = useCallback((options) => {
+    if (!options?.text) return Promise.resolve();
+    if (prefersReducedMotion() && !options.force) return Promise.resolve();
+    const entry = {
+      id: ++idRef.current,
+      text: options.text,
+      color: options.color ?? "#ffffff",
+      background: options.background,
+      glowColor: options.glowColor ?? BRILLIANT_TEAL,
+      durationMs: Math.max(500, options.durationMs ?? DEFAULT_BANNER_DURATION_MS)
+    };
+    return new Promise((resolve) => {
+      resolversRef.current.set(entry.id, resolve);
+      setBanners((prev) => [...prev, entry]);
+    });
+  }, []);
   const clearCinematics = useCallback(() => {
     for (const anims of Array.from(animationsRef.current.values())) {
       for (const anim of anims) anim.cancel();
@@ -2749,8 +3101,11 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
         if (orig) orig.style.opacity = "";
       }
     }
-    const landingResolvers = Array.from(landingResolversRef.current.values());
-    landingResolversRef.current.clear();
+    for (const square of hiddenVictimsRef.current.values()) {
+      const el = getPieceElementRef.current(square);
+      if (el) el.style.opacity = "";
+    }
+    hiddenVictimsRef.current.clear();
     const resolvers = Array.from(resolversRef.current.values());
     resolversRef.current.clear();
     startedRef.current.clear();
@@ -2758,15 +3113,20 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
     setMoves([]);
     setBursts([]);
     setBadges([]);
-    for (const resolve of landingResolvers) resolve();
+    setBlasts([]);
+    setFlashes([]);
+    setConfetti([]);
+    setBanners([]);
     for (const resolve of resolvers) resolve();
   }, []);
   useImperativeHandle(ref, () => ({
     cinematicMove,
     squareBurst,
     popBadge,
+    celebrate,
+    popBanner,
     clearCinematics
-  }), [cinematicMove, squareBurst, popBadge, clearCinematics]);
+  }), [cinematicMove, squareBurst, popBadge, celebrate, popBanner, clearCinematics]);
   useEffect(() => {
     return () => {
       for (const anims of animationsRef.current.values()) {
@@ -2775,14 +3135,33 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
       animationsRef.current.clear();
       for (const tid of timeoutsRef.current.values()) clearTimeout(tid);
       timeoutsRef.current.clear();
-      for (const resolve of landingResolversRef.current.values()) resolve();
-      landingResolversRef.current.clear();
       for (const resolve of resolversRef.current.values()) resolve();
       resolversRef.current.clear();
     };
   }, []);
-  if (moves.length === 0 && bursts.length === 0 && badges.length === 0) return null;
-  return /* @__PURE__ */ jsxs("div", { style: { position: "absolute", inset: 0, pointerEvents: "none", overflow: "hidden", zIndex: 10 }, children: [
+  if (moves.length === 0 && bursts.length === 0 && badges.length === 0 && blasts.length === 0 && flashes.length === 0 && confetti.length === 0 && banners.length === 0) return null;
+  const pieceBox = { width: "12.5%", height: "12.5%" };
+  return /* @__PURE__ */ jsxs("div", { "data-cine-overlay": true, style: { position: "absolute", inset: 0, pointerEvents: "none", overflow: "hidden", zIndex: 10 }, children: [
+    flashes.map((f) => /* @__PURE__ */ jsx(
+      "div",
+      {
+        ref: (el) => {
+          if (el) startFlashAnimation(el, f);
+        },
+        style: {
+          position: "absolute",
+          inset: 0,
+          background: [
+            `radial-gradient(circle at ${f.cxPct}% ${f.cyPct}%, #ffffff 0%, transparent 28%)`,
+            `radial-gradient(circle at ${f.cxPct}% ${f.cyPct}%, ${f.color} 0%, transparent 62%)`
+          ].join(", "),
+          opacity: 0,
+          willChange: "opacity",
+          zIndex: 2
+        }
+      },
+      `flash-${f.id}`
+    )),
     bursts.map((b) => /* @__PURE__ */ jsxs(
       "div",
       {
@@ -2791,8 +3170,7 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
         },
         style: {
           position: "absolute",
-          width: "12.5%",
-          height: "12.5%",
+          ...pieceBox,
           transform: positionTransform(b.col, b.row),
           pointerEvents: "none",
           zIndex: 4
@@ -2840,13 +3218,46 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
       },
       `burst-${b.id}`
     )),
+    blasts.map((bl) => /* @__PURE__ */ jsx(
+      "div",
+      {
+        style: {
+          position: "absolute",
+          ...pieceBox,
+          transform: positionTransform(bl.col, bl.row),
+          pointerEvents: "none",
+          zIndex: 4
+        },
+        children: /* @__PURE__ */ jsx(
+          "div",
+          {
+            ref: (el) => {
+              if (el) startBlastAnimation(el, bl);
+            },
+            style: { width: "100%", height: "100%", willChange: "transform, opacity" },
+            children: /* @__PURE__ */ jsx(
+              "div",
+              {
+                style: {
+                  width: "100%",
+                  height: "100%",
+                  transform: flipPieces ? "rotate(180deg)" : void 0,
+                  transformOrigin: "center center"
+                },
+                children: /* @__PURE__ */ jsx(PieceGlyph, { pieceKey: bl.pieceKey, pieceSet, customPieces })
+              }
+            )
+          }
+        )
+      },
+      `blast-${bl.id}`
+    )),
     badges.map((bd) => /* @__PURE__ */ jsx(
       "div",
       {
         style: {
           position: "absolute",
-          width: "12.5%",
-          height: "12.5%",
+          ...pieceBox,
           transform: positionTransform(bd.col, bd.row),
           pointerEvents: "none",
           zIndex: 5
@@ -2890,47 +3301,147 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
       },
       `badge-${bd.id}`
     )),
-    moves.map((m) => /* @__PURE__ */ jsx(
+    moves.map((m) => /* @__PURE__ */ jsxs(
       "div",
       {
         ref: (el) => {
           if (el) startMoveAnimation(el, m);
         },
-        style: {
-          position: "absolute",
-          width: "12.5%",
-          height: "12.5%",
-          transform: positionTransform(m.fromCol, m.fromRow),
-          willChange: "transform",
-          pointerEvents: "none",
-          zIndex: 3
+        style: { position: "absolute", inset: 0, pointerEvents: "none", zIndex: 3 },
+        children: [
+          Array.from({ length: m.opts.trailCount }, (_, i) => /* @__PURE__ */ jsx(
+            "div",
+            {
+              "data-cine-trail": true,
+              style: {
+                position: "absolute",
+                ...pieceBox,
+                transform: positionTransform(m.fromCol, m.fromRow),
+                opacity: 0,
+                willChange: "transform, opacity"
+              },
+              children: /* @__PURE__ */ jsx(
+                "div",
+                {
+                  style: {
+                    width: "100%",
+                    height: "100%",
+                    transform: `${flipPieces ? "rotate(180deg) " : ""}scale(${0.92 - i * 0.05})`,
+                    transformOrigin: "center center",
+                    filter: "blur(1px)"
+                  },
+                  children: /* @__PURE__ */ jsx(PieceGlyph, { pieceKey: m.pieceKey, pieceSet, customPieces })
+                }
+              )
+            },
+            `trail-${i}`
+          )),
+          /* @__PURE__ */ jsx(
+            "div",
+            {
+              "data-cine-hero": true,
+              style: {
+                position: "absolute",
+                ...pieceBox,
+                transform: positionTransform(m.fromCol, m.fromRow),
+                willChange: "transform"
+              },
+              children: /* @__PURE__ */ jsx("div", { style: { width: "100%", height: "100%", perspective: 800 }, children: /* @__PURE__ */ jsx(
+                "div",
+                {
+                  style: {
+                    width: "100%",
+                    height: "100%",
+                    transformOrigin: "center center",
+                    transformStyle: "preserve-3d",
+                    willChange: "transform, filter"
+                  },
+                  children: /* @__PURE__ */ jsx(
+                    "div",
+                    {
+                      style: {
+                        width: "100%",
+                        height: "100%",
+                        transform: flipPieces ? "rotate(180deg)" : void 0,
+                        transformOrigin: "center center"
+                      },
+                      children: /* @__PURE__ */ jsx(PieceGlyph, { pieceKey: m.pieceKey, pieceSet, customPieces })
+                    }
+                  )
+                }
+              ) })
+            }
+          )
+        ]
+      },
+      `cine-${m.id}`
+    )),
+    confetti.map((c) => /* @__PURE__ */ jsx(
+      "div",
+      {
+        ref: (el) => {
+          if (el) startConfettiAnimation(el, c);
         },
-        children: /* @__PURE__ */ jsx("div", { style: { width: "100%", height: "100%", perspective: 800 }, children: /* @__PURE__ */ jsx(
+        style: { position: "absolute", inset: 0, pointerEvents: "none", zIndex: 6 },
+        children: c.flakes.map((f, i) => /* @__PURE__ */ jsx(
           "div",
           {
             style: {
-              width: "100%",
-              height: "100%",
-              transformOrigin: "center center",
-              transformStyle: "preserve-3d",
-              willChange: "transform, filter"
-            },
-            children: /* @__PURE__ */ jsx(
-              "div",
-              {
-                style: {
-                  width: "100%",
-                  height: "100%",
-                  transform: flipPieces ? "rotate(180deg)" : void 0,
-                  transformOrigin: "center center"
-                },
-                children: /* @__PURE__ */ jsx(PieceGlyph, { pieceKey: m.pieceKey, pieceSet, customPieces })
-              }
-            )
-          }
-        ) })
+              position: "absolute",
+              top: `${-f.hPct - 3}%`,
+              left: `${f.leftPct}%`,
+              width: `${f.wPct}%`,
+              height: `${f.hPct}%`,
+              background: f.color,
+              borderRadius: f.round ? "50%" : "18%",
+              opacity: 0,
+              willChange: "transform, opacity"
+            }
+          },
+          i
+        ))
       },
-      `cine-${m.id}`
+      `confetti-${c.id}`
+    )),
+    banners.map((bn) => /* @__PURE__ */ jsx(
+      "div",
+      {
+        style: {
+          position: "absolute",
+          inset: 0,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          pointerEvents: "none",
+          zIndex: 7
+        },
+        children: /* @__PURE__ */ jsx(
+          "span",
+          {
+            ref: (el) => {
+              if (el) startBannerAnimation(el, bn);
+            },
+            style: {
+              maxWidth: "92%",
+              padding: bn.background ? "0.25em 0.9em" : void 0,
+              borderRadius: bn.background ? "999px" : void 0,
+              background: bn.background,
+              color: bn.color,
+              fontSize: "clamp(20px, 7.5vmin, 60px)",
+              fontWeight: 900,
+              fontFamily: "system-ui, sans-serif",
+              letterSpacing: "0.06em",
+              textAlign: "center",
+              lineHeight: 1.1,
+              textShadow: `0 0 18px ${bn.glowColor}, 0 0 42px ${bn.glowColor}, 0 2px 4px rgba(0, 0, 0, 0.45)`,
+              opacity: 0,
+              willChange: "transform, opacity"
+            },
+            children: bn.text
+          }
+        )
+      },
+      `banner-${bn.id}`
     ))
   ] });
 }));
@@ -3142,6 +3653,14 @@ function playCinematicScript(ctx, steps, options) {
       }
       case "badge": {
         await ctx.getLayer()?.popBadge(step.square, { force, ...step.options });
+        break;
+      }
+      case "celebrate": {
+        await ctx.getLayer()?.celebrate({ force, ...step.options });
+        break;
+      }
+      case "banner": {
+        await ctx.getLayer()?.popBanner({ force, ...step.options });
         break;
       }
       case "wait": {
@@ -4116,6 +4635,9 @@ var ChessiroCanvas = forwardRef(
       }
       return cameraControllerRef.current;
     }, []);
+    const handleImpactShake = useCallback((options) => {
+      void getCameraController().shake(options);
+    }, [getCameraController]);
     useEffect(() => {
       return () => {
         playbackRef.current?.cancel();
@@ -4257,6 +4779,12 @@ var ChessiroCanvas = forwardRef(
       },
       popBadge(square, options) {
         return cinematicRef.current?.popBadge(square, options) ?? Promise.resolve();
+      },
+      celebrate(options) {
+        return cinematicRef.current?.celebrate(options) ?? Promise.resolve();
+      },
+      popBanner(options) {
+        return cinematicRef.current?.popBanner(options) ?? Promise.resolve();
       },
       clearCinematics() {
         playbackRef.current?.cancel();
@@ -4420,7 +4948,8 @@ var ChessiroCanvas = forwardRef(
                               pieceSet,
                               customPieces,
                               flipPieces,
-                              getPieceElement
+                              getPieceElement,
+                              onImpactShake: handleImpactShake
                             }
                           ),
                           hasValidSize && /* @__PURE__ */ jsxs(Fragment, { children: [

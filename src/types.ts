@@ -356,7 +356,7 @@ export interface SquareLabel {
 // ── Cinematic effects ──────────────────────────────────────────────
 
 /** Preset choreography for `cinematicMove`. */
-export type CinematicStyle = 'brilliant' | 'great' | 'smooth' | 'slam';
+export type CinematicStyle = 'brilliant' | 'great' | 'smooth' | 'slam' | 'meteor';
 
 export interface CinematicMoveOptions {
   /** Choreography preset. Default: 'brilliant'. */
@@ -381,9 +381,58 @@ export interface CinematicMoveOptions {
   badgeColor?: string;
   /** Compress the end of the flight so the final approach plays in slow motion. */
   slowMoLanding?: boolean;
+  /**
+   * Ghost afterimages trailing the flying piece. true uses the style default
+   * count; a number sets the copy count (0 disables). Default depends on
+   * style (brilliant/meteor: 4, others: off).
+   */
+  trail?: boolean | number;
+  /** Radial light flash across the board at the impact moment. Default depends on style. */
+  flash?: boolean;
+  /**
+   * When the destination square holds a piece, blast it away at the impact
+   * moment (capture explosion). Default: true for brilliant/slam/meteor.
+   */
+  victimBlast?: boolean;
+  /**
+   * Camera shake fired exactly at impact. true uses style defaults; pass
+   * numbers to tune. Default: true for slam/meteor, false otherwise.
+   */
+  impactShake?: boolean | { intensity?: number; durationMs?: number };
+  /**
+   * Called at the exact impact moment (piece contacts the square) — wire
+   * sound effects or haptics here.
+   */
+  onImpact?: () => void;
   /** Piece key like 'wQ' to animate when the origin square is empty. */
   piece?: string;
   /** Play the full choreography even when the user prefers reduced motion. */
+  force?: boolean;
+}
+
+export interface CelebrateOptions {
+  /** What to spawn. Default: 'both'. */
+  kind?: 'confetti' | 'fireworks' | 'both';
+  /** Overall duration in ms. Default: 2200. */
+  durationMs?: number;
+  /** Confetti / firework colors. Default: a festive palette. */
+  colors?: string[];
+  /** Play even when the user prefers reduced motion. */
+  force?: boolean;
+}
+
+export interface PopBannerOptions {
+  /** Banner text, e.g. 'BRILLIANT!!' or 'CHECKMATE'. */
+  text: string;
+  /** Text color. Default: '#ffffff'. */
+  color?: string;
+  /** Pill background. Default: none (glowing text only). */
+  background?: string;
+  /** Glow color behind the text. Default: '#26c2a3'. */
+  glowColor?: string;
+  /** Total duration in ms. Default: 1800. */
+  durationMs?: number;
+  /** Play even when the user prefers reduced motion. */
   force?: boolean;
 }
 
@@ -492,6 +541,8 @@ export type CinematicStep =
     }
   | { type: 'burst'; square: Square; options?: SquareBurstOptions }
   | { type: 'badge'; square: Square; options: PopBadgeOptions }
+  | { type: 'celebrate'; options?: CelebrateOptions }
+  | { type: 'banner'; options: PopBannerOptions }
   | { type: 'wait'; ms: number }
   /** Run children concurrently and await them all. */
   | { type: 'parallel'; steps: CinematicStep[] }
@@ -682,6 +733,10 @@ export interface ChessiroCanvasRef {
   squareBurst: (square: Square, options?: SquareBurstOptions) => Promise<void>;
   /** Pop an annotation badge ('!!', '?', ...) on a square. */
   popBadge: (square: Square, options: PopBadgeOptions) => Promise<void>;
+  /** Board-wide celebration: confetti rain and/or firework bursts. */
+  celebrate: (options?: CelebrateOptions) => Promise<void>;
+  /** Big glowing text banner across the board ('BRILLIANT!!', 'CHECKMATE'). */
+  popBanner: (options: PopBannerOptions) => Promise<void>;
   /**
    * Cancel the running cinematic script and every cinematic effect: WAAPI
    * animations are cancelled, hidden pieces restored, overlay nodes

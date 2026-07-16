@@ -248,7 +248,7 @@ interface SquareLabel {
     corner?: 'topLeft' | 'topRight' | 'bottomLeft' | 'bottomRight' | 'center';
 }
 /** Preset choreography for `cinematicMove`. */
-type CinematicStyle = 'brilliant' | 'great' | 'smooth' | 'slam';
+type CinematicStyle = 'brilliant' | 'great' | 'smooth' | 'slam' | 'meteor';
 interface CinematicMoveOptions {
     /** Choreography preset. Default: 'brilliant'. */
     style?: CinematicStyle;
@@ -272,9 +272,59 @@ interface CinematicMoveOptions {
     badgeColor?: string;
     /** Compress the end of the flight so the final approach plays in slow motion. */
     slowMoLanding?: boolean;
+    /**
+     * Ghost afterimages trailing the flying piece. true uses the style default
+     * count; a number sets the copy count (0 disables). Default depends on
+     * style (brilliant/meteor: 4, others: off).
+     */
+    trail?: boolean | number;
+    /** Radial light flash across the board at the impact moment. Default depends on style. */
+    flash?: boolean;
+    /**
+     * When the destination square holds a piece, blast it away at the impact
+     * moment (capture explosion). Default: true for brilliant/slam/meteor.
+     */
+    victimBlast?: boolean;
+    /**
+     * Camera shake fired exactly at impact. true uses style defaults; pass
+     * numbers to tune. Default: true for slam/meteor, false otherwise.
+     */
+    impactShake?: boolean | {
+        intensity?: number;
+        durationMs?: number;
+    };
+    /**
+     * Called at the exact impact moment (piece contacts the square) — wire
+     * sound effects or haptics here.
+     */
+    onImpact?: () => void;
     /** Piece key like 'wQ' to animate when the origin square is empty. */
     piece?: string;
     /** Play the full choreography even when the user prefers reduced motion. */
+    force?: boolean;
+}
+interface CelebrateOptions {
+    /** What to spawn. Default: 'both'. */
+    kind?: 'confetti' | 'fireworks' | 'both';
+    /** Overall duration in ms. Default: 2200. */
+    durationMs?: number;
+    /** Confetti / firework colors. Default: a festive palette. */
+    colors?: string[];
+    /** Play even when the user prefers reduced motion. */
+    force?: boolean;
+}
+interface PopBannerOptions {
+    /** Banner text, e.g. 'BRILLIANT!!' or 'CHECKMATE'. */
+    text: string;
+    /** Text color. Default: '#ffffff'. */
+    color?: string;
+    /** Pill background. Default: none (glowing text only). */
+    background?: string;
+    /** Glow color behind the text. Default: '#26c2a3'. */
+    glowColor?: string;
+    /** Total duration in ms. Default: 1800. */
+    durationMs?: number;
+    /** Play even when the user prefers reduced motion. */
     force?: boolean;
 }
 interface SquareBurstOptions {
@@ -385,6 +435,12 @@ type CinematicStep = {
     type: 'badge';
     square: Square;
     options: PopBadgeOptions;
+} | {
+    type: 'celebrate';
+    options?: CelebrateOptions;
+} | {
+    type: 'banner';
+    options: PopBannerOptions;
 } | {
     type: 'wait';
     ms: number;
@@ -544,6 +600,10 @@ interface ChessiroCanvasRef {
     squareBurst: (square: Square, options?: SquareBurstOptions) => Promise<void>;
     /** Pop an annotation badge ('!!', '?', ...) on a square. */
     popBadge: (square: Square, options: PopBadgeOptions) => Promise<void>;
+    /** Board-wide celebration: confetti rain and/or firework bursts. */
+    celebrate: (options?: CelebrateOptions) => Promise<void>;
+    /** Big glowing text banner across the board ('BRILLIANT!!', 'CHECKMATE'). */
+    popBanner: (options: PopBannerOptions) => Promise<void>;
     /**
      * Cancel the running cinematic script and every cinematic effect: WAAPI
      * animations are cancelled, hidden pieces restored, overlay nodes
@@ -580,4 +640,4 @@ declare function premoveDests(square: Square, pieces: Pieces, color: PieceColor)
 
 declare function resolvePieceImageSrc(pieceKey: string, piecePath?: string): string;
 
-export { type AnimateMoveOptions, type AnimationEvent, type Arrow, type ArrowBrush, type ArrowBrushes, type ArrowHeadShape, type ArrowVisuals, type BoardTheme, type CameraController, type CameraDriftOptions, type CameraShakeOptions, type CameraTiltOptions, type CameraZoomOptions, ChessiroCanvas, type ChessiroCanvasProps, type ChessiroCanvasRef, type CinematicMoveOptions, type CinematicPlayback, type CinematicStep, type CinematicStyle, DEFAULT_ARROW_BRUSHES, type Dests, type ExpectedMove, type GhostPiece, INITIAL_FEN, INITIAL_GAME_FEN, type MoveQualityBadge, type NotationVisuals, type Orientation, type OverlayVisuals, type Piece, type PieceColor, type PieceRenderer, type PieceRole, type PieceSet, type PlayCinematicOptions, type PopBadgeOptions, type PremoveConfig, type PromotionContext, type PromotionPiece, type PromotionVisuals, type PulseSquareOptions, type Square, type SquareBurstOptions, type SquareLabel, type SquareVisuals, type TextOverlay, preloadPieceSet, premoveDests, readFen, resolvePieceImageSrc, writeFen };
+export { type AnimateMoveOptions, type AnimationEvent, type Arrow, type ArrowBrush, type ArrowBrushes, type ArrowHeadShape, type ArrowVisuals, type BoardTheme, type CameraController, type CameraDriftOptions, type CameraShakeOptions, type CameraTiltOptions, type CameraZoomOptions, type CelebrateOptions, ChessiroCanvas, type ChessiroCanvasProps, type ChessiroCanvasRef, type CinematicMoveOptions, type CinematicPlayback, type CinematicStep, type CinematicStyle, DEFAULT_ARROW_BRUSHES, type Dests, type ExpectedMove, type GhostPiece, INITIAL_FEN, INITIAL_GAME_FEN, type MoveQualityBadge, type NotationVisuals, type Orientation, type OverlayVisuals, type Piece, type PieceColor, type PieceRenderer, type PieceRole, type PieceSet, type PlayCinematicOptions, type PopBadgeOptions, type PopBannerOptions, type PremoveConfig, type PromotionContext, type PromotionPiece, type PromotionVisuals, type PulseSquareOptions, type Square, type SquareBurstOptions, type SquareLabel, type SquareVisuals, type TextOverlay, preloadPieceSet, premoveDests, readFen, resolvePieceImageSrc, writeFen };

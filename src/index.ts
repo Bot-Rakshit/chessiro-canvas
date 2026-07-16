@@ -34,6 +34,8 @@ export type {
   CinematicMoveOptions,
   SquareBurstOptions,
   PopBadgeOptions,
+  CelebrateOptions,
+  PopBannerOptions,
   CameraController,
   CameraZoomOptions,
   CameraTiltOptions,
