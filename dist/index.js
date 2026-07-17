@@ -3043,12 +3043,12 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
     if (pillar && canAnimate2(pillar)) {
       const anim = pillar.animate(
         [
-          { transform: "scaleX(0.8) scaleY(0)", opacity: 0, offset: 0 },
-          { transform: "scaleX(1.1) scaleY(1)", opacity: 0.95, offset: 0.4 },
-          { transform: "scaleX(0.9) scaleY(1)", opacity: 0.85, offset: 0.7 },
+          { transform: "scaleX(0.8) scaleY(0)", opacity: 0, offset: 0, easing: "cubic-bezier(0.22, 1, 0.36, 1)" },
+          { transform: "scaleX(1.1) scaleY(1)", opacity: 0.95, offset: 0.35, easing: "ease-out" },
+          { transform: "scaleX(0.9) scaleY(1)", opacity: 0.85, offset: 0.7, easing: "ease-in" },
           { transform: "scaleX(0.7) scaleY(1.05)", opacity: 0, offset: 1 }
         ],
-        { duration: d, easing: "ease-out", fill: "forwards" }
+        { duration: d, fill: "forwards" }
       );
       anims.push(anim);
       waits.push(waitForAnimation(anim, d));
@@ -3083,30 +3083,33 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
     }
     const oldPiece = container.querySelector("[data-promo-old]");
     if (oldPiece && canAnimate2(oldPiece)) {
-      const oldMs = Math.max(50, Math.round(d * 0.45));
+      const oldMs = Math.max(50, Math.round(d * 0.5));
       const anim = oldPiece.animate(
         [
-          { transform: "scaleX(1) scaleY(1) rotateZ(0deg)", opacity: 1 },
-          { transform: "scaleX(0.2) scaleY(0.2) rotateZ(180deg)", opacity: 0 }
+          { transform: "scaleX(1) scaleY(1) rotateZ(0deg)", opacity: 1, offset: 0, easing: "ease-in" },
+          { transform: "scaleX(0.6) scaleY(0.6) rotateZ(90deg)", opacity: 0.6, offset: 0.45, easing: "ease-in" },
+          { transform: "scaleX(0.15) scaleY(0.15) rotateZ(180deg)", opacity: 0, offset: 1 }
         ],
-        { duration: oldMs, easing: "ease-in", fill: "forwards" }
+        { duration: oldMs, fill: "forwards" }
       );
       anims.push(anim);
       waits.push(waitForAnimation(anim, oldMs));
     }
     const newPiece = container.querySelector("[data-promo-new]");
     if (newPiece && canAnimate2(newPiece)) {
+      const newDelay = Math.round(d * 0.28);
+      const newMs = Math.max(50, d - newDelay);
       const anim = newPiece.animate(
         [
-          { transform: "scale(0) rotateY(0deg)", opacity: 0, filter: `drop-shadow(0 0 0px ${c})`, offset: 0 },
-          { transform: "scale(0) rotateY(0deg)", opacity: 0, filter: `drop-shadow(0 0 0px ${c})`, offset: 0.4 },
-          { transform: "scale(1.2) rotateY(720deg)", opacity: 1, filter: `drop-shadow(0 0 20px ${c})`, offset: 0.62 },
-          { transform: "scale(1) rotateY(720deg)", opacity: 1, filter: `drop-shadow(0 0 4px ${c})`, offset: 1 }
+          { transform: "scale(0) rotateY(0deg)", opacity: 0, filter: `drop-shadow(0 0 0px ${c})`, offset: 0, easing: "cubic-bezier(0.22, 1, 0.36, 1)" },
+          { transform: "scale(0.3) rotateY(180deg)", opacity: 0.5, filter: `drop-shadow(0 0 8px ${c})`, offset: 0.25, easing: "cubic-bezier(0.22, 1, 0.36, 1)" },
+          { transform: "scale(1.15) rotateY(540deg)", opacity: 1, filter: `drop-shadow(0 0 18px ${c})`, offset: 0.6, easing: "cubic-bezier(0.22, 1, 0.36, 1)" },
+          { transform: "scale(1) rotateY(720deg)", opacity: 1, filter: `drop-shadow(0 0 6px ${c})`, offset: 1 }
         ],
-        { duration: d, easing: "ease-out", fill: "forwards" }
+        { duration: newMs, delay: newDelay, fill: "both" }
       );
       anims.push(anim);
-      waits.push(waitForAnimation(anim, d));
+      waits.push(waitForAnimation(anim, newMs + newDelay));
     }
     if (anims.length === 0) {
       finishPromo(entry);
@@ -3125,13 +3128,15 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
     rings.forEach((ringEl, i) => {
       if (!canAnimate2(ringEl)) return;
       const dir = i % 2 === 0 ? 1 : -1;
+      const ringDelay = i * Math.round(d * 0.08);
       const anim = ringEl.animate(
         [
-          { transform: `scale(1.6) rotateZ(0deg)`, opacity: 0, offset: 0 },
-          { transform: `scale(1) rotateZ(${dir * 180}deg)`, opacity: 0.9, offset: 0.4 },
+          { transform: `scale(1.6) rotateZ(0deg)`, opacity: 0, offset: 0, easing: "cubic-bezier(0.42, 0, 0.58, 1)" },
+          { transform: `scale(1.3) rotateZ(${dir * 90}deg)`, opacity: 0.7, offset: 0.2, easing: "cubic-bezier(0.42, 0, 0.58, 1)" },
+          { transform: `scale(1) rotateZ(${dir * 200}deg)`, opacity: 0.9, offset: 0.5, easing: "cubic-bezier(0.55, 0, 0.7, 0.6)" },
           { transform: `scale(0) rotateZ(${dir * 360}deg)`, opacity: 0, offset: 1 }
         ],
-        { duration: d, easing: "ease-in", fill: "forwards" }
+        { duration: d - ringDelay, delay: ringDelay, fill: "forwards" }
       );
       anims.push(anim);
       waits.push(waitForAnimation(anim, d));
@@ -3140,11 +3145,12 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
     if (core && canAnimate2(core)) {
       const anim = core.animate(
         [
-          { transform: "scale(0)", opacity: 0, offset: 0 },
-          { transform: "scale(1.4)", opacity: 0.95, offset: 0.7 },
+          { transform: "scale(0)", opacity: 0, offset: 0, easing: "cubic-bezier(0.42, 0, 0.58, 1)" },
+          { transform: "scale(0.6)", opacity: 0.7, offset: 0.35, easing: "cubic-bezier(0.42, 0, 0.58, 1)" },
+          { transform: "scale(1.4)", opacity: 0.95, offset: 0.7, easing: "ease-in" },
           { transform: "scale(0)", opacity: 0, offset: 1 }
         ],
-        { duration: d, easing: "ease-in", fill: "forwards" }
+        { duration: d, fill: "forwards" }
       );
       anims.push(anim);
       waits.push(waitForAnimation(anim, d));
@@ -3153,11 +3159,12 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
     if (piece && canAnimate2(piece)) {
       const anim = piece.animate(
         [
-          { transform: "scaleX(1) scaleY(1) rotateZ(0deg)", opacity: 1, offset: 0 },
-          { transform: "scaleX(0.5) scaleY(0.6) rotateZ(360deg)", opacity: 0.9, offset: 0.6 },
-          { transform: "scaleX(0.05) scaleY(0.25) rotateZ(720deg)", opacity: 0, offset: 1 }
+          { transform: "scaleX(1) scaleY(1) rotateZ(0deg)", opacity: 1, offset: 0, easing: "cubic-bezier(0.42, 0, 0.58, 1)" },
+          { transform: "scaleX(0.8) scaleY(0.85) rotateZ(150deg)", opacity: 0.95, offset: 0.25, easing: "cubic-bezier(0.55, 0, 0.7, 0.6)" },
+          { transform: "scaleX(0.4) scaleY(0.5) rotateZ(420deg)", opacity: 0.7, offset: 0.6, easing: "cubic-bezier(0.55, 0, 0.7, 0.6)" },
+          { transform: "scaleX(0.05) scaleY(0.2) rotateZ(720deg)", opacity: 0, offset: 1 }
         ],
-        { duration: d, easing: "ease-in", fill: "forwards" }
+        { duration: d, fill: "forwards" }
       );
       anims.push(anim);
       waits.push(waitForAnimation(anim, d));
@@ -3208,25 +3215,23 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
     const beamDraw = beam.animate(
       [
         { transform: `rotate(${entry.angle}deg) scaleX(0)`, opacity: 0, offset: 0 },
-        { transform: `rotate(${entry.angle}deg) scaleX(0)`, opacity: 1, offset: 0.1 },
+        { transform: `rotate(${entry.angle}deg) scaleX(0)`, opacity: 1, offset: 0.08, easing: "cubic-bezier(0.25, 0.46, 0.45, 0.94)" },
         { transform: `rotate(${entry.angle}deg) scaleX(1)`, opacity: 1, offset: 1 }
       ],
-      { duration: drawMs, easing: "ease-out", fill: "forwards" }
+      { duration: drawMs, fill: "forwards" }
     );
     anims.push(beamDraw);
     if (tip && canAnimate2(tip)) {
+      const dxPx = (entry.sx - entry.ex) / 100 * container.clientWidth;
+      const dyPx = (entry.sy - entry.ey) / 100 * container.clientHeight;
       const tipAnim = tip.animate(
         [
-          { opacity: 0, offset: 0 },
-          { opacity: 1, offset: 0.5 },
-          { opacity: 0.6, offset: 1 }
+          { transform: `translate(${dxPx}px, ${dyPx}px)`, opacity: 0, offset: 0, easing: "linear" },
+          { transform: `translate(${dxPx}px, ${dyPx}px)`, opacity: 1, offset: 0.08, easing: "cubic-bezier(0.25, 0.46, 0.45, 0.94)" },
+          { transform: "translate(0px, 0px)", opacity: 1, offset: 0.95, easing: "ease-out" },
+          { transform: "translate(0px, 0px)", opacity: 0.85, offset: 1 }
         ],
-        {
-          duration: Math.max(50, Math.round(drawMs * 0.5)),
-          delay: Math.round(drawMs * 0.85),
-          easing: "ease-out",
-          fill: "forwards"
-        }
+        { duration: drawMs, fill: "forwards" }
       );
       anims.push(tipAnim);
     }
@@ -3247,7 +3252,7 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
       current.push(fadeBeam);
       if (tip && canAnimate2(tip)) {
         const fadeTip = tip.animate(
-          [{ opacity: 0.6 }, { opacity: 0 }],
+          [{ opacity: 0.85 }, { opacity: 0 }],
           { duration: LASER_FADE_MS, delay: entry.holdMs, easing: "ease-out", fill: "forwards" }
         );
         current.push(fadeTip);
