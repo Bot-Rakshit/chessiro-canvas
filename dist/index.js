@@ -2265,6 +2265,13 @@ var DEFAULT_LASER_DURATION_MS = 500;
 var DEFAULT_LASER_WIDTH_PX = 4;
 var DEFAULT_LASER_HOLD_MS = 400;
 var LASER_FADE_MS = 250;
+var DEFAULT_DRAW_ARROW_COLOR = "#ff3b3b";
+var DEFAULT_DRAW_ARROW_DURATION_MS = 700;
+var DEFAULT_DRAW_ARROW_WIDTH_PX = 4;
+var DEFAULT_DRAW_ARROW_HEAD_LENGTH_PX = 14;
+var DEFAULT_DRAW_ARROW_HEAD_WIDTH_PX = 12;
+var DEFAULT_DRAW_ARROW_HOLD_MS = 400;
+var DRAW_ARROW_FADE_MS = 250;
 var HEX6 = /^#[0-9a-f]{6}$/i;
 var TRAIL_GAP_MS = 55;
 var FLIGHT_SAMPLES = 24;
@@ -2572,6 +2579,7 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
   const [implodes, setImplodes] = useState([]);
   const [spotlights, setSpotlights] = useState([]);
   const [lasers, setLasers] = useState([]);
+  const [drawnArrows, setDrawnArrows] = useState([]);
   const movesRef = useRef(moves);
   movesRef.current = moves;
   const idRef = useRef(0);
@@ -2672,6 +2680,7 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
   const finishPromo = useRef(makeHiddenFinisher(setPromos)).current;
   const finishImplode = useRef(makeHiddenFinisher(setImplodes)).current;
   const finishLaser = useRef(makeFinisher(setLasers)).current;
+  const finishDrawArrow = useRef(makeFinisher(setDrawnArrows)).current;
   const spawnBurst = useCallback((square, options) => {
     const [col, row] = squareColRow5(square, asWhiteRef.current);
     const kind = options?.kind ?? "both";
@@ -3261,6 +3270,78 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
       waitForAnimation(fadeBeam, LASER_FADE_MS + entry.holdMs).then(() => finishLaser(entry));
     });
   }, [finishLaser]);
+  const startDrawArrowAnimation = useCallback((svg, entry) => {
+    if (startedRef.current.has(entry.id)) return;
+    startedRef.current.add(entry.id);
+    const shaft = svg.querySelector("[data-draw-arrow-shaft]");
+    const head = svg.querySelector("[data-draw-arrow-head]");
+    if (!shaft || !head) {
+      finishDrawArrow(entry);
+      return;
+    }
+    const rect = svg.getBoundingClientRect();
+    const scale = 8 / Math.max(rect.width, 1);
+    const sx = -4 + entry.sx * 8 / 100;
+    const sy = -4 + entry.sy * 8 / 100;
+    const ex = -4 + entry.ex * 8 / 100;
+    const ey = -4 + entry.ey * 8 / 100;
+    const hl = entry.headLengthPx * scale;
+    const hw = entry.headWidthPx * scale;
+    const angle = Math.atan2(ey - sy, ex - sx);
+    const shaftEndX = ex - Math.cos(angle) * hl;
+    const shaftEndY = ey - Math.sin(angle) * hl;
+    const base1X = shaftEndX - Math.sin(angle) * (hw / 2);
+    const base1Y = shaftEndY + Math.cos(angle) * (hw / 2);
+    const base2X = shaftEndX + Math.sin(angle) * (hw / 2);
+    const base2Y = shaftEndY - Math.cos(angle) * (hw / 2);
+    shaft.setAttribute("d", `M${sx.toFixed(4)},${sy.toFixed(4)} L${shaftEndX.toFixed(4)},${shaftEndY.toFixed(4)}`);
+    head.setAttribute("d", `M${base1X.toFixed(4)},${base1Y.toFixed(4)} L${ex.toFixed(4)},${ey.toFixed(4)} L${base2X.toFixed(4)},${base2Y.toFixed(4)} Z`);
+    const pathLength = shaft.getTotalLength();
+    if (!Number.isFinite(pathLength) || pathLength <= 0) {
+      finishDrawArrow(entry);
+      return;
+    }
+    shaft.style.strokeDasharray = `${pathLength}`;
+    shaft.style.strokeDashoffset = `${pathLength}`;
+    const anims = [];
+    const drawMs = entry.durationMs;
+    const shaftDraw = shaft.animate(
+      [{ strokeDashoffset: pathLength }, { strokeDashoffset: 0 }],
+      { duration: drawMs, easing: "ease-out", fill: "forwards" }
+    );
+    anims.push(shaftDraw);
+    if (canAnimate2(head)) {
+      const headFadeMs = Math.max(100, drawMs * 0.3);
+      const headDelay = Math.max(0, drawMs - headFadeMs);
+      const headAppear = head.animate(
+        [{ opacity: 0 }, { opacity: 1 }],
+        { duration: headFadeMs, delay: headDelay, fill: "forwards", easing: "ease-out" }
+      );
+      anims.push(headAppear);
+    }
+    animationsRef.current.set(entry.id, anims);
+    waitForAnimation(shaftDraw, drawMs).then(() => {
+      if (!animationsRef.current.has(entry.id) || finishedRef.current.has(entry.id)) return;
+      if (entry.persist) {
+        const resolve = resolversRef.current.get(entry.id);
+        resolversRef.current.delete(entry.id);
+        resolve?.();
+        return;
+      }
+      const fadeShaft = shaft.animate(
+        [{ opacity: 1 }, { opacity: 0 }],
+        { duration: DRAW_ARROW_FADE_MS, delay: entry.holdMs, easing: "ease-out", fill: "forwards" }
+      );
+      const fadeHead = head.animate(
+        [{ opacity: 1 }, { opacity: 0 }],
+        { duration: DRAW_ARROW_FADE_MS, delay: entry.holdMs, easing: "ease-out", fill: "forwards" }
+      );
+      const current = animationsRef.current.get(entry.id) ?? [];
+      current.push(fadeShaft, fadeHead);
+      animationsRef.current.set(entry.id, current);
+      waitForAnimation(fadeShaft, DRAW_ARROW_FADE_MS + entry.holdMs).then(() => finishDrawArrow(entry));
+    });
+  }, [finishDrawArrow]);
   const cinematicMove = useCallback((from, to, options) => {
     if (!isValidSquare4(from) || !isValidSquare4(to) || from === to) {
       return Promise.resolve();
@@ -3527,6 +3608,33 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
       setLasers((prev) => [...prev, entry]);
     });
   }, []);
+  const drawArrow = useCallback((from, to, options) => {
+    if (!isValidSquare4(from) || !isValidSquare4(to)) return Promise.resolve();
+    if (prefersReducedMotion() && !options?.force) return Promise.resolve();
+    const white = asWhiteRef.current;
+    const [fc, fr] = squareColRow5(from, white);
+    const [tc, tr] = squareColRow5(to, white);
+    const color = options?.color ?? DEFAULT_DRAW_ARROW_COLOR;
+    const entry = {
+      id: ++idRef.current,
+      sx: (fc + 0.5) * 12.5,
+      sy: (fr + 0.5) * 12.5,
+      ex: (tc + 0.5) * 12.5,
+      ey: (tr + 0.5) * 12.5,
+      color,
+      glowColor: options?.glowColor ?? color,
+      widthPx: Math.max(1, options?.widthPx ?? DEFAULT_DRAW_ARROW_WIDTH_PX),
+      headLengthPx: Math.max(4, options?.headLengthPx ?? DEFAULT_DRAW_ARROW_HEAD_LENGTH_PX),
+      headWidthPx: Math.max(4, options?.headWidthPx ?? DEFAULT_DRAW_ARROW_HEAD_WIDTH_PX),
+      durationMs: Math.max(50, options?.durationMs ?? DEFAULT_DRAW_ARROW_DURATION_MS),
+      persist: options?.persist ?? false,
+      holdMs: Math.max(0, options?.holdMs ?? DEFAULT_DRAW_ARROW_HOLD_MS)
+    };
+    return new Promise((resolve) => {
+      resolversRef.current.set(entry.id, resolve);
+      setDrawnArrows((prev) => [...prev, entry]);
+    });
+  }, []);
   const clearCinematics = useCallback(() => {
     for (const anims of Array.from(animationsRef.current.values())) {
       for (const anim of anims) anim.cancel();
@@ -3566,6 +3674,7 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
     setImplodes([]);
     setSpotlights([]);
     setLasers([]);
+    setDrawnArrows([]);
     for (const resolve of resolvers) resolve();
   }, []);
   useImperativeHandle(ref, () => ({
@@ -3579,8 +3688,9 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
     castleSwap,
     spotlight,
     drawLaser,
+    drawArrow,
     clearCinematics
-  }), [cinematicMove, squareBurst, popBadge, celebrate, popBanner, promotionBeam, implode, castleSwap, spotlight, drawLaser, clearCinematics]);
+  }), [cinematicMove, squareBurst, popBadge, celebrate, popBanner, promotionBeam, implode, castleSwap, spotlight, drawLaser, drawArrow, clearCinematics]);
   useEffect(() => {
     return () => {
       for (const anims of animationsRef.current.values()) {
@@ -3598,7 +3708,7 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
       resolversRef.current.clear();
     };
   }, []);
-  if (moves.length === 0 && bursts.length === 0 && badges.length === 0 && blasts.length === 0 && flashes.length === 0 && confetti.length === 0 && banners.length === 0 && promos.length === 0 && implodes.length === 0 && spotlights.length === 0 && lasers.length === 0) return null;
+  if (moves.length === 0 && bursts.length === 0 && badges.length === 0 && blasts.length === 0 && flashes.length === 0 && confetti.length === 0 && banners.length === 0 && promos.length === 0 && implodes.length === 0 && spotlights.length === 0 && lasers.length === 0 && drawnArrows.length === 0) return null;
   const pieceBox = { width: "12.5%", height: "12.5%" };
   return /* @__PURE__ */ jsxs("div", { "data-cine-overlay": true, style: { position: "absolute", inset: 0, pointerEvents: "none", overflow: "hidden", zIndex: 10 }, children: [
     flashes.map((f) => /* @__PURE__ */ jsx(
@@ -4118,7 +4228,57 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
         },
         `laser-${l.id}`
       );
-    })
+    }),
+    drawnArrows.map((a) => /* @__PURE__ */ jsxs(
+      "svg",
+      {
+        ref: (el) => {
+          if (el) startDrawArrowAnimation(el, a);
+        },
+        style: {
+          position: "absolute",
+          inset: 0,
+          width: "100%",
+          height: "100%",
+          pointerEvents: "none",
+          overflow: "visible",
+          zIndex: 8
+        },
+        viewBox: "-4 -4 8 8",
+        preserveAspectRatio: "xMidYMid slice",
+        children: [
+          /* @__PURE__ */ jsx(
+            "path",
+            {
+              "data-draw-arrow-shaft": true,
+              fill: "none",
+              stroke: a.color,
+              strokeWidth: a.widthPx,
+              strokeLinecap: "round",
+              strokeLinejoin: "round",
+              vectorEffect: "non-scaling-stroke",
+              style: {
+                filter: `drop-shadow(0 0 ${a.widthPx * 2}px ${a.glowColor})`,
+                opacity: 1
+              }
+            }
+          ),
+          /* @__PURE__ */ jsx(
+            "path",
+            {
+              "data-draw-arrow-head": true,
+              fill: a.color,
+              stroke: "none",
+              style: {
+                filter: `drop-shadow(0 0 ${a.widthPx * 1.5}px ${a.glowColor})`,
+                opacity: 0
+              }
+            }
+          )
+        ]
+      },
+      `draw-arrow-${a.id}`
+    ))
   ] });
 }));
 
@@ -4363,6 +4523,10 @@ function playCinematicScript(ctx, steps, options) {
       }
       case "laser": {
         await ctx.getLayer()?.drawLaser(step.from, step.to, { force, ...step.options });
+        break;
+      }
+      case "drawArrow": {
+        await ctx.getLayer()?.drawArrow(step.from, step.to, { force, ...step.options });
         break;
       }
       case "wait": {
@@ -5504,6 +5668,9 @@ var ChessiroCanvas = forwardRef(
       },
       drawLaser(from, to, options) {
         return cinematicRef.current?.drawLaser(from, to, options) ?? Promise.resolve();
+      },
+      drawArrow(from, to, options) {
+        return cinematicRef.current?.drawArrow(from, to, options) ?? Promise.resolve();
       },
       clearCinematics() {
         playbackRef.current?.cancel();

@@ -11,7 +11,7 @@ import type {
   Orientation, Pieces, PieceSet, PieceRenderer, Square,
   CinematicMoveOptions, CinematicStyle, SquareBurstOptions, PopBadgeOptions,
   CelebrateOptions, PopBannerOptions, PromotionBeamOptions, ImplodeOptions,
-  CastleSwapOptions, SpotlightOptions, SpotlightHandle, LaserOptions,
+  CastleSwapOptions, SpotlightOptions, SpotlightHandle, LaserOptions, DrawArrowOptions,
 } from '../types';
 import { PieceGlyph } from './PieceGlyph';
 import { canAnimate, prefersReducedMotion, waitForAnimation } from '../cinematics/motion';
@@ -27,6 +27,7 @@ export interface CinematicLayerRef {
   castleSwap: (kingFrom: Square, kingTo: Square, rookFrom: Square, rookTo: Square, options?: CastleSwapOptions) => Promise<void>;
   spotlight: (squares: Square[], options?: SpotlightOptions) => SpotlightHandle;
   drawLaser: (from: Square, to: Square, options?: LaserOptions) => Promise<void>;
+  drawArrow: (from: Square, to: Square, options?: DrawArrowOptions) => Promise<void>;
   clearCinematics: () => void;
 }
 
@@ -205,6 +206,22 @@ interface LaserEntry {
   holdMs: number;
 }
 
+interface DrawnArrowEntry {
+  id: number;
+  sx: number;
+  sy: number;
+  ex: number;
+  ey: number;
+  color: string;
+  glowColor: string;
+  widthPx: number;
+  headLengthPx: number;
+  headWidthPx: number;
+  durationMs: number;
+  persist: boolean;
+  holdMs: number;
+}
+
 const BRILLIANT_TEAL = '#26c2a3';
 const DEFAULT_BURST_COLOR = '#ffd65a';
 const DEFAULT_BURST_DURATION_MS = 650;
@@ -229,6 +246,13 @@ const DEFAULT_LASER_DURATION_MS = 500;
 const DEFAULT_LASER_WIDTH_PX = 4;
 const DEFAULT_LASER_HOLD_MS = 400;
 const LASER_FADE_MS = 250;
+const DEFAULT_DRAW_ARROW_COLOR = '#ff3b3b';
+const DEFAULT_DRAW_ARROW_DURATION_MS = 700;
+const DEFAULT_DRAW_ARROW_WIDTH_PX = 4;
+const DEFAULT_DRAW_ARROW_HEAD_LENGTH_PX = 14;
+const DEFAULT_DRAW_ARROW_HEAD_WIDTH_PX = 12;
+const DEFAULT_DRAW_ARROW_HOLD_MS = 400;
+const DRAW_ARROW_FADE_MS = 250;
 const HEX6 = /^#[0-9a-f]{6}$/i;
 const TRAIL_GAP_MS = 55;
 const FLIGHT_SAMPLES = 24;
@@ -560,6 +584,7 @@ export const CinematicLayer = memo(forwardRef<CinematicLayerRef, CinematicLayerP
   const [implodes, setImplodes] = useState<ImplodeEntry[]>([]);
   const [spotlights, setSpotlights] = useState<SpotlightEntry[]>([]);
   const [lasers, setLasers] = useState<LaserEntry[]>([]);
+  const [drawnArrows, setDrawnArrows] = useState<DrawnArrowEntry[]>([]);
   const movesRef = useRef<MoveEntry[]>(moves);
   movesRef.current = moves;
 
@@ -683,6 +708,7 @@ export const CinematicLayer = memo(forwardRef<CinematicLayerRef, CinematicLayerP
   const finishPromo = useRef(makeHiddenFinisher<PromoEntry>(setPromos)).current;
   const finishImplode = useRef(makeHiddenFinisher<ImplodeEntry>(setImplodes)).current;
   const finishLaser = useRef(makeFinisher<LaserEntry>(setLasers)).current;
+  const finishDrawArrow = useRef(makeFinisher<DrawnArrowEntry>(setDrawnArrows)).current;
 
   const spawnBurst = useCallback((square: Square, options?: SquareBurstOptions): Promise<void> => {
     const [col, row] = squareColRow(square, asWhiteRef.current);
@@ -1322,6 +1348,90 @@ export const CinematicLayer = memo(forwardRef<CinematicLayerRef, CinematicLayerP
     });
   }, [finishLaser]);
 
+  const startDrawArrowAnimation = useCallback((svg: SVGSVGElement, entry: DrawnArrowEntry) => {
+    if (startedRef.current.has(entry.id)) return;
+    startedRef.current.add(entry.id);
+
+    const shaft = svg.querySelector<SVGPathElement>('[data-draw-arrow-shaft]');
+    const head = svg.querySelector<SVGPathElement>('[data-draw-arrow-head]');
+    if (!shaft || !head) {
+      finishDrawArrow(entry);
+      return;
+    }
+
+    const rect = svg.getBoundingClientRect();
+    const scale = 8 / Math.max(rect.width, 1);
+    const sx = -4 + (entry.sx * 8) / 100;
+    const sy = -4 + (entry.sy * 8) / 100;
+    const ex = -4 + (entry.ex * 8) / 100;
+    const ey = -4 + (entry.ey * 8) / 100;
+    const hl = entry.headLengthPx * scale;
+    const hw = entry.headWidthPx * scale;
+    const angle = Math.atan2(ey - sy, ex - sx);
+
+    const shaftEndX = ex - Math.cos(angle) * hl;
+    const shaftEndY = ey - Math.sin(angle) * hl;
+    const base1X = shaftEndX - Math.sin(angle) * (hw / 2);
+    const base1Y = shaftEndY + Math.cos(angle) * (hw / 2);
+    const base2X = shaftEndX + Math.sin(angle) * (hw / 2);
+    const base2Y = shaftEndY - Math.cos(angle) * (hw / 2);
+
+    shaft.setAttribute('d', `M${sx.toFixed(4)},${sy.toFixed(4)} L${shaftEndX.toFixed(4)},${shaftEndY.toFixed(4)}`);
+    head.setAttribute('d', `M${base1X.toFixed(4)},${base1Y.toFixed(4)} L${ex.toFixed(4)},${ey.toFixed(4)} L${base2X.toFixed(4)},${base2Y.toFixed(4)} Z`);
+
+    const pathLength = shaft.getTotalLength();
+    if (!Number.isFinite(pathLength) || pathLength <= 0) {
+      finishDrawArrow(entry);
+      return;
+    }
+
+    shaft.style.strokeDasharray = `${pathLength}`;
+    shaft.style.strokeDashoffset = `${pathLength}`;
+
+    const anims: Animation[] = [];
+    const drawMs = entry.durationMs;
+
+    const shaftDraw = shaft.animate(
+      [{ strokeDashoffset: pathLength }, { strokeDashoffset: 0 }],
+      { duration: drawMs, easing: 'ease-out', fill: 'forwards' },
+    );
+    anims.push(shaftDraw);
+
+    if (canAnimate(head)) {
+      const headFadeMs = Math.max(100, drawMs * 0.3);
+      const headDelay = Math.max(0, drawMs - headFadeMs);
+      const headAppear = head.animate(
+        [{ opacity: 0 }, { opacity: 1 }],
+        { duration: headFadeMs, delay: headDelay, fill: 'forwards', easing: 'ease-out' },
+      );
+      anims.push(headAppear);
+    }
+
+    animationsRef.current.set(entry.id, anims);
+
+    waitForAnimation(shaftDraw, drawMs).then(() => {
+      if (!animationsRef.current.has(entry.id) || finishedRef.current.has(entry.id)) return;
+      if (entry.persist) {
+        const resolve = resolversRef.current.get(entry.id);
+        resolversRef.current.delete(entry.id);
+        resolve?.();
+        return;
+      }
+      const fadeShaft = shaft.animate(
+        [{ opacity: 1 }, { opacity: 0 }],
+        { duration: DRAW_ARROW_FADE_MS, delay: entry.holdMs, easing: 'ease-out', fill: 'forwards' },
+      );
+      const fadeHead = head.animate(
+        [{ opacity: 1 }, { opacity: 0 }],
+        { duration: DRAW_ARROW_FADE_MS, delay: entry.holdMs, easing: 'ease-out', fill: 'forwards' },
+      );
+      const current = animationsRef.current.get(entry.id) ?? [];
+      current.push(fadeShaft, fadeHead);
+      animationsRef.current.set(entry.id, current);
+      waitForAnimation(fadeShaft, DRAW_ARROW_FADE_MS + entry.holdMs).then(() => finishDrawArrow(entry));
+    });
+  }, [finishDrawArrow]);
+
   /**
    * Choreographed flight of the piece on `from` to `to`. The real piece on
    * `from` is hidden during the flight and restored on cleanup. Resolves
@@ -1652,6 +1762,37 @@ export const CinematicLayer = memo(forwardRef<CinematicLayerRef, CinematicLayerP
     });
   }, []);
 
+  /** Draw an arrow slowly from `from` to `to` (SVG, shaft draws then head fades in). */
+  const drawArrow = useCallback((from: Square, to: Square, options?: DrawArrowOptions): Promise<void> => {
+    if (!isValidSquare(from) || !isValidSquare(to)) return Promise.resolve();
+    if (prefersReducedMotion() && !options?.force) return Promise.resolve();
+
+    const white = asWhiteRef.current;
+    const [fc, fr] = squareColRow(from, white);
+    const [tc, tr] = squareColRow(to, white);
+    const color = options?.color ?? DEFAULT_DRAW_ARROW_COLOR;
+    const entry: DrawnArrowEntry = {
+      id: ++idRef.current,
+      sx: (fc + 0.5) * 12.5,
+      sy: (fr + 0.5) * 12.5,
+      ex: (tc + 0.5) * 12.5,
+      ey: (tr + 0.5) * 12.5,
+      color,
+      glowColor: options?.glowColor ?? color,
+      widthPx: Math.max(1, options?.widthPx ?? DEFAULT_DRAW_ARROW_WIDTH_PX),
+      headLengthPx: Math.max(4, options?.headLengthPx ?? DEFAULT_DRAW_ARROW_HEAD_LENGTH_PX),
+      headWidthPx: Math.max(4, options?.headWidthPx ?? DEFAULT_DRAW_ARROW_HEAD_WIDTH_PX),
+      durationMs: Math.max(50, options?.durationMs ?? DEFAULT_DRAW_ARROW_DURATION_MS),
+      persist: options?.persist ?? false,
+      holdMs: Math.max(0, options?.holdMs ?? DEFAULT_DRAW_ARROW_HOLD_MS),
+    };
+
+    return new Promise<void>((resolve) => {
+      resolversRef.current.set(entry.id, resolve);
+      setDrawnArrows(prev => [...prev, entry]);
+    });
+  }, []);
+
   const clearCinematics = useCallback(() => {
     for (const anims of Array.from(animationsRef.current.values())) {
       for (const anim of anims) anim.cancel();
@@ -1691,6 +1832,7 @@ export const CinematicLayer = memo(forwardRef<CinematicLayerRef, CinematicLayerP
     setImplodes([]);
     setSpotlights([]);
     setLasers([]);
+    setDrawnArrows([]);
     for (const resolve of resolvers) resolve();
   }, []);
 
@@ -1705,8 +1847,9 @@ export const CinematicLayer = memo(forwardRef<CinematicLayerRef, CinematicLayerP
     castleSwap,
     spotlight,
     drawLaser,
+    drawArrow,
     clearCinematics,
-  }), [cinematicMove, squareBurst, popBadge, celebrate, popBanner, promotionBeam, implode, castleSwap, spotlight, drawLaser, clearCinematics]);
+  }), [cinematicMove, squareBurst, popBadge, celebrate, popBanner, promotionBeam, implode, castleSwap, spotlight, drawLaser, drawArrow, clearCinematics]);
 
   useEffect(() => {
     return () => {
@@ -1730,7 +1873,7 @@ export const CinematicLayer = memo(forwardRef<CinematicLayerRef, CinematicLayerP
     moves.length === 0 && bursts.length === 0 && badges.length === 0
     && blasts.length === 0 && flashes.length === 0 && confetti.length === 0
     && banners.length === 0 && promos.length === 0 && implodes.length === 0
-    && spotlights.length === 0 && lasers.length === 0
+    && spotlights.length === 0 && lasers.length === 0 && drawnArrows.length === 0
   ) return null;
 
   const pieceBox = { width: '12.5%', height: '12.5%' } as const;
@@ -2185,6 +2328,46 @@ export const CinematicLayer = memo(forwardRef<CinematicLayerRef, CinematicLayerP
           </div>
         );
       })}
+      {drawnArrows.map((a) => (
+        <svg
+          key={`draw-arrow-${a.id}`}
+          ref={(el) => { if (el) startDrawArrowAnimation(el, a); }}
+          style={{
+            position: 'absolute',
+            inset: 0,
+            width: '100%',
+            height: '100%',
+            pointerEvents: 'none',
+            overflow: 'visible',
+            zIndex: 8,
+          }}
+          viewBox="-4 -4 8 8"
+          preserveAspectRatio="xMidYMid slice"
+        >
+          <path
+            data-draw-arrow-shaft
+            fill="none"
+            stroke={a.color}
+            strokeWidth={a.widthPx}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            vectorEffect="non-scaling-stroke"
+            style={{
+              filter: `drop-shadow(0 0 ${a.widthPx * 2}px ${a.glowColor})`,
+              opacity: 1,
+            }}
+          />
+          <path
+            data-draw-arrow-head
+            fill={a.color}
+            stroke="none"
+            style={{
+              filter: `drop-shadow(0 0 ${a.widthPx * 1.5}px ${a.glowColor})`,
+              opacity: 0,
+            }}
+          />
+        </svg>
+      ))}
     </div>
   );
 }));

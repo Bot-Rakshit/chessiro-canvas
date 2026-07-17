@@ -42,6 +42,7 @@ export type {
   SpotlightOptions,
   SpotlightHandle,
   LaserOptions,
+  DrawArrowOptions,
   CameraController,
   CameraZoomOptions,
   CameraTiltOptions,

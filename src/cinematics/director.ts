@@ -111,6 +111,10 @@ export function playCinematicScript(
         await ctx.getLayer()?.drawLaser(step.from, step.to, { force, ...step.options });
         break;
       }
+      case 'drawArrow': {
+        await ctx.getLayer()?.drawArrow(step.from, step.to, { force, ...step.options });
+        break;
+      }
       case 'wait': {
         await wait(step.ms);
         break;

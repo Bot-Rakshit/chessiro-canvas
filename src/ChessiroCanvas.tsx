@@ -6,7 +6,7 @@ import type {
   CelebrateOptions, CinematicMoveOptions, CinematicPlayback, CinematicStep,
   PlayCinematicOptions, PopBadgeOptions, PopBannerOptions, SquareBurstOptions,
   PromotionBeamOptions, ImplodeOptions, CastleSwapOptions, SpotlightOptions,
-  SpotlightHandle, LaserOptions,
+  SpotlightHandle, LaserOptions, DrawArrowOptions,
 } from './types';
 import { INITIAL_FEN, readFen } from './utils/fen';
 import { screenPos2square } from './utils/coords';
@@ -323,6 +323,9 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
       },
       drawLaser(from: Square, to: Square, options?: LaserOptions) {
         return cinematicRef.current?.drawLaser(from, to, options) ?? Promise.resolve();
+      },
+      drawArrow(from: Square, to: Square, options?: DrawArrowOptions) {
+        return cinematicRef.current?.drawArrow(from, to, options) ?? Promise.resolve();
       },
       clearCinematics() {
         playbackRef.current?.cancel();

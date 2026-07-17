@@ -480,6 +480,27 @@ export interface LaserOptions {
   force?: boolean;
 }
 
+export interface DrawArrowOptions {
+  /** Arrow color. Default: '#ff3b3b'. */
+  color?: string;
+  /** Glow color behind the arrow. Default: matches color. */
+  glowColor?: string;
+  /** Draw duration in ms. Default: 700. */
+  durationMs?: number;
+  /** Shaft thickness in px. Default: 4. */
+  widthPx?: number;
+  /** Arrowhead length in px. Default: 14. */
+  headLengthPx?: number;
+  /** Arrowhead width in px. Default: 12. */
+  headWidthPx?: number;
+  /** Keep the arrow until clearCinematics instead of auto-fading. Default: false. */
+  persist?: boolean;
+  /** Hold time before auto-fade when not persisted, in ms. Default: 400. */
+  holdMs?: number;
+  /** Play even when the user prefers reduced motion. */
+  force?: boolean;
+}
+
 export interface CelebrateOptions {
   /** What to spawn. Default: 'both'. */
   kind?: 'confetti' | 'fireworks' | 'both';
@@ -619,6 +640,7 @@ export type CinematicStep =
   | { type: 'spotlight'; squares: Square[]; options?: SpotlightOptions }
   | { type: 'clearSpotlight' }
   | { type: 'laser'; from: Square; to: Square; options?: LaserOptions }
+  | { type: 'drawArrow'; from: Square; to: Square; options?: DrawArrowOptions }
   | { type: 'wait'; ms: number }
   /** Run children concurrently and await them all. */
   | { type: 'parallel'; steps: CinematicStep[] }
@@ -838,6 +860,8 @@ export interface ChessiroCanvasRef {
   spotlight: (squares: Square[], options?: SpotlightOptions) => SpotlightHandle;
   /** Draw an animated glowing threat beam from one square to another. */
   drawLaser: (from: Square, to: Square, options?: LaserOptions) => Promise<void>;
+  /** Draw an arrow slowly from one square to another (shaft draws, then head pops in). */
+  drawArrow: (from: Square, to: Square, options?: DrawArrowOptions) => Promise<void>;
   /**
    * Cancel the running cinematic script and every cinematic effect: WAAPI
    * animations are cancelled, hidden pieces restored, overlay nodes

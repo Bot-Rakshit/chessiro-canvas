@@ -367,6 +367,26 @@ interface LaserOptions {
     /** Play even when the user prefers reduced motion. */
     force?: boolean;
 }
+interface DrawArrowOptions {
+    /** Arrow color. Default: '#ff3b3b'. */
+    color?: string;
+    /** Glow color behind the arrow. Default: matches color. */
+    glowColor?: string;
+    /** Draw duration in ms. Default: 700. */
+    durationMs?: number;
+    /** Shaft thickness in px. Default: 4. */
+    widthPx?: number;
+    /** Arrowhead length in px. Default: 14. */
+    headLengthPx?: number;
+    /** Arrowhead width in px. Default: 12. */
+    headWidthPx?: number;
+    /** Keep the arrow until clearCinematics instead of auto-fading. Default: false. */
+    persist?: boolean;
+    /** Hold time before auto-fade when not persisted, in ms. Default: 400. */
+    holdMs?: number;
+    /** Play even when the user prefers reduced motion. */
+    force?: boolean;
+}
 interface CelebrateOptions {
     /** What to spawn. Default: 'both'. */
     kind?: 'confetti' | 'fireworks' | 'both';
@@ -531,6 +551,11 @@ type CinematicStep = {
     from: Square;
     to: Square;
     options?: LaserOptions;
+} | {
+    type: 'drawArrow';
+    from: Square;
+    to: Square;
+    options?: DrawArrowOptions;
 } | {
     type: 'wait';
     ms: number;
@@ -719,6 +744,8 @@ interface ChessiroCanvasRef {
     spotlight: (squares: Square[], options?: SpotlightOptions) => SpotlightHandle;
     /** Draw an animated glowing threat beam from one square to another. */
     drawLaser: (from: Square, to: Square, options?: LaserOptions) => Promise<void>;
+    /** Draw an arrow slowly from one square to another (shaft draws, then head pops in). */
+    drawArrow: (from: Square, to: Square, options?: DrawArrowOptions) => Promise<void>;
     /**
      * Cancel the running cinematic script and every cinematic effect: WAAPI
      * animations are cancelled, hidden pieces restored, overlay nodes
@@ -755,4 +782,4 @@ declare function premoveDests(square: Square, pieces: Pieces, color: PieceColor)
 
 declare function resolvePieceImageSrc(pieceKey: string, piecePath?: string): string;
 
-export { type AnimateMoveOptions, type AnimationEvent, type Arrow, type ArrowBrush, type ArrowBrushes, type ArrowHeadShape, type ArrowVisuals, type BoardTheme, type CameraController, type CameraDriftOptions, type CameraShakeOptions, type CameraTiltOptions, type CameraZoomOptions, type CastleSwapOptions, type CelebrateOptions, ChessiroCanvas, type ChessiroCanvasProps, type ChessiroCanvasRef, type CinematicMoveOptions, type CinematicPlayback, type CinematicStep, type CinematicStyle, DEFAULT_ARROW_BRUSHES, type Dests, type ExpectedMove, type GhostPiece, INITIAL_FEN, INITIAL_GAME_FEN, type ImplodeOptions, type LaserOptions, type MoveQualityBadge, type NotationVisuals, type Orientation, type OverlayVisuals, type Piece, type PieceColor, type PieceRenderer, type PieceRole, type PieceSet, type PlayCinematicOptions, type PopBadgeOptions, type PopBannerOptions, type PremoveConfig, type PromotionBeamOptions, type PromotionContext, type PromotionPiece, type PromotionVisuals, type PulseSquareOptions, type SpotlightHandle, type SpotlightOptions, type Square, type SquareBurstOptions, type SquareLabel, type SquareVisuals, type TextOverlay, preloadPieceSet, premoveDests, readFen, resolvePieceImageSrc, writeFen };
+export { type AnimateMoveOptions, type AnimationEvent, type Arrow, type ArrowBrush, type ArrowBrushes, type ArrowHeadShape, type ArrowVisuals, type BoardTheme, type CameraController, type CameraDriftOptions, type CameraShakeOptions, type CameraTiltOptions, type CameraZoomOptions, type CastleSwapOptions, type CelebrateOptions, ChessiroCanvas, type ChessiroCanvasProps, type ChessiroCanvasRef, type CinematicMoveOptions, type CinematicPlayback, type CinematicStep, type CinematicStyle, DEFAULT_ARROW_BRUSHES, type Dests, type DrawArrowOptions, type ExpectedMove, type GhostPiece, INITIAL_FEN, INITIAL_GAME_FEN, type ImplodeOptions, type LaserOptions, type MoveQualityBadge, type NotationVisuals, type Orientation, type OverlayVisuals, type Piece, type PieceColor, type PieceRenderer, type PieceRole, type PieceSet, type PlayCinematicOptions, type PopBadgeOptions, type PopBannerOptions, type PremoveConfig, type PromotionBeamOptions, type PromotionContext, type PromotionPiece, type PromotionVisuals, type PulseSquareOptions, type SpotlightHandle, type SpotlightOptions, type Square, type SquareBurstOptions, type SquareLabel, type SquareVisuals, type TextOverlay, preloadPieceSet, premoveDests, readFen, resolvePieceImageSrc, writeFen };
