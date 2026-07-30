@@ -226,9 +226,10 @@ export function App() {
               </dl>
 
               <p className="note measure-wide mt-5">
-                Measured against react-chessboard v5 on the same harness: 77% faster to mount,
-                81% faster to update, 13% smaller gzipped. Numbers vary by machine — the harness
-                lives in the repository.
+                Measured against react-chessboard v5 on the same harness: 81% faster to mount and
+                to update, and 89% less React commit time. It is the larger bundle of the two —
+                the cinematics layer costs about 11 KB gzipped. Numbers vary by machine; the
+                harness lives in the repository.
               </p>
             </section>
 

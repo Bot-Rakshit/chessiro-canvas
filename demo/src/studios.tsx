@@ -1034,6 +1034,52 @@ export function CinematicStudio({ theme }: { theme: BoardTheme }) {
     }
   }, [busy, resetTo]);
 
+  const playKingTopple = useCallback(async () => {
+    if (busy || !boardRef.current) return;
+    setBusy(true);
+    setStatus('Checkmate: the queen lands, then the black king tips over on its base.');
+    try {
+      resetTo(() => posFromFen(CINEMATIC_FEN));
+      await sleep(400);
+      const playback = boardRef.current.playCinematic([
+        { type: 'move', from: 'f3', to: 'f7', options: { style: 'brilliant', badge: '#' } },
+        { type: 'call', fn: () => commitInstant('f3', 'f7') },
+        { type: 'wait', ms: 200 },
+        { type: 'checkmate', square: 'e8' },
+      ]);
+      await playback.finished;
+      setStatus('Qxf7# — checkmate() topples the king, dims the board and announces the result.');
+    } finally {
+      setBusy(false);
+    }
+  }, [busy, resetTo, commitInstant]);
+
+  const playAnnotations = useCallback(async () => {
+    if (busy || !boardRef.current) return;
+    setBusy(true);
+    setStatus('annotate(): live text pinned to squares — evaluations, counts, callouts.');
+    try {
+      resetTo(() => posFromFen(CINEMATIC_FEN));
+      await sleep(300);
+      const b = boardRef.current;
+      const evalTag = b.annotate('f3', '+0.4', { corner: 'topRight', background: '#1f6f43' });
+      const target = b.annotate('f7', 'weak', { corner: 'center', background: '#9b2226' });
+      b.annotate('c4', 'A', { corner: 'topLeft', background: '#1e40af' });
+      await sleep(900);
+      // setText updates in place — no re-animation, so a running eval doesn't flicker.
+      evalTag.setText('+3.1');
+      target.setText('2 v 1');
+      setStatus('setText() swaps the text in place, without replaying the entry animation.');
+      await sleep(1400);
+      b.annotate('f7', 'Fork!', { durationMs: 1200, enter: 'rise', corner: 'bottomRight' });
+      await sleep(1600);
+      b.clearCinematics();
+      setStatus('Annotations persist until cleared; the rising one dismissed itself.');
+    } finally {
+      setBusy(false);
+    }
+  }, [busy, resetTo]);
+
   const playSparkles = useCallback(() => {
     setStatus('squareBurst: sparkles and a shockwave on e4.');
     boardRef.current?.squareBurst('e4', { kind: 'both' });
@@ -1101,6 +1147,21 @@ export function CinematicStudio({ theme }: { theme: BoardTheme }) {
             <p className="note">
               <C>promotionBeam</C>, <C>implode</C>, <C>castleSwap</C>, <C>spotlight</C> and <C>drawLaser</C> —
               board-relative overlays, usable as script steps or one-off calls.
+            </p>
+          </Panel>
+
+          <Panel title="Learning & endgame">
+            <button onClick={playKingTopple} disabled={busy} className="btn btn-block">
+              Checkmate (king topples)
+            </button>
+            <button onClick={playAnnotations} disabled={busy} className="btn btn-block">
+              Annotate squares with text
+            </button>
+            <p className="note">
+              <C>checkmate()</C> tips the king over on its base, the gesture a player makes when
+              they resign, then dims the board and announces. <C>annotate()</C> pins live text to a
+              square — evaluations, attacker counts, callouts — and <C>setText</C> updates it in
+              place without replaying the animation.
             </p>
           </Panel>
 

@@ -633,8 +633,40 @@ setFen(nextFen);                  // cinematics never commit the position
 ```
 
 The full effect set on the ref: `cinematicMove`, `squareBurst`, `popBadge`,
-`popBanner`, `celebrate`, `promotionBeam`, `implode`, `castleSwap`, `spotlight`,
-`drawLaser`, `drawArrow`, plus `camera.zoomTo / zoomOut / tilt / shake / drift / reset`.
+`popBanner`, `celebrate`, `promotionBeam`, `implode`, `castleSwap`, `checkmate`,
+`annotate`, `spotlight`, `drawLaser`, `drawArrow`, plus
+`camera.zoomTo / zoomOut / tilt / shake / drift / reset`.
+
+**Ending the game.** `checkmate` tips the king over on its base — the gesture a
+player makes when they resign — then dims the board and announces:
+
+```tsx
+await board.current?.checkmate('e8');                 // topple + CHECKMATE banner
+await board.current?.checkmate('e8', {
+  direction: 'left',   // default 'auto' tips away from the board centre
+  banner: 'MATE IN 3', // or null to stay silent
+  dim: false,
+});
+```
+
+Under `prefers-reduced-motion` the fall is skipped but the announcement still
+plays, because that part is information rather than decoration.
+
+**Text over a square.** `annotate` pins live text to a square — evaluations,
+attacker counts, lesson callouts. It persists until cleared, and `setText`
+updates it in place without replaying the entry animation:
+
+```tsx
+const evalTag = board.current!.annotate('e4', '+0.3', { corner: 'topRight' });
+evalTag.setText('+1.7');        // no re-animation, just new text
+await evalTag.clear();          // fades out
+
+// Self-dismissing callout
+board.current?.annotate('f7', 'Fork!', { durationMs: 1500, enter: 'rise' });
+```
+
+Use `annotate` for transient, scripted commentary; use the `squareLabels` prop
+for labels that are part of your render state.
 
 Scripted sequences via `playCinematic` — steps run in order, `parallel` runs
 children together, `call` hooks back into your app:
@@ -800,6 +832,8 @@ const board = useRef<ChessiroCanvasRef>(null);
 | `promotionBeam(square, options?)` | `Promise<void>` | Pillar of light morphing one piece into another. |
 | `implode(square, options?)` | `Promise<void>` | Collapse a piece into a vortex. |
 | `castleSwap(kingFrom, kingTo, rookFrom, rookTo, options?)` | `Promise<void>` | 3D teleport-swap of king and rook. |
+| `checkmate(square, options?)` | `Promise<void>` | The king topples on its base, thuds down and kicks up dust, dimming the board and popping a banner. |
+| `annotate(square, text, options?)` | `AnnotationHandle` | Pin animated text over a square. Persists; the handle exposes `setText` and `clear`. |
 | `spotlight(squares, options?)` | `SpotlightHandle` | Dim the board except the given squares; `handle.clear()` removes it. |
 | `drawLaser(from, to, options?)` | `Promise<void>` | Animated glowing threat beam. |
 | `drawArrow(from, to, options?)` | `Promise<void>` | Arrow that draws itself, then pops its head in. |
@@ -850,16 +884,51 @@ v5 under an identical harness.
 
 | Metric | chessiro-canvas | react-chessboard | Delta |
 | --- | ---: | ---: | ---: |
-| Mount wall time (mean) | 2.90 ms | 12.81 ms | **77.4% faster** |
-| Update wall time (120 updates) | 52.56 ms | 272.38 ms | **80.7% faster** |
-| Update wall time per render | 0.44 ms | 2.27 ms | **80.7% faster** |
-| React Profiler update duration (mean) | 0.14 ms | 1.23 ms | **88.8% faster** |
-| Bundle ESM gzip | 32.5 KB | 37.4 KB | **13.2% smaller** |
+| Mount wall time (mean) | 2.55 ms | 13.25 ms | **80.8% faster** |
+| Update wall time (300 updates) | 126.13 ms | 676.33 ms | **81.4% faster** |
+| Update wall time per render | 0.42 ms | 2.25 ms | **81.4% faster** |
+| React Profiler update duration (mean) | 0.13 ms | 1.22 ms | **89.3% faster** |
+| Bundle ESM gzip | 43.7 KB | 37.4 KB | **16.9% larger** |
 
-<sub>Generated 2026-07-16 · Node v26.0.0, macOS arm64, Apple M4 (10 cores), 16 GB RAM ·
-3 measured rounds + 1 warmup across 5 move-playthrough scenarios (15 samples,
-69 positions) · 120 position updates per round · 640 px board · animations disabled
+<sub>Generated 2026-07-30 · Node v26.0.0, macOS arm64, Apple M4 (10 cores), 16 GB RAM ·
+8 measured rounds + 2 warmup across 5 move-playthrough scenarios (40 samples,
+69 positions) · 300 position updates per round · 640 px board · animations disabled
 for both libraries.</sub>
+
+**On bundle size:** the cinematics layer costs about 11 KB gzipped, which now puts
+the package above `react-chessboard`. It is statically imported, so an app that
+never plays a cinematic still pays for it. If size matters more to you than the
+replay effects, that is the trade — a lazy-loaded cinematics entry point is the
+obvious fix and is not implemented yet.
+
+### Rendering with config props
+
+`scripts/benchmark.mjs` renders a bare display board — no `dests`, no visual
+config, `interactive: false`. Most apps pass config objects as inline literals,
+which changes their identity on every render:
+
+```tsx
+<ChessiroCanvas squareVisuals={{ legalMoveStyle: 'ring' }} dests={dests} />
+```
+
+`scripts/bench-visuals.mjs` measures that path, since it is where per-square
+memoization either holds or collapses:
+
+```bash
+npm run benchmark:visuals
+```
+
+| Metric | Before | After | Delta |
+| --- | ---: | ---: | ---: |
+| Wall time per update | 1.14 ms | 0.70 ms | **38.5% faster** |
+| React Profiler duration per commit | 0.56 ms | 0.36 ms | **35.2% faster** |
+
+<sub>200 updates per round, 10 kept rounds, inline `squareVisuals` +
+`highlightedSquares` + `dests`. "Before" is the same build with the merged
+visuals memoized on the prop's reference instead of its contents.</sub>
+
+You do not need to wrap config props in `useMemo` — the board compares their
+contents internally.
 
 Scenarios replay real games covering castling, capture sequences, pawn tension,
 king-and-pawn endgames, and promotion conversions.

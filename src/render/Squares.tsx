@@ -2,6 +2,7 @@ import { memo, useMemo } from 'react';
 import type { Orientation, BoardTheme, Square, SquareVisuals } from '../types';
 import { FILES, RANKS } from '../types';
 import { hexToRgba } from '../utils/colors';
+import { useStableObject } from '../hooks/useStableValue';
 
 interface SquaresProps {
   theme: BoardTheme;
@@ -219,9 +220,11 @@ export const Squares = memo(function Squares({
   check,
   lastMoveColor,
 }: SquaresProps) {
-  const visuals = useMemo(
-    () => ({ ...DEFAULT_SQUARE_VISUALS, ...squareVisuals }),
-    [squareVisuals],
+  // Keyed on contents, not on `squareVisuals`'s identity: callers pass this as
+  // an inline literal, so a reference-keyed useMemo rebuilt `visuals` on every
+  // render and invalidated the memo on all 64 cells.
+  const visuals = useStableObject<Required<SquareVisuals>>(
+    { ...DEFAULT_SQUARE_VISUALS, ...squareVisuals },
   );
 
   const highlightColor = lastMoveColor

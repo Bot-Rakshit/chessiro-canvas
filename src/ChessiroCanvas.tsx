@@ -7,6 +7,7 @@ import type {
   PlayCinematicOptions, PopBadgeOptions, PopBannerOptions, SquareBurstOptions,
   PromotionBeamOptions, ImplodeOptions, CastleSwapOptions, SpotlightOptions,
   SpotlightHandle, LaserOptions, DrawArrowOptions,
+  CheckmateOptions, AnnotationOptions, AnnotationHandle,
 } from './types';
 import { INITIAL_FEN, readFen } from './utils/fen';
 import { screenPos2square } from './utils/coords';
@@ -314,6 +315,15 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
       },
       implode(square: Square, options?: ImplodeOptions) {
         return cinematicRef.current?.implode(square, options) ?? Promise.resolve();
+      },
+      checkmate(square: Square, options?: CheckmateOptions) {
+        return cinematicRef.current?.checkmate(square, options) ?? Promise.resolve();
+      },
+      annotate(square: Square, text: string, options?: AnnotationOptions): AnnotationHandle {
+        return (
+          cinematicRef.current?.annotate(square, text, options)
+          ?? { setText: () => {}, clear: () => Promise.resolve() }
+        );
       },
       castleSwap(kingFrom: Square, kingTo: Square, rookFrom: Square, rookTo: Square, options?: CastleSwapOptions) {
         return cinematicRef.current?.castleSwap(kingFrom, kingTo, rookFrom, rookTo, options) ?? Promise.resolve();

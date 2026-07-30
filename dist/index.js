@@ -1109,6 +1109,22 @@ function hexToRgba(hex, alpha) {
   const b = parseInt(clean.substring(4, 6), 16);
   return `rgba(${r}, ${g}, ${b}, ${Math.max(0, Math.min(1, alpha))})`;
 }
+function shallowEqual(a, b) {
+  const aKeys = Object.keys(a);
+  if (aKeys.length !== Object.keys(b).length) return false;
+  for (const key of aKeys) {
+    if (a[key] !== b[key]) return false;
+    if (!(key in b)) return false;
+  }
+  return true;
+}
+function useStableObject(next) {
+  const ref = useRef(next);
+  if (ref.current !== next && !shallowEqual(ref.current, next)) {
+    ref.current = next;
+  }
+  return ref.current;
+}
 var DEFAULT_SQUARE_VISUALS = {
   markOverlay: "rgba(235, 64, 52, 0.65)",
   markOutline: "rgba(235, 64, 52, 0.9)",
@@ -1256,9 +1272,8 @@ var Squares = memo(function Squares2({
   check,
   lastMoveColor
 }) {
-  const visuals = useMemo(
-    () => ({ ...DEFAULT_SQUARE_VISUALS, ...squareVisuals }),
-    [squareVisuals]
+  const visuals = useStableObject(
+    { ...DEFAULT_SQUARE_VISUALS, ...squareVisuals }
   );
   const highlightColor = lastMoveColor || hexToRgba(theme.lastMoveHighlight || "#DFAA4E", 0.5) || "rgba(223, 170, 78, 0.5)";
   const selectedColor = hexToRgba(theme.selectedPiece || "#B57340", 0.5) || "rgba(181, 115, 64, 0.5)";
@@ -2253,6 +2268,18 @@ var DEFAULT_CELEBRATE_DURATION_MS = 2200;
 var DEFAULT_BANNER_DURATION_MS = 1800;
 var DEFAULT_PROMOTION_BEAM_DURATION_MS = 1500;
 var DEFAULT_PROMOTION_BEAM_COLOR = "#ffe27a";
+var ANNOTATION_POSITIONS = {
+  topLeft: { align: "flex-start", justify: "flex-start" },
+  topRight: { align: "flex-start", justify: "flex-end" },
+  bottomLeft: { align: "flex-end", justify: "flex-start" },
+  bottomRight: { align: "flex-end", justify: "flex-end" },
+  center: { align: "center", justify: "center" }
+};
+var DEFAULT_CHECKMATE_DURATION_MS = 1600;
+var DEFAULT_CHECKMATE_COLOR = "#c0392b";
+var DEFAULT_ANNOTATION_BG = "rgba(17, 24, 39, 0.92)";
+var ANNOTATION_ENTER_MS = 260;
+var ANNOTATION_EXIT_MS = 200;
 var DEFAULT_IMPLODE_DURATION_MS = 750;
 var DEFAULT_IMPLODE_COLOR = "#b07bff";
 var DEFAULT_CASTLE_SWAP_DURATION_MS = 1100;
@@ -2274,9 +2301,14 @@ var DEFAULT_DRAW_ARROW_HOLD_MS = 400;
 var DRAW_ARROW_FADE_MS = 250;
 var HEX6 = /^#[0-9a-f]{6}$/i;
 var TRAIL_GAP_MS = 55;
-var FLIGHT_SAMPLES = 24;
+var FLIGHT_SAMPLES = 32;
 var CELEBRATE_COLORS = [BRILLIANT_TEAL, "#ffd65a", "#ff6b6b", "#5ea2d9", "#b78bff", "#7ee081"];
 var SLOWMO_EXPONENT = Math.log(0.2) / Math.log(0.4);
+var EASE_LIFT = "cubic-bezier(0.16, 0.84, 0.34, 1)";
+var EASE_FLIGHT = "cubic-bezier(0.37, 0, 0.63, 1)";
+var EASE_GRAVITY = "cubic-bezier(0.45, 0, 0.9, 0.55)";
+var EASE_COMPRESS = "cubic-bezier(0.5, 0, 0.9, 0.5)";
+var EASE_RECOVER = "cubic-bezier(0.16, 1, 0.3, 1)";
 var STYLE_PRESETS = {
   brilliant: {
     durationMs: 2e3,
@@ -2289,7 +2321,7 @@ var STYLE_PRESETS = {
     shockwave: true,
     slowMoLanding: true,
     plunge: false,
-    squash: 0.15,
+    squash: 0.11,
     liftEnd: 0.15,
     landStart: 0.7,
     slam: false,
@@ -2309,7 +2341,7 @@ var STYLE_PRESETS = {
     shockwave: false,
     slowMoLanding: false,
     plunge: false,
-    squash: 0.12,
+    squash: 0.09,
     liftEnd: 0.15,
     landStart: 0.72,
     slam: false,
@@ -2339,19 +2371,19 @@ var STYLE_PRESETS = {
     impactShake: null
   },
   slam: {
-    durationMs: 1100,
+    durationMs: 1050,
     spins: 0,
     arcHeight: 0,
-    liftScale: 1.6,
+    liftScale: 1.48,
     glowColor: DEFAULT_BURST_COLOR,
     glowMaxPx: 12,
     sparkles: false,
     shockwave: true,
     slowMoLanding: false,
     plunge: false,
-    squash: 0.3,
+    squash: 0.17,
     liftEnd: 0.25,
-    landStart: 0.7,
+    landStart: 0.72,
     slam: true,
     trailCount: 0,
     flash: true,
@@ -2359,19 +2391,19 @@ var STYLE_PRESETS = {
     impactShake: { intensity: 7, durationMs: 380 }
   },
   meteor: {
-    durationMs: 2e3,
-    spins: 2,
-    arcHeight: 2.6,
-    liftScale: 1.5,
+    durationMs: 1800,
+    spins: 1.5,
+    arcHeight: 2.4,
+    liftScale: 1.44,
     glowColor: "#ff7a3d",
     glowMaxPx: 26,
     sparkles: true,
     shockwave: true,
     slowMoLanding: false,
     plunge: true,
-    squash: 0.28,
+    squash: 0.18,
     liftEnd: 0.12,
-    landStart: 0.72,
+    landStart: 0.74,
     slam: false,
     trailCount: 5,
     flash: true,
@@ -2517,16 +2549,16 @@ function buildApproachAttitudeKeyframes(e) {
   const L = o.landStart;
   const liftFrac = o.liftEnd / L;
   const { flightRy } = attitudePlan(o);
-  const frames = [att(0, {}, c)];
+  const frames = [att(0, {}, c, EASE_LIFT)];
   if (o.slam) {
-    frames.push(att(liftFrac, { sx: lift, sy: lift, shadow: 22, glow: g * 0.5 }, c));
-    frames.push(att(0.78, { sx: lift, sy: lift, shadow: 22, glow: g }, c, "cubic-bezier(0.7, 0, 1, 0.6)"));
-    frames.push(att(1, { sx: 1.04, sy: 0.96, shadow: 3, glow: g }, c));
+    frames.push(att(liftFrac, { sx: lift, sy: lift, shadow: 22, glow: g * 0.5 }, c, EASE_FLIGHT));
+    frames.push(att(0.78, { sx: lift, sy: lift, shadow: 22, glow: g }, c, EASE_GRAVITY));
+    frames.push(att(1, { sx: 1.03, sy: 0.97, shadow: 3, glow: g }, c));
     return frames;
   }
   const tiltZ = o.spins > 0 ? -6 : 0;
   const wobble = o.spins > 0 ? 14 : 0;
-  frames.push(att(liftFrac, { z: tiltZ, sx: lift, sy: lift, shadow: 10, glow: g * 0.35 }, c));
+  frames.push(att(liftFrac, { z: tiltZ, sx: lift, sy: lift, shadow: 10, glow: g * 0.35 }, c, EASE_FLIGHT));
   const flight = 1 - liftFrac;
   for (const [u, w] of [[0.25, 1], [0.5, 0], [0.75, -1]]) {
     frames.push(att(liftFrac + flight * u, {
@@ -2537,7 +2569,7 @@ function buildApproachAttitudeKeyframes(e) {
       sy: lift,
       shadow: 12,
       glow: g * (0.35 + 0.65 * u)
-    }, c));
+    }, c, EASE_FLIGHT));
   }
   frames.push(att(1, { ry: flightRy, sx: lift, sy: lift, shadow: 12, glow: g }, c));
   return frames;
@@ -2549,12 +2581,13 @@ function buildSettleAttitudeKeyframes(e) {
   const { flightRy, restRy } = attitudePlan(o);
   const contact = o.slam ? att(0, { sx: 1.04, sy: 0.96, shadow: 3, glow: g }, c) : att(0, { ry: flightRy, sx: o.liftScale, sy: o.liftScale, shadow: 12, glow: g }, c);
   if (o.squash <= 0) {
-    return [contact, att(1, { ry: restRy, shadow: 2 }, c)];
+    return [contact, att(1, { ry: restRy, shadow: 2 }, c, EASE_RECOVER)];
   }
+  const compressAt = o.slam ? 0.18 : 0.24;
   return [
-    contact,
-    att(o.slam ? 0.22 : 0.28, { ry: restRy, sx: 1 + o.squash, sy: 1 - o.squash, shadow: 2, glow: g * 0.6 }, c),
-    att(0.6, { ry: restRy, sx: 1 - o.squash * 0.25, sy: 1 + o.squash * 0.2, shadow: 2, glow: g * 0.3 }, c),
+    { ...contact, easing: EASE_COMPRESS },
+    att(compressAt, { ry: restRy, sx: 1 + o.squash, sy: 1 - o.squash, shadow: 2, glow: g * 0.6 }, c, EASE_RECOVER),
+    att(0.58, { ry: restRy, sx: 1 - o.squash * 0.33, sy: 1 + o.squash * 0.28, shadow: 2, glow: g * 0.3 }, c, EASE_RECOVER),
     att(1, { ry: restRy, shadow: 2 }, c)
   ];
 }
@@ -2577,6 +2610,8 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
   const [banners, setBanners] = useState([]);
   const [promos, setPromos] = useState([]);
   const [implodes, setImplodes] = useState([]);
+  const [checkmates, setCheckmates] = useState([]);
+  const [annotations, setAnnotations] = useState([]);
   const [spotlights, setSpotlights] = useState([]);
   const [lasers, setLasers] = useState([]);
   const [drawnArrows, setDrawnArrows] = useState([]);
@@ -2597,6 +2632,8 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
   const hiddenVictimsRef = useRef(/* @__PURE__ */ new Map());
   const hiddenSquaresRef = useRef(/* @__PURE__ */ new Map());
   const spotlightElsRef = useRef(/* @__PURE__ */ new Map());
+  const annotationElsRef = useRef(/* @__PURE__ */ new Map());
+  const annotationTimersRef = useRef(/* @__PURE__ */ new Map());
   const startedRef = useRef(/* @__PURE__ */ new Set());
   const finishedRef = useRef(/* @__PURE__ */ new Set());
   const finishMove = useCallback((entry) => {
@@ -2679,6 +2716,7 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
   const finishBanner = useRef(makeFinisher(setBanners)).current;
   const finishPromo = useRef(makeHiddenFinisher(setPromos)).current;
   const finishImplode = useRef(makeHiddenFinisher(setImplodes)).current;
+  const finishCheckmate = useRef(makeHiddenFinisher(setCheckmates)).current;
   const finishLaser = useRef(makeFinisher(setLasers)).current;
   const finishDrawArrow = useRef(makeFinisher(setDrawnArrows)).current;
   const spawnBurst = useCallback((square, options) => {
@@ -2931,7 +2969,7 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
     const fadeStart = Math.max(pop, 1 - 300 / duration);
     const anim = el.animate(
       [
-        { transform: "scale(0)", opacity: 0, offset: 0, easing: "cubic-bezier(0.34, 1.56, 0.64, 1)" },
+        { transform: "scale(0)", opacity: 0, offset: 0, easing: "cubic-bezier(0.28, 1.18, 0.5, 1)" },
         { transform: "scale(1.25)", opacity: 1, offset: pop * 0.6 },
         { transform: "scale(0.95)", opacity: 1, offset: pop * 0.85 },
         { transform: "scale(1)", opacity: 1, offset: pop },
@@ -3030,7 +3068,7 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
     const holdEnd = Math.max(popIn, 1 - Math.min(0.3, 500 / duration));
     const anim = el.animate(
       [
-        { transform: "scale(0.4)", opacity: 0, offset: 0, easing: "cubic-bezier(0.34, 1.56, 0.64, 1)" },
+        { transform: "scale(0.4)", opacity: 0, offset: 0, easing: "cubic-bezier(0.28, 1.18, 0.5, 1)" },
         { transform: "scale(1.08)", opacity: 1, offset: popIn * 0.7 },
         { transform: "scale(1)", opacity: 1, offset: popIn },
         { transform: "scale(1)", opacity: 1, offset: holdEnd },
@@ -3127,6 +3165,88 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
     animationsRef.current.set(entry.id, anims);
     Promise.all(waits).then(() => finishPromo(entry));
   }, [finishPromo]);
+  const startCheckmateAnimation = useCallback((container, entry) => {
+    if (startedRef.current.has(entry.id)) return;
+    startedRef.current.add(entry.id);
+    const total = entry.durationMs;
+    const waits = [];
+    const anims = [];
+    const d = entry.dir;
+    const piece = container.querySelector("[data-mate-piece]");
+    if (piece && canAnimate2(piece)) {
+      const fall = piece.animate(
+        [
+          { transform: "rotateZ(0deg) translateY(0px)", offset: 0, easing: "cubic-bezier(0.3, 0, 0.7, 0.2)" },
+          // Rock back very slightly against the fall — the beat that sells it.
+          { transform: `rotateZ(${-d * 4}deg) translateY(0px)`, offset: 0.18, easing: EASE_GRAVITY },
+          // Gravity: most of the arc happens in the last third of the fall.
+          { transform: `rotateZ(${d * 46}deg) translateY(0px)`, offset: 0.5, easing: "cubic-bezier(0.6, 0, 0.9, 0.4)" },
+          { transform: `rotateZ(${d * 88}deg) translateY(0px)`, offset: 0.7, easing: EASE_RECOVER },
+          // Bounce once off the board, small and damped.
+          { transform: `rotateZ(${d * 80}deg) translateY(-2%)`, offset: 0.79, easing: "cubic-bezier(0.4, 0, 0.8, 0.5)" },
+          { transform: `rotateZ(${d * 86}deg) translateY(0px)`, offset: 0.88, easing: EASE_RECOVER },
+          { transform: `rotateZ(${d * 84}deg) translateY(0px)`, offset: 1 }
+        ],
+        { duration: total, easing: "linear", fill: "forwards" }
+      );
+      anims.push(fall);
+      waits.push(waitForAnimation(fall, total));
+    }
+    const dust = container.querySelector("[data-mate-dust]");
+    if (dust && canAnimate2(dust)) {
+      const dustMs = Math.round(total * 0.34);
+      const a = dust.animate(
+        [
+          { transform: `translateX(${d * 8}%) scale(0.3)`, opacity: 0, offset: 0, easing: "ease-out" },
+          { transform: `translateX(${d * 26}%) scale(0.9)`, opacity: 0.5, offset: 0.35, easing: "ease-out" },
+          { transform: `translateX(${d * 44}%) scale(1.35)`, opacity: 0, offset: 1 }
+        ],
+        { duration: dustMs, delay: Math.round(total * 0.68), easing: "linear", fill: "both" }
+      );
+      anims.push(a);
+      waits.push(waitForAnimation(a, dustMs + total * 0.68));
+    }
+    const dim = container.querySelector("[data-mate-dim]");
+    if (dim && canAnimate2(dim)) {
+      const a = dim.animate(
+        [
+          { opacity: 0, offset: 0, easing: EASE_FLIGHT },
+          { opacity: 1, offset: 0.7 },
+          { opacity: 1, offset: 1 }
+        ],
+        { duration: total, easing: "linear", fill: "forwards" }
+      );
+      anims.push(a);
+    }
+    animationsRef.current.set(entry.id, anims);
+    if (waits.length === 0) {
+      finishCheckmate(entry);
+      return;
+    }
+    Promise.all(waits).then(() => finishCheckmate(entry));
+  }, [finishCheckmate]);
+  const startAnnotationAnimation = useCallback((container, entry) => {
+    if (startedRef.current.has(entry.id)) return;
+    startedRef.current.add(entry.id);
+    if (!canAnimate2(container)) return;
+    if (entry.reduced) {
+      container.style.opacity = "1";
+      return;
+    }
+    const frames = entry.enter === "fade" ? [{ opacity: 0 }, { opacity: 1 }] : entry.enter === "rise" ? [
+      { transform: "translateY(35%)", opacity: 0, easing: EASE_RECOVER },
+      { transform: "translateY(0)", opacity: 1 }
+    ] : [
+      { transform: "scale(0.7)", opacity: 0, easing: "cubic-bezier(0.28, 1.18, 0.5, 1)" },
+      { transform: "scale(1)", opacity: 1 }
+    ];
+    const anim = container.animate(frames, {
+      duration: ANNOTATION_ENTER_MS,
+      easing: "linear",
+      fill: "forwards"
+    });
+    animationsRef.current.set(entry.id, [anim]);
+  }, []);
   const startImplodeAnimation = useCallback((container, entry) => {
     if (startedRef.current.has(entry.id)) return;
     startedRef.current.add(entry.id);
@@ -3506,6 +3626,101 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
       setImplodes((prev) => [...prev, entry]);
     });
   }, []);
+  const checkmate = useCallback((square, options) => {
+    if (!isValidSquare4(square)) return Promise.resolve();
+    const reduced = prefersReducedMotion() && !options?.force;
+    const existing = piecesRef.current.get(square);
+    const pieceKey = options?.piece ?? (existing ? `${existing.color}${existing.role.toUpperCase()}` : void 0);
+    const color = options?.color ?? DEFAULT_CHECKMATE_COLOR;
+    const bannerText = options?.banner === void 0 ? "CHECKMATE" : options.banner;
+    if (reduced) {
+      return bannerText ? popBanner({ text: bannerText, glowColor: color }) : Promise.resolve();
+    }
+    const [col, row] = squareColRow5(square, asWhiteRef.current);
+    const dir = options?.direction === "left" ? -1 : options?.direction === "right" ? 1 : col <= 3 ? -1 : 1;
+    const entry = {
+      id: ++idRef.current,
+      col,
+      row,
+      dir,
+      color,
+      durationMs: Math.max(200, options?.durationMs ?? DEFAULT_CHECKMATE_DURATION_MS),
+      dim: options?.dim ?? true,
+      pieceKey
+    };
+    if (existing) {
+      const orig = getPieceElementRef.current(square);
+      if (orig) {
+        orig.style.opacity = "0";
+        hiddenSquaresRef.current.set(entry.id, square);
+      }
+    }
+    const toppled = new Promise((resolve) => {
+      resolversRef.current.set(entry.id, resolve);
+      setCheckmates((prev) => [...prev, entry]);
+    });
+    if (!bannerText) return toppled;
+    return toppled.then(() => popBanner({ text: bannerText, glowColor: color }));
+  }, [popBanner]);
+  const annotate = useCallback((square, text, options) => {
+    const noop = { setText: () => {
+    }, clear: () => Promise.resolve() };
+    if (!isValidSquare4(square)) return noop;
+    const [col, row] = squareColRow5(square, asWhiteRef.current);
+    const id = ++idRef.current;
+    const size = options?.fontSize;
+    const entry = {
+      id,
+      col,
+      row,
+      text,
+      color: options?.color ?? "#ffffff",
+      background: options?.background ?? DEFAULT_ANNOTATION_BG,
+      corner: options?.corner ?? "center",
+      fontSize: typeof size === "number" ? `${size}px` : size,
+      enter: options?.enter ?? "pop",
+      reduced: prefersReducedMotion() && !options?.force
+    };
+    setAnnotations((prev) => [...prev, entry]);
+    let cleared = false;
+    const remove = () => {
+      annotationTimersRef.current.delete(id);
+      setAnnotations((prev) => prev.filter((a) => a.id !== id));
+      startedRef.current.delete(id);
+      animationsRef.current.delete(id);
+    };
+    if (options?.durationMs !== void 0) {
+      const tid = setTimeout(() => {
+        void handle.clear();
+      }, Math.max(0, options.durationMs));
+      annotationTimersRef.current.set(id, tid);
+    }
+    const handle = {
+      setText: (next) => {
+        if (cleared) return;
+        setAnnotations((prev) => prev.map((a) => a.id === id ? { ...a, text: next } : a));
+      },
+      clear: (durationMs) => {
+        if (cleared) return Promise.resolve();
+        cleared = true;
+        const tid = annotationTimersRef.current.get(id);
+        if (tid !== void 0) clearTimeout(tid);
+        annotationTimersRef.current.delete(id);
+        const el = annotationElsRef.current.get(id);
+        const ms = Math.max(0, durationMs ?? ANNOTATION_EXIT_MS);
+        if (!el || !canAnimate2(el) || ms === 0) {
+          remove();
+          return Promise.resolve();
+        }
+        const out = el.animate(
+          [{ opacity: 1, transform: "scale(1)" }, { opacity: 0, transform: "scale(0.85)" }],
+          { duration: ms, easing: EASE_FLIGHT, fill: "forwards" }
+        );
+        return waitForAnimation(out, ms).then(remove);
+      }
+    };
+    return handle;
+  }, []);
   const castleSwap = useCallback((kingFrom, kingTo, rookFrom, rookTo, options) => {
     if (![kingFrom, kingTo, rookFrom, rookTo].every(isValidSquare4)) return Promise.resolve();
     if (prefersReducedMotion() && !options?.force) return Promise.resolve();
@@ -3659,6 +3874,9 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
     }
     hiddenSquaresRef.current.clear();
     spotlightElsRef.current.clear();
+    for (const tid of annotationTimersRef.current.values()) clearTimeout(tid);
+    annotationTimersRef.current.clear();
+    annotationElsRef.current.clear();
     const resolvers = Array.from(resolversRef.current.values());
     resolversRef.current.clear();
     startedRef.current.clear();
@@ -3672,6 +3890,8 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
     setBanners([]);
     setPromos([]);
     setImplodes([]);
+    setCheckmates([]);
+    setAnnotations([]);
     setSpotlights([]);
     setLasers([]);
     setDrawnArrows([]);
@@ -3685,12 +3905,14 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
     popBanner,
     promotionBeam,
     implode,
+    checkmate,
+    annotate,
     castleSwap,
     spotlight,
     drawLaser,
     drawArrow,
     clearCinematics
-  }), [cinematicMove, squareBurst, popBadge, celebrate, popBanner, promotionBeam, implode, castleSwap, spotlight, drawLaser, drawArrow, clearCinematics]);
+  }), [cinematicMove, squareBurst, popBadge, celebrate, popBanner, promotionBeam, implode, checkmate, annotate, castleSwap, spotlight, drawLaser, drawArrow, clearCinematics]);
   useEffect(() => {
     return () => {
       for (const anims of animationsRef.current.values()) {
@@ -3699,6 +3921,9 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
       animationsRef.current.clear();
       for (const tid of timeoutsRef.current.values()) clearTimeout(tid);
       timeoutsRef.current.clear();
+      for (const tid of annotationTimersRef.current.values()) clearTimeout(tid);
+      annotationTimersRef.current.clear();
+      annotationElsRef.current.clear();
       for (const square of hiddenSquaresRef.current.values()) {
         const el = getPieceElementRef.current(square);
         if (el) el.style.opacity = "";
@@ -3708,7 +3933,7 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
       resolversRef.current.clear();
     };
   }, []);
-  if (moves.length === 0 && bursts.length === 0 && badges.length === 0 && blasts.length === 0 && flashes.length === 0 && confetti.length === 0 && banners.length === 0 && promos.length === 0 && implodes.length === 0 && spotlights.length === 0 && lasers.length === 0 && drawnArrows.length === 0) return null;
+  if (moves.length === 0 && bursts.length === 0 && badges.length === 0 && blasts.length === 0 && flashes.length === 0 && confetti.length === 0 && banners.length === 0 && promos.length === 0 && implodes.length === 0 && checkmates.length === 0 && annotations.length === 0 && spotlights.length === 0 && lasers.length === 0 && drawnArrows.length === 0) return null;
   const pieceBox = { width: "12.5%", height: "12.5%" };
   return /* @__PURE__ */ jsxs("div", { "data-cine-overlay": true, style: { position: "absolute", inset: 0, pointerEvents: "none", overflow: "hidden", zIndex: 10 }, children: [
     flashes.map((f) => /* @__PURE__ */ jsx(
@@ -4174,6 +4399,128 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
       },
       `implode-${im.id}`
     )),
+    checkmates.map((cm) => /* @__PURE__ */ jsxs("div", { ref: (el) => {
+      if (el) startCheckmateAnimation(el, cm);
+    }, children: [
+      cm.dim && /* @__PURE__ */ jsx(
+        "div",
+        {
+          "data-mate-dim": true,
+          style: {
+            position: "absolute",
+            inset: 0,
+            background: "rgba(3, 7, 15, 0.55)",
+            opacity: 0,
+            pointerEvents: "none",
+            zIndex: 3,
+            willChange: "opacity"
+          }
+        }
+      ),
+      /* @__PURE__ */ jsxs(
+        "div",
+        {
+          style: {
+            position: "absolute",
+            ...pieceBox,
+            transform: positionTransform(cm.col, cm.row),
+            pointerEvents: "none",
+            zIndex: 5
+          },
+          children: [
+            /* @__PURE__ */ jsx(
+              "div",
+              {
+                "data-mate-dust": true,
+                style: {
+                  position: "absolute",
+                  left: "10%",
+                  bottom: "-4%",
+                  width: "55%",
+                  height: "26%",
+                  borderRadius: "50%",
+                  background: `radial-gradient(ellipse at center, ${cm.color}55 0%, transparent 70%)`,
+                  opacity: 0,
+                  willChange: "transform, opacity"
+                }
+              }
+            ),
+            cm.pieceKey && /* @__PURE__ */ jsx(
+              "div",
+              {
+                "data-mate-piece": true,
+                style: {
+                  position: "absolute",
+                  inset: 0,
+                  // Pivot on the base of the piece so it tips rather than spins.
+                  transformOrigin: "50% 92%",
+                  willChange: "transform"
+                },
+                children: /* @__PURE__ */ jsx(
+                  "div",
+                  {
+                    style: {
+                      width: "100%",
+                      height: "100%",
+                      transform: flipPieces ? "rotate(180deg)" : void 0,
+                      transformOrigin: "center center"
+                    },
+                    children: /* @__PURE__ */ jsx(PieceGlyph, { pieceKey: cm.pieceKey, pieceSet, customPieces })
+                  }
+                )
+              }
+            )
+          ]
+        }
+      )
+    ] }, `mate-${cm.id}`)),
+    annotations.map((an) => {
+      const pos = ANNOTATION_POSITIONS[an.corner];
+      return /* @__PURE__ */ jsx(
+        "div",
+        {
+          ref: (el) => {
+            if (!el) {
+              annotationElsRef.current.delete(an.id);
+              return;
+            }
+            annotationElsRef.current.set(an.id, el);
+            startAnnotationAnimation(el, an);
+          },
+          style: {
+            position: "absolute",
+            ...pieceBox,
+            transform: positionTransform(an.col, an.row),
+            pointerEvents: "none",
+            zIndex: 9,
+            opacity: 0,
+            display: "flex",
+            alignItems: pos.align,
+            justifyContent: pos.justify,
+            padding: an.corner === "center" ? 0 : "6%",
+            willChange: "transform, opacity"
+          },
+          children: /* @__PURE__ */ jsx(
+            "span",
+            {
+              style: {
+                background: an.background,
+                color: an.color,
+                fontSize: an.fontSize ?? "clamp(9px, 2.1cqw, 15px)",
+                fontWeight: 700,
+                lineHeight: 1.15,
+                padding: "0.18em 0.42em",
+                borderRadius: "0.25em",
+                whiteSpace: "nowrap",
+                boxShadow: "0 1px 3px rgba(0, 0, 0, 0.35)"
+              },
+              children: an.text
+            }
+          )
+        },
+        `annot-${an.id}`
+      );
+    }),
     lasers.map((l) => {
       const gradient = HEX6.test(l.color) ? `linear-gradient(90deg, ${l.color}00 0%, ${l.color} 60%, #ffffff 100%)` : `linear-gradient(90deg, transparent, ${l.color} 60%, #ffffff)`;
       return /* @__PURE__ */ jsxs(
@@ -4506,6 +4853,14 @@ function playCinematicScript(ctx, steps, options) {
       }
       case "implode": {
         await ctx.getLayer()?.implode(step.square, { force, ...step.options });
+        break;
+      }
+      case "checkmate": {
+        await ctx.getLayer()?.checkmate(step.square, { force, ...step.options });
+        break;
+      }
+      case "annotate": {
+        ctx.getLayer()?.annotate(step.square, step.text, { force, ...step.options });
         break;
       }
       case "castleSwap": {
@@ -5659,6 +6014,13 @@ var ChessiroCanvas = forwardRef(
       },
       implode(square, options) {
         return cinematicRef.current?.implode(square, options) ?? Promise.resolve();
+      },
+      checkmate(square, options) {
+        return cinematicRef.current?.checkmate(square, options) ?? Promise.resolve();
+      },
+      annotate(square, text, options) {
+        return cinematicRef.current?.annotate(square, text, options) ?? { setText: () => {
+        }, clear: () => Promise.resolve() };
       },
       castleSwap(kingFrom, kingTo, rookFrom, rookTo, options) {
         return cinematicRef.current?.castleSwap(kingFrom, kingTo, rookFrom, rookTo, options) ?? Promise.resolve();

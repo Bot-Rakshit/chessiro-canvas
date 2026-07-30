@@ -11,6 +11,7 @@ import type {
   Orientation, Pieces, PieceSet, PieceRenderer, Square,
   CinematicMoveOptions, CinematicStyle, SquareBurstOptions, PopBadgeOptions,
   CelebrateOptions, PopBannerOptions, PromotionBeamOptions, ImplodeOptions,
+  CheckmateOptions, AnnotationOptions, AnnotationHandle, SquareCorner,
   CastleSwapOptions, SpotlightOptions, SpotlightHandle, LaserOptions, DrawArrowOptions,
 } from '../types';
 import { PieceGlyph } from './PieceGlyph';
@@ -24,6 +25,8 @@ export interface CinematicLayerRef {
   popBanner: (options: PopBannerOptions) => Promise<void>;
   promotionBeam: (square: Square, options?: PromotionBeamOptions) => Promise<void>;
   implode: (square: Square, options?: ImplodeOptions) => Promise<void>;
+  checkmate: (square: Square, options?: CheckmateOptions) => Promise<void>;
+  annotate: (square: Square, text: string, options?: AnnotationOptions) => AnnotationHandle;
   castleSwap: (kingFrom: Square, kingTo: Square, rookFrom: Square, rookTo: Square, options?: CastleSwapOptions) => Promise<void>;
   spotlight: (squares: Square[], options?: SpotlightOptions) => SpotlightHandle;
   drawLaser: (from: Square, to: Square, options?: LaserOptions) => Promise<void>;
@@ -177,6 +180,31 @@ interface ImplodeEntry {
   pieceKey?: string;
 }
 
+interface CheckmateEntry {
+  id: number;
+  col: number;
+  row: number;
+  /** +1 topples to the right, -1 to the left. */
+  dir: 1 | -1;
+  color: string;
+  durationMs: number;
+  dim: boolean;
+  pieceKey?: string;
+}
+
+interface AnnotationEntry {
+  id: number;
+  col: number;
+  row: number;
+  text: string;
+  color: string;
+  background: string;
+  corner: SquareCorner;
+  fontSize?: string;
+  enter: 'pop' | 'fade' | 'rise';
+  reduced: boolean;
+}
+
 interface SpotHole {
   cx: number;
   cy: number;
@@ -234,6 +262,18 @@ const DEFAULT_CELEBRATE_DURATION_MS = 2200;
 const DEFAULT_BANNER_DURATION_MS = 1800;
 const DEFAULT_PROMOTION_BEAM_DURATION_MS = 1500;
 const DEFAULT_PROMOTION_BEAM_COLOR = '#ffe27a';
+const ANNOTATION_POSITIONS: Record<SquareCorner, { align: string; justify: string }> = {
+  topLeft: { align: 'flex-start', justify: 'flex-start' },
+  topRight: { align: 'flex-start', justify: 'flex-end' },
+  bottomLeft: { align: 'flex-end', justify: 'flex-start' },
+  bottomRight: { align: 'flex-end', justify: 'flex-end' },
+  center: { align: 'center', justify: 'center' },
+};
+const DEFAULT_CHECKMATE_DURATION_MS = 1600;
+const DEFAULT_CHECKMATE_COLOR = '#c0392b';
+const DEFAULT_ANNOTATION_BG = 'rgba(17, 24, 39, 0.92)';
+const ANNOTATION_ENTER_MS = 260;
+const ANNOTATION_EXIT_MS = 200;
 const DEFAULT_IMPLODE_DURATION_MS = 750;
 const DEFAULT_IMPLODE_COLOR = '#b07bff';
 const DEFAULT_CASTLE_SWAP_DURATION_MS = 1100;
@@ -255,11 +295,29 @@ const DEFAULT_DRAW_ARROW_HOLD_MS = 400;
 const DRAW_ARROW_FADE_MS = 250;
 const HEX6 = /^#[0-9a-f]{6}$/i;
 const TRAIL_GAP_MS = 55;
-const FLIGHT_SAMPLES = 24;
+const FLIGHT_SAMPLES = 32;
 const CELEBRATE_COLORS = [BRILLIANT_TEAL, '#ffd65a', '#ff6b6b', '#5ea2d9', '#b78bff', '#7ee081'];
 // p(u) = 1 - (1-u)^k with k chosen so the last 20% of the flight distance
 // takes the final 40% of the flight time (slow-motion landing).
 const SLOWMO_EXPONENT = Math.log(0.2) / Math.log(0.4);
+
+// ── Easing vocabulary ────────────────────────────────────────────────
+// The position track is sampled densely (FLIGHT_SAMPLES) with its pacing baked
+// into the sample offsets, so it interpolates linearly between samples. The
+// attitude and settle tracks have only a handful of keyframes, and linear
+// interpolation between them produced a visible velocity break at every
+// keyframe — that constant-speed, stop-start quality is what read as robotic.
+// These curves give each segment its own acceleration.
+/** Lift off the board: quick out of the gate, then float. */
+const EASE_LIFT = 'cubic-bezier(0.16, 0.84, 0.34, 1)';
+/** Mid-flight attitude: no acceleration break at either end. */
+const EASE_FLIGHT = 'cubic-bezier(0.37, 0, 0.63, 1)';
+/** Gravity: slow to leave, fast to arrive. */
+const EASE_GRAVITY = 'cubic-bezier(0.45, 0, 0.9, 0.55)';
+/** Compression on contact — the piece takes the hit fast. */
+const EASE_COMPRESS = 'cubic-bezier(0.5, 0, 0.9, 0.5)';
+/** Recovery out of the squash — decelerates smoothly, no elastic wobble. */
+const EASE_RECOVER = 'cubic-bezier(0.16, 1, 0.3, 1)';
 
 interface StylePreset {
   durationMs: number;
@@ -286,13 +344,13 @@ const STYLE_PRESETS: Record<CinematicStyle, StylePreset> = {
   brilliant: {
     durationMs: 2000, spins: 1.5, arcHeight: 1.6, liftScale: 1.35,
     glowColor: BRILLIANT_TEAL, glowMaxPx: 18, sparkles: true, shockwave: true,
-    slowMoLanding: true, plunge: false, squash: 0.15, liftEnd: 0.15, landStart: 0.7, slam: false,
+    slowMoLanding: true, plunge: false, squash: 0.11, liftEnd: 0.15, landStart: 0.7, slam: false,
     trailCount: 4, flash: true, victimBlast: true, impactShake: { intensity: 3, durationMs: 300 },
   },
   great: {
     durationMs: 1400, spins: 1, arcHeight: 0.9, liftScale: 1.26,
     glowColor: '#5ea2d9', glowMaxPx: 10, sparkles: true, shockwave: false,
-    slowMoLanding: false, plunge: false, squash: 0.12, liftEnd: 0.15, landStart: 0.72, slam: false,
+    slowMoLanding: false, plunge: false, squash: 0.09, liftEnd: 0.15, landStart: 0.72, slam: false,
     trailCount: 0, flash: false, victimBlast: false, impactShake: null,
   },
   smooth: {
@@ -302,15 +360,15 @@ const STYLE_PRESETS: Record<CinematicStyle, StylePreset> = {
     trailCount: 0, flash: false, victimBlast: false, impactShake: null,
   },
   slam: {
-    durationMs: 1100, spins: 0, arcHeight: 0, liftScale: 1.6,
+    durationMs: 1050, spins: 0, arcHeight: 0, liftScale: 1.48,
     glowColor: DEFAULT_BURST_COLOR, glowMaxPx: 12, sparkles: false, shockwave: true,
-    slowMoLanding: false, plunge: false, squash: 0.3, liftEnd: 0.25, landStart: 0.7, slam: true,
+    slowMoLanding: false, plunge: false, squash: 0.17, liftEnd: 0.25, landStart: 0.72, slam: true,
     trailCount: 0, flash: true, victimBlast: true, impactShake: { intensity: 7, durationMs: 380 },
   },
   meteor: {
-    durationMs: 2000, spins: 2, arcHeight: 2.6, liftScale: 1.5,
+    durationMs: 1800, spins: 1.5, arcHeight: 2.4, liftScale: 1.44,
     glowColor: '#ff7a3d', glowMaxPx: 26, sparkles: true, shockwave: true,
-    slowMoLanding: false, plunge: true, squash: 0.28, liftEnd: 0.12, landStart: 0.72, slam: false,
+    slowMoLanding: false, plunge: true, squash: 0.18, liftEnd: 0.12, landStart: 0.74, slam: false,
     trailCount: 5, flash: true, victimBlast: true, impactShake: { intensity: 9, durationMs: 450 },
   },
 };
@@ -502,18 +560,20 @@ function buildApproachAttitudeKeyframes(e: MoveEntry): Keyframe[] {
   const L = o.landStart;
   const liftFrac = o.liftEnd / L;
   const { flightRy } = attitudePlan(o);
-  const frames: Keyframe[] = [att(0, {}, c)];
+  // The lift segment eases out so the piece leaves the board with intent
+  // instead of ramping up at constant speed.
+  const frames: Keyframe[] = [att(0, {}, c, EASE_LIFT)];
   if (o.slam) {
-    frames.push(att(liftFrac, { sx: lift, sy: lift, shadow: 22, glow: g * 0.5 }, c));
+    frames.push(att(liftFrac, { sx: lift, sy: lift, shadow: 22, glow: g * 0.5 }, c, EASE_FLIGHT));
     // Hang above the destination, then accelerate hard into the drop; the
     // drop ends at the last frame = the impact moment.
-    frames.push(att(0.78, { sx: lift, sy: lift, shadow: 22, glow: g }, c, 'cubic-bezier(0.7, 0, 1, 0.6)'));
-    frames.push(att(1, { sx: 1.04, sy: 0.96, shadow: 3, glow: g }, c));
+    frames.push(att(0.78, { sx: lift, sy: lift, shadow: 22, glow: g }, c, EASE_GRAVITY));
+    frames.push(att(1, { sx: 1.03, sy: 0.97, shadow: 3, glow: g }, c));
     return frames;
   }
   const tiltZ = o.spins > 0 ? -6 : 0;
   const wobble = o.spins > 0 ? 14 : 0;
-  frames.push(att(liftFrac, { z: tiltZ, sx: lift, sy: lift, shadow: 10, glow: g * 0.35 }, c));
+  frames.push(att(liftFrac, { z: tiltZ, sx: lift, sy: lift, shadow: 10, glow: g * 0.35 }, c, EASE_FLIGHT));
   const flight = 1 - liftFrac;
   for (const [u, w] of [[0.25, 1], [0.5, 0], [0.75, -1]] as const) {
     frames.push(att(liftFrac + flight * u, {
@@ -524,7 +584,7 @@ function buildApproachAttitudeKeyframes(e: MoveEntry): Keyframe[] {
       sy: lift,
       shadow: 12,
       glow: g * (0.35 + 0.65 * u),
-    }, c));
+    }, c, EASE_FLIGHT));
   }
   frames.push(att(1, { ry: flightRy, sx: lift, sy: lift, shadow: 12, glow: g }, c));
   return frames;
@@ -541,12 +601,17 @@ function buildSettleAttitudeKeyframes(e: MoveEntry): Keyframe[] {
     ? att(0, { sx: 1.04, sy: 0.96, shadow: 3, glow: g }, c)
     : att(0, { ry: flightRy, sx: o.liftScale, sy: o.liftScale, shadow: 12, glow: g }, c);
   if (o.squash <= 0) {
-    return [contact, att(1, { ry: restRy, shadow: 2 }, c)];
+    return [contact, att(1, { ry: restRy, shadow: 2 }, c, EASE_RECOVER)];
   }
+  // Weight comes from an asymmetric rebound: compress fast on contact, then
+  // release slowly. A symmetric squash/stretch at constant speed is what makes
+  // an impact read as rubber instead of mass, so the counter-stretch is kept
+  // to a third of the compression and decays rather than oscillating.
+  const compressAt = o.slam ? 0.18 : 0.24;
   return [
-    contact,
-    att(o.slam ? 0.22 : 0.28, { ry: restRy, sx: 1 + o.squash, sy: 1 - o.squash, shadow: 2, glow: g * 0.6 }, c),
-    att(0.6, { ry: restRy, sx: 1 - o.squash * 0.25, sy: 1 + o.squash * 0.2, shadow: 2, glow: g * 0.3 }, c),
+    { ...contact, easing: EASE_COMPRESS },
+    att(compressAt, { ry: restRy, sx: 1 + o.squash, sy: 1 - o.squash, shadow: 2, glow: g * 0.6 }, c, EASE_RECOVER),
+    att(0.58, { ry: restRy, sx: 1 - o.squash * 0.33, sy: 1 + o.squash * 0.28, shadow: 2, glow: g * 0.3 }, c, EASE_RECOVER),
     att(1, { ry: restRy, shadow: 2 }, c),
   ];
 }
@@ -582,6 +647,8 @@ export const CinematicLayer = memo(forwardRef<CinematicLayerRef, CinematicLayerP
   const [banners, setBanners] = useState<BannerEntry[]>([]);
   const [promos, setPromos] = useState<PromoEntry[]>([]);
   const [implodes, setImplodes] = useState<ImplodeEntry[]>([]);
+  const [checkmates, setCheckmates] = useState<CheckmateEntry[]>([]);
+  const [annotations, setAnnotations] = useState<AnnotationEntry[]>([]);
   const [spotlights, setSpotlights] = useState<SpotlightEntry[]>([]);
   const [lasers, setLasers] = useState<LaserEntry[]>([]);
   const [drawnArrows, setDrawnArrows] = useState<DrawnArrowEntry[]>([]);
@@ -604,6 +671,10 @@ export const CinematicLayer = memo(forwardRef<CinematicLayerRef, CinematicLayerP
   const hiddenVictimsRef = useRef<Map<number, string>>(new Map());
   const hiddenSquaresRef = useRef<Map<number, string>>(new Map());
   const spotlightElsRef = useRef<Map<number, HTMLElement>>(new Map());
+  // Annotations outlive the call that created them, so their nodes and
+  // auto-dismiss timers are tracked separately from the one-shot effects.
+  const annotationElsRef = useRef<Map<number, HTMLElement>>(new Map());
+  const annotationTimersRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
   const startedRef = useRef<Set<number>>(new Set());
   const finishedRef = useRef<Set<number>>(new Set());
 
@@ -707,6 +778,7 @@ export const CinematicLayer = memo(forwardRef<CinematicLayerRef, CinematicLayerP
   const finishBanner = useRef(makeFinisher<BannerEntry>(setBanners)).current;
   const finishPromo = useRef(makeHiddenFinisher<PromoEntry>(setPromos)).current;
   const finishImplode = useRef(makeHiddenFinisher<ImplodeEntry>(setImplodes)).current;
+  const finishCheckmate = useRef(makeHiddenFinisher<CheckmateEntry>(setCheckmates)).current;
   const finishLaser = useRef(makeFinisher<LaserEntry>(setLasers)).current;
   const finishDrawArrow = useRef(makeFinisher<DrawnArrowEntry>(setDrawnArrows)).current;
 
@@ -977,7 +1049,7 @@ export const CinematicLayer = memo(forwardRef<CinematicLayerRef, CinematicLayerP
     const fadeStart = Math.max(pop, 1 - 300 / duration);
     const anim = el.animate(
       [
-        { transform: 'scale(0)', opacity: 0, offset: 0, easing: 'cubic-bezier(0.34, 1.56, 0.64, 1)' },
+        { transform: 'scale(0)', opacity: 0, offset: 0, easing: 'cubic-bezier(0.28, 1.18, 0.5, 1)' },
         { transform: 'scale(1.25)', opacity: 1, offset: pop * 0.6 },
         { transform: 'scale(0.95)', opacity: 1, offset: pop * 0.85 },
         { transform: 'scale(1)', opacity: 1, offset: pop },
@@ -1085,7 +1157,7 @@ export const CinematicLayer = memo(forwardRef<CinematicLayerRef, CinematicLayerP
     const holdEnd = Math.max(popIn, 1 - Math.min(0.3, 500 / duration));
     const anim = el.animate(
       [
-        { transform: 'scale(0.4)', opacity: 0, offset: 0, easing: 'cubic-bezier(0.34, 1.56, 0.64, 1)' },
+        { transform: 'scale(0.4)', opacity: 0, offset: 0, easing: 'cubic-bezier(0.28, 1.18, 0.5, 1)' },
         { transform: 'scale(1.08)', opacity: 1, offset: popIn * 0.7 },
         { transform: 'scale(1)', opacity: 1, offset: popIn },
         { transform: 'scale(1)', opacity: 1, offset: holdEnd },
@@ -1190,6 +1262,105 @@ export const CinematicLayer = memo(forwardRef<CinematicLayerRef, CinematicLayerP
     animationsRef.current.set(entry.id, anims);
     Promise.all(waits).then(() => finishPromo(entry));
   }, [finishPromo]);
+
+  /**
+   * The king topples. It pivots on its base like a real piece being tipped
+   * over: a moment of tension, then gravity takes it, then it thuds flat and
+   * kicks up dust. Timing is split 18% tension / 52% fall / 30% settle.
+   */
+  const startCheckmateAnimation = useCallback((container: HTMLDivElement, entry: CheckmateEntry) => {
+    if (startedRef.current.has(entry.id)) return;
+    startedRef.current.add(entry.id);
+
+    const total = entry.durationMs;
+    const waits: Promise<void>[] = [];
+    const anims: Animation[] = [];
+    const d = entry.dir;
+
+    const piece = container.querySelector<HTMLElement>('[data-mate-piece]');
+    if (piece && canAnimate(piece)) {
+      // transformOrigin is the base of the piece, so rotateZ reads as tipping
+      // rather than spinning about the middle.
+      const fall = piece.animate(
+        [
+          { transform: 'rotateZ(0deg) translateY(0px)', offset: 0, easing: 'cubic-bezier(0.3, 0, 0.7, 0.2)' },
+          // Rock back very slightly against the fall — the beat that sells it.
+          { transform: `rotateZ(${-d * 4}deg) translateY(0px)`, offset: 0.18, easing: EASE_GRAVITY },
+          // Gravity: most of the arc happens in the last third of the fall.
+          { transform: `rotateZ(${d * 46}deg) translateY(0px)`, offset: 0.5, easing: 'cubic-bezier(0.6, 0, 0.9, 0.4)' },
+          { transform: `rotateZ(${d * 88}deg) translateY(0px)`, offset: 0.7, easing: EASE_RECOVER },
+          // Bounce once off the board, small and damped.
+          { transform: `rotateZ(${d * 80}deg) translateY(-2%)`, offset: 0.79, easing: 'cubic-bezier(0.4, 0, 0.8, 0.5)' },
+          { transform: `rotateZ(${d * 86}deg) translateY(0px)`, offset: 0.88, easing: EASE_RECOVER },
+          { transform: `rotateZ(${d * 84}deg) translateY(0px)`, offset: 1 },
+        ],
+        { duration: total, easing: 'linear', fill: 'forwards' },
+      );
+      anims.push(fall);
+      waits.push(waitForAnimation(fall, total));
+    }
+
+    const dust = container.querySelector<HTMLElement>('[data-mate-dust]');
+    if (dust && canAnimate(dust)) {
+      const dustMs = Math.round(total * 0.34);
+      const a = dust.animate(
+        [
+          { transform: `translateX(${d * 8}%) scale(0.3)`, opacity: 0, offset: 0, easing: 'ease-out' },
+          { transform: `translateX(${d * 26}%) scale(0.9)`, opacity: 0.5, offset: 0.35, easing: 'ease-out' },
+          { transform: `translateX(${d * 44}%) scale(1.35)`, opacity: 0, offset: 1 },
+        ],
+        { duration: dustMs, delay: Math.round(total * 0.68), easing: 'linear', fill: 'both' },
+      );
+      anims.push(a);
+      waits.push(waitForAnimation(a, dustMs + total * 0.68));
+    }
+
+    const dim = container.querySelector<HTMLElement>('[data-mate-dim]');
+    if (dim && canAnimate(dim)) {
+      const a = dim.animate(
+        [
+          { opacity: 0, offset: 0, easing: EASE_FLIGHT },
+          { opacity: 1, offset: 0.7 },
+          { opacity: 1, offset: 1 },
+        ],
+        { duration: total, easing: 'linear', fill: 'forwards' },
+      );
+      anims.push(a);
+    }
+
+    animationsRef.current.set(entry.id, anims);
+    if (waits.length === 0) {
+      finishCheckmate(entry);
+      return;
+    }
+    Promise.all(waits).then(() => finishCheckmate(entry));
+  }, [finishCheckmate]);
+
+  /** Annotations animate in once, then persist until cleared. */
+  const startAnnotationAnimation = useCallback((container: HTMLDivElement, entry: AnnotationEntry) => {
+    if (startedRef.current.has(entry.id)) return;
+    startedRef.current.add(entry.id);
+    if (!canAnimate(container)) return;
+    if (entry.reduced) {
+      container.style.opacity = '1';
+      return;
+    }
+    const frames: Keyframe[] = entry.enter === 'fade'
+      ? [{ opacity: 0 }, { opacity: 1 }]
+      : entry.enter === 'rise'
+        ? [
+            { transform: 'translateY(35%)', opacity: 0, easing: EASE_RECOVER },
+            { transform: 'translateY(0)', opacity: 1 },
+          ]
+        : [
+            { transform: 'scale(0.7)', opacity: 0, easing: 'cubic-bezier(0.28, 1.18, 0.5, 1)' },
+            { transform: 'scale(1)', opacity: 1 },
+          ];
+    const anim = container.animate(frames, {
+      duration: ANNOTATION_ENTER_MS, easing: 'linear', fill: 'forwards',
+    });
+    animationsRef.current.set(entry.id, [anim]);
+  }, []);
 
   const startImplodeAnimation = useCallback((container: HTMLDivElement, entry: ImplodeEntry) => {
     if (startedRef.current.has(entry.id)) return;
@@ -1640,6 +1811,130 @@ export const CinematicLayer = memo(forwardRef<CinematicLayerRef, CinematicLayerP
   }, []);
 
   /**
+   * Topple the king on `square`. Does not change the position — the game is
+   * already over; this is the closing beat.
+   */
+  const checkmate = useCallback((square: Square, options?: CheckmateOptions): Promise<void> => {
+    if (!isValidSquare(square)) return Promise.resolve();
+    const reduced = prefersReducedMotion() && !options?.force;
+
+    const existing = piecesRef.current.get(square);
+    const pieceKey = options?.piece
+      ?? (existing ? `${existing.color}${existing.role.toUpperCase()}` : undefined);
+    const color = options?.color ?? DEFAULT_CHECKMATE_COLOR;
+    const bannerText = options?.banner === undefined ? 'CHECKMATE' : options.banner;
+
+    // Reduced motion: skip the fall, keep the announcement.
+    if (reduced) {
+      return bannerText ? popBanner({ text: bannerText, glowColor: color }) : Promise.resolve();
+    }
+
+    const [col, row] = squareColRow(square, asWhiteRef.current);
+    // 'auto' tips the king away from the middle of the board, so it falls into
+    // open space instead of over its own defenders.
+    const dir: 1 | -1 = options?.direction === 'left'
+      ? -1
+      : options?.direction === 'right'
+        ? 1
+        : col <= 3 ? -1 : 1;
+
+    const entry: CheckmateEntry = {
+      id: ++idRef.current,
+      col,
+      row,
+      dir,
+      color,
+      durationMs: Math.max(200, options?.durationMs ?? DEFAULT_CHECKMATE_DURATION_MS),
+      dim: options?.dim ?? true,
+      pieceKey,
+    };
+
+    if (existing) {
+      const orig = getPieceElementRef.current(square);
+      if (orig) {
+        orig.style.opacity = '0';
+        hiddenSquaresRef.current.set(entry.id, square);
+      }
+    }
+
+    const toppled = new Promise<void>((resolve) => {
+      resolversRef.current.set(entry.id, resolve);
+      setCheckmates(prev => [...prev, entry]);
+    });
+
+    if (!bannerText) return toppled;
+    // The banner lands with the king rather than after it.
+    return toppled.then(() => popBanner({ text: bannerText, glowColor: color }));
+  }, [popBanner]);
+
+  /**
+   * Pin animated text over a square. Returns a handle: `setText` swaps the
+   * text without replaying the entry animation, `clear` fades it out.
+   */
+  const annotate = useCallback((
+    square: Square, text: string, options?: AnnotationOptions,
+  ): AnnotationHandle => {
+    const noop: AnnotationHandle = { setText: () => {}, clear: () => Promise.resolve() };
+    if (!isValidSquare(square)) return noop;
+
+    const [col, row] = squareColRow(square, asWhiteRef.current);
+    const id = ++idRef.current;
+    const size = options?.fontSize;
+    const entry: AnnotationEntry = {
+      id,
+      col,
+      row,
+      text,
+      color: options?.color ?? '#ffffff',
+      background: options?.background ?? DEFAULT_ANNOTATION_BG,
+      corner: options?.corner ?? 'center',
+      fontSize: typeof size === 'number' ? `${size}px` : size,
+      enter: options?.enter ?? 'pop',
+      reduced: prefersReducedMotion() && !options?.force,
+    };
+    setAnnotations(prev => [...prev, entry]);
+
+    let cleared = false;
+    const remove = () => {
+      annotationTimersRef.current.delete(id);
+      setAnnotations(prev => prev.filter(a => a.id !== id));
+      startedRef.current.delete(id);
+      animationsRef.current.delete(id);
+    };
+
+    if (options?.durationMs !== undefined) {
+      const tid = setTimeout(() => { void handle.clear(); }, Math.max(0, options.durationMs));
+      annotationTimersRef.current.set(id, tid);
+    }
+
+    const handle: AnnotationHandle = {
+      setText: (next: string) => {
+        if (cleared) return;
+        setAnnotations(prev => prev.map(a => (a.id === id ? { ...a, text: next } : a)));
+      },
+      clear: (durationMs?: number) => {
+        if (cleared) return Promise.resolve();
+        cleared = true;
+        const tid = annotationTimersRef.current.get(id);
+        if (tid !== undefined) clearTimeout(tid);
+        annotationTimersRef.current.delete(id);
+        const el = annotationElsRef.current.get(id);
+        const ms = Math.max(0, durationMs ?? ANNOTATION_EXIT_MS);
+        if (!el || !canAnimate(el) || ms === 0) {
+          remove();
+          return Promise.resolve();
+        }
+        const out = el.animate(
+          [{ opacity: 1, transform: 'scale(1)' }, { opacity: 0, transform: 'scale(0.85)' }],
+          { duration: ms, easing: EASE_FLIGHT, fill: 'forwards' },
+        );
+        return waitForAnimation(out, ms).then(remove);
+      },
+    };
+    return handle;
+  }, []);
+
+  /**
    * 3D teleport-swap of a castle: king and rook fly simultaneously (the rook
    * arcs lower so they pass without colliding). A thin wrapper over two
    * concurrent cinematicMove flights. Commit the real castle when it resolves.
@@ -1817,6 +2112,9 @@ export const CinematicLayer = memo(forwardRef<CinematicLayerRef, CinematicLayerP
     }
     hiddenSquaresRef.current.clear();
     spotlightElsRef.current.clear();
+    for (const tid of annotationTimersRef.current.values()) clearTimeout(tid);
+    annotationTimersRef.current.clear();
+    annotationElsRef.current.clear();
     const resolvers = Array.from(resolversRef.current.values());
     resolversRef.current.clear();
     startedRef.current.clear();
@@ -1830,6 +2128,8 @@ export const CinematicLayer = memo(forwardRef<CinematicLayerRef, CinematicLayerP
     setBanners([]);
     setPromos([]);
     setImplodes([]);
+    setCheckmates([]);
+    setAnnotations([]);
     setSpotlights([]);
     setLasers([]);
     setDrawnArrows([]);
@@ -1844,12 +2144,14 @@ export const CinematicLayer = memo(forwardRef<CinematicLayerRef, CinematicLayerP
     popBanner,
     promotionBeam,
     implode,
+    checkmate,
+    annotate,
     castleSwap,
     spotlight,
     drawLaser,
     drawArrow,
     clearCinematics,
-  }), [cinematicMove, squareBurst, popBadge, celebrate, popBanner, promotionBeam, implode, castleSwap, spotlight, drawLaser, drawArrow, clearCinematics]);
+  }), [cinematicMove, squareBurst, popBadge, celebrate, popBanner, promotionBeam, implode, checkmate, annotate, castleSwap, spotlight, drawLaser, drawArrow, clearCinematics]);
 
   useEffect(() => {
     return () => {
@@ -1859,6 +2161,9 @@ export const CinematicLayer = memo(forwardRef<CinematicLayerRef, CinematicLayerP
       animationsRef.current.clear();
       for (const tid of timeoutsRef.current.values()) clearTimeout(tid);
       timeoutsRef.current.clear();
+      for (const tid of annotationTimersRef.current.values()) clearTimeout(tid);
+      annotationTimersRef.current.clear();
+      annotationElsRef.current.clear();
       for (const square of hiddenSquaresRef.current.values()) {
         const el = getPieceElementRef.current(square);
         if (el) el.style.opacity = '';
@@ -1873,6 +2178,7 @@ export const CinematicLayer = memo(forwardRef<CinematicLayerRef, CinematicLayerP
     moves.length === 0 && bursts.length === 0 && badges.length === 0
     && blasts.length === 0 && flashes.length === 0 && confetti.length === 0
     && banners.length === 0 && promos.length === 0 && implodes.length === 0
+    && checkmates.length === 0 && annotations.length === 0
     && spotlights.length === 0 && lasers.length === 0 && drawnArrows.length === 0
   ) return null;
 
@@ -2281,6 +2587,113 @@ export const CinematicLayer = memo(forwardRef<CinematicLayerRef, CinematicLayerP
           />
         </div>
       ))}
+      {checkmates.map((cm) => (
+        <div key={`mate-${cm.id}`} ref={(el) => { if (el) startCheckmateAnimation(el, cm); }}>
+          {cm.dim && (
+            <div
+              data-mate-dim
+              style={{
+                position: 'absolute',
+                inset: 0,
+                background: 'rgba(3, 7, 15, 0.55)',
+                opacity: 0,
+                pointerEvents: 'none',
+                zIndex: 3,
+                willChange: 'opacity',
+              }}
+            />
+          )}
+          <div
+            style={{
+              position: 'absolute',
+              ...pieceBox,
+              transform: positionTransform(cm.col, cm.row),
+              pointerEvents: 'none',
+              zIndex: 5,
+            }}
+          >
+            <div
+              data-mate-dust
+              style={{
+                position: 'absolute',
+                left: '10%',
+                bottom: '-4%',
+                width: '55%',
+                height: '26%',
+                borderRadius: '50%',
+                background: `radial-gradient(ellipse at center, ${cm.color}55 0%, transparent 70%)`,
+                opacity: 0,
+                willChange: 'transform, opacity',
+              }}
+            />
+            {cm.pieceKey && (
+              <div
+                data-mate-piece
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  // Pivot on the base of the piece so it tips rather than spins.
+                  transformOrigin: '50% 92%',
+                  willChange: 'transform',
+                }}
+              >
+                <div
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    transform: flipPieces ? 'rotate(180deg)' : undefined,
+                    transformOrigin: 'center center',
+                  }}
+                >
+                  <PieceGlyph pieceKey={cm.pieceKey} pieceSet={pieceSet} customPieces={customPieces} />
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      ))}
+      {annotations.map((an) => {
+        const pos = ANNOTATION_POSITIONS[an.corner];
+        return (
+          <div
+            key={`annot-${an.id}`}
+            ref={(el) => {
+              if (!el) { annotationElsRef.current.delete(an.id); return; }
+              annotationElsRef.current.set(an.id, el);
+              startAnnotationAnimation(el, an);
+            }}
+            style={{
+              position: 'absolute',
+              ...pieceBox,
+              transform: positionTransform(an.col, an.row),
+              pointerEvents: 'none',
+              zIndex: 9,
+              opacity: 0,
+              display: 'flex',
+              alignItems: pos.align,
+              justifyContent: pos.justify,
+              padding: an.corner === 'center' ? 0 : '6%',
+              willChange: 'transform, opacity',
+            }}
+          >
+            <span
+              style={{
+                background: an.background,
+                color: an.color,
+                fontSize: an.fontSize ?? 'clamp(9px, 2.1cqw, 15px)',
+                fontWeight: 700,
+                lineHeight: 1.15,
+                padding: '0.18em 0.42em',
+                borderRadius: '0.25em',
+                whiteSpace: 'nowrap',
+                boxShadow: '0 1px 3px rgba(0, 0, 0, 0.35)',
+              }}
+            >
+              {an.text}
+            </span>
+          </div>
+        );
+      })}
       {lasers.map((l) => {
         const gradient = HEX6.test(l.color)
           ? `linear-gradient(90deg, ${l.color}00 0%, ${l.color} 60%, #ffffff 100%)`

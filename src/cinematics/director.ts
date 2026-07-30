@@ -94,6 +94,16 @@ export function playCinematicScript(
         await ctx.getLayer()?.implode(step.square, { force, ...step.options });
         break;
       }
+      case 'checkmate': {
+        await ctx.getLayer()?.checkmate(step.square, { force, ...step.options });
+        break;
+      }
+      case 'annotate': {
+        // Annotations persist by design; a script step fires and moves on, and
+        // clearCinematics removes them at the end of the sequence.
+        ctx.getLayer()?.annotate(step.square, step.text, { force, ...step.options });
+        break;
+      }
       case 'castleSwap': {
         await ctx.getLayer()?.castleSwap(step.kingFrom, step.kingTo, step.rookFrom, step.rookTo, { force, ...step.options });
         break;

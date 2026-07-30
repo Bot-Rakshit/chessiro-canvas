@@ -434,6 +434,50 @@ export interface ImplodeOptions {
   force?: boolean;
 }
 
+export interface CheckmateOptions {
+  /** Piece that topples. Defaults to the piece currently on the square. */
+  piece?: string;
+  /** Which way the king falls. 'auto' tips it away from the board centre. Default: 'auto'. */
+  direction?: 'left' | 'right' | 'auto';
+  /** Total duration in ms. Default: 1600. */
+  durationMs?: number;
+  /** Dim the rest of the board while the king falls. Default: true. */
+  dim?: boolean;
+  /** Banner text shown as the king lands. Pass null to suppress it. Default: 'CHECKMATE'. */
+  banner?: string | null;
+  /** Accent colour for the banner glow and dust. Default: '#c0392b'. */
+  color?: string;
+  /** Play even when the user prefers reduced motion. */
+  force?: boolean;
+}
+
+/** Where inside a square a label or annotation sits. */
+export type SquareCorner = 'topLeft' | 'topRight' | 'bottomLeft' | 'bottomRight' | 'center';
+
+export interface AnnotationOptions {
+  /** Text colour. Default: '#ffffff'. */
+  color?: string;
+  /** Pill background. Default: 'rgba(17, 24, 39, 0.92)'. */
+  background?: string;
+  /** Placement inside the square. Default: 'center'. */
+  corner?: SquareCorner;
+  /** Font size, number in px or any CSS length. Default: scales with the square. */
+  fontSize?: string | number;
+  /** Auto-remove after this many ms. Omit to persist until cleared. */
+  durationMs?: number;
+  /** Entry animation. Default: 'pop'. */
+  enter?: 'pop' | 'fade' | 'rise';
+  /** Play the entry animation even when the user prefers reduced motion. */
+  force?: boolean;
+}
+
+export interface AnnotationHandle {
+  /** Replace the text in place, without replaying the entry animation. */
+  setText: (text: string) => void;
+  /** Fade out and remove. Resolves once gone. */
+  clear: (durationMs?: number) => Promise<void>;
+}
+
 export interface CastleSwapOptions {
   /** Total duration in ms. Default: 1100. */
   durationMs?: number;
@@ -636,6 +680,8 @@ export type CinematicStep =
   | { type: 'banner'; options: PopBannerOptions }
   | { type: 'promotionBeam'; square: Square; options?: PromotionBeamOptions }
   | { type: 'implode'; square: Square; options?: ImplodeOptions }
+  | { type: 'checkmate'; square: Square; options?: CheckmateOptions }
+  | { type: 'annotate'; square: Square; text: string; options?: AnnotationOptions }
   | { type: 'castleSwap'; kingFrom: Square; kingTo: Square; rookFrom: Square; rookTo: Square; options?: CastleSwapOptions }
   | { type: 'spotlight'; squares: Square[]; options?: SpotlightOptions }
   | { type: 'clearSpotlight' }
@@ -858,6 +904,21 @@ export interface ChessiroCanvasRef {
    * `clearCinematics`).
    */
   spotlight: (squares: Square[], options?: SpotlightOptions) => SpotlightHandle;
+  /**
+   * Topple the king on `square` — it tips on its base, falls, and thuds down
+   * with a dust puff, optionally dimming the board and popping a banner. The
+   * canonical end-of-game beat for a playing or learning app. Does not change
+   * the position.
+   */
+  checkmate: (square: Square, options?: CheckmateOptions) => Promise<void>;
+  /**
+   * Pin animated text over a square — evaluations, counts, "fork!", lesson
+   * callouts. Persists until the returned handle is cleared (or
+   * `clearCinematics`), and `setText` updates it in place without replaying
+   * the entry animation. For static, always-on labels prefer the
+   * `squareLabels` prop.
+   */
+  annotate: (square: Square, text: string, options?: AnnotationOptions) => AnnotationHandle;
   /** Draw an animated glowing threat beam from one square to another. */
   drawLaser: (from: Square, to: Square, options?: LaserOptions) => Promise<void>;
   /** Draw an arrow slowly from one square to another (shaft draws, then head pops in). */

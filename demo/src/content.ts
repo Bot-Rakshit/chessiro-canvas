@@ -48,9 +48,9 @@ export const THEMES: BoardTheme[] = [
 /* ── Facts, measured. Sourced from benchmarks/latest.json ──────────── */
 
 export const FACTS = [
-  { value: '32 KB', label: 'ESM, gzipped' },
+  { value: '44 KB', label: 'ESM, gzipped' },
   { value: '0', label: 'Runtime deps' },
-  { value: '0.44 ms', label: 'Mean update' },
+  { value: '0.42 ms', label: 'Mean update' },
   { value: '67', label: 'Typed props' },
 ];
 
@@ -369,6 +369,8 @@ export const REF_GROUPS: { title: string; rows: { name: string; sig: string; not
       { name: 'promotionBeam', sig: '(square, options?) => Promise', notes: 'Pillar of light morphing one piece into another.' },
       { name: 'implode', sig: '(square, options?) => Promise', notes: 'Collapse a piece into a vortex.' },
       { name: 'castleSwap', sig: '(kFrom, kTo, rFrom, rTo, options?) => Promise', notes: '3D teleport-swap of king and rook.' },
+      { name: 'checkmate', sig: '(square, options?) => Promise', notes: 'The king topples on its base, thuds down and kicks up dust.' },
+      { name: 'annotate', sig: '(square, text, options?) => AnnotationHandle', notes: 'Pin animated text over a square; setText updates it in place.' },
       { name: 'spotlight', sig: '(squares, options?) => SpotlightHandle', notes: 'Dim the board except these squares.' },
       { name: 'drawLaser', sig: '(from, to, options?) => Promise', notes: 'Animated glowing threat beam.' },
       { name: 'drawArrow', sig: '(from, to, options?) => Promise', notes: 'Arrow draws itself, then the head pops in.' },

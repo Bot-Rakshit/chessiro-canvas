@@ -108,6 +108,15 @@ function withTimeout(promise, ms, label) {
   ]).then((done) => assert(done, label));
 }
 
+async function waitFor(predicate, ms, label) {
+  const deadline = Date.now() + ms;
+  while (Date.now() < deadline) {
+    if (predicate()) { assert(true, label); return; }
+    await sleep(20);
+  }
+  assert(predicate(), label);
+}
+
 const container = document.getElementById('root');
 const root = createRoot(container);
 const ref = React.createRef();
@@ -341,6 +350,80 @@ ref.current.clearCinematics();
 await sleep(60);
 assert(countNodes() === baseline, 'clearCinematics removed the spotlight');
 
+console.log('\n-- checkmate (king topple) --');
+const matePieces = () => container.querySelectorAll('[data-mate-piece]').length;
+const mateDim = () => container.querySelectorAll('[data-mate-dim]').length;
+const matePromise = ref.current.checkmate('e1', { durationMs: 120, banner: null, force: true });
+await sleep(40);
+assert(matePieces() === 1, 'toppling king mounted');
+assert(mateDim() === 1, 'board dimmed during the topple');
+assert(hiddenPieceCount() === 1, 'real king hidden while it topples');
+await withTimeout(matePromise, 3000, 'checkmate resolved');
+await sleep(150);
+assert(countNodes() === baseline, 'topple overlay unmounted');
+assert(hiddenPieceCount() === 0, 'real king restored after topple');
+
+// dim:false must not mount the dimmer, and direction is explicit-overridable.
+await withTimeout(
+  ref.current.checkmate('e1', { durationMs: 60, banner: null, dim: false, direction: 'left', force: true }),
+  3000,
+  'checkmate honoured dim:false + direction:left',
+);
+await sleep(120);
+assert(countNodes() === baseline, 'undimmed topple cleaned up');
+
+// The banner is part of the beat, so the promise must outlast the fall.
+const mateBanner = ref.current.checkmate('e1', { durationMs: 60, force: true });
+// The banner pops once the king has landed, so poll rather than guessing a
+// sleep: the topple must unmount first and jsdom's timers are loose.
+await waitFor(() => container.textContent.includes('CHECKMATE'), 2000,
+  'checkmate popped its CHECKMATE banner after the king landed');
+await withTimeout(mateBanner, 4000, 'checkmate with banner resolved');
+await sleep(150);
+assert(countNodes() === baseline, 'banner + topple fully unmounted');
+
+// A square with no piece must not hang the promise.
+await withTimeout(
+  ref.current.checkmate('d5', { durationMs: 60, banner: null, force: true }),
+  2000,
+  'checkmate on an empty square still resolves',
+);
+await sleep(100);
+
+console.log('\n-- annotate (text over a square) --');
+const annotTexts = () =>
+  [...container.querySelectorAll('[data-cine-overlay] span')].map((s) => s.textContent);
+const note = ref.current.annotate('e4', '+1.4');
+await sleep(40);
+assert(annotTexts().includes('+1.4'), 'annotation text mounted');
+note.setText('+2.1');
+await sleep(30);
+assert(annotTexts().includes('+2.1'), 'setText updated in place');
+assert(annotTexts().filter((t) => t === '+2.1').length === 1, 'setText did not duplicate the node');
+await withTimeout(note.clear(40), 2000, 'annotation clear() resolved');
+await sleep(80);
+assert(countNodes() === baseline, 'annotation unmounted after clear');
+// clear() twice must be safe and must not reject.
+await withTimeout(note.clear(), 500, 'second clear() is a no-op');
+
+// Auto-dismiss after durationMs.
+ref.current.annotate('a1', 'fork!', { durationMs: 60, corner: 'topRight' });
+await sleep(40);
+assert(annotTexts().includes('fork!'), 'timed annotation mounted');
+await sleep(300);
+assert(countNodes() === baseline, 'timed annotation auto-removed');
+
+// Annotations persist until explicitly cleared, and clearCinematics gets them.
+ref.current.annotate('h8', 'A');
+ref.current.annotate('h7', 'B');
+await sleep(60);
+assert(annotTexts().filter((t) => t === 'A' || t === 'B').length === 2, 'two annotations coexist');
+await sleep(400);
+assert(annotTexts().includes('A'), 'annotation persisted without a duration');
+ref.current.clearCinematics();
+await sleep(60);
+assert(countNodes() === baseline, 'clearCinematics removed annotations');
+
 console.log('\n-- new effects under reduced motion --');
 reducedMotion = true;
 const rmCount = countNodes();
@@ -350,7 +433,25 @@ await withTimeout(ref.current.castleSwap('e1', 'g1', 'h1', 'f1'), 200, 'reduced-
 await withTimeout(ref.current.drawLaser('c1', 'h6'), 200, 'reduced-motion drawLaser resolved immediately');
 const rmSpot = ref.current.spotlight(['e4']);
 await withTimeout(rmSpot.clear(), 200, 'reduced-motion spotlight handle is a no-op');
+await withTimeout(
+  ref.current.checkmate('e1', { banner: null }),
+  200,
+  'reduced-motion checkmate skips the topple and resolves immediately',
+);
 assert(countNodes() === rmCount, 'reduced-motion new effects mounted nothing');
+
+// Text is information, not motion: an annotation must still appear under
+// reduced motion — only its entry animation is skipped.
+const rmNote = ref.current.annotate('e4', 'still shown');
+await sleep(40);
+assert(
+  [...container.querySelectorAll('[data-cine-overlay] span')].some(
+    (s) => s.textContent === 'still shown',
+  ),
+  'reduced-motion annotation still renders its text',
+);
+await withTimeout(rmNote.clear(0), 500, 'reduced-motion annotation cleared');
+await sleep(60);
 reducedMotion = false;
 
 console.log('\n-- unmount safety --');
