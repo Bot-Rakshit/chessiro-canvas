@@ -1,287 +1,98 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import {
-  ChessiroCanvas,
-  DEFAULT_ARROW_BRUSHES,
-  resolvePieceImageSrc,
-  type ArrowVisuals,
-  type ArrowHeadShape,
-  type ArrowBrushes,
-  type BoardTheme,
-  type Arrow,
-  type PieceColor,
-  type SquareVisuals,
-  type ChessiroCanvasRef,
-  type GhostPiece,
-  type SquareLabel,
-  type Square,
-  type CinematicStep,
-} from 'chessiro-canvas';
-import { Chess } from 'chessops/chess';
+import { ChessiroCanvas } from 'chessiro-canvas';
 import { chessgroundDests } from 'chessops/compat';
-import { parseFen, makeFen } from 'chessops/fen';
+import { makeFen } from 'chessops/fen';
 import { parseUci } from 'chessops/util';
-import { Copy, Check, ChevronDown, Code2, Sparkles, Zap, Layers } from 'lucide-react';
 
-function cn(...classes: (string | undefined | null | false)[]) {
-  return classes.filter(Boolean).join(' ');
-}
+import { createInitialPosition } from './chess';
+import {
+  BOARD_ONLY_CODE,
+  CHESSOPS_QUICKSTART_CODE,
+  CHESS_JS_CODE,
+  CUSTOM_PIECES_CODE,
+  FACTS,
+  PROP_GROUPS,
+  REF_GROUPS,
+  SECTIONS,
+  SQUARE_VISUALS_CODE,
+  THEMES,
+  UI_VISUALS_CODE,
+  type SectionId,
+} from './content';
+import {
+  ArrowPremoveStudio,
+  CinematicStudio,
+  ForkTrainer,
+  GuidedDrill,
+  TeachingStudio,
+} from './studios';
+import { C, Choice, CodeBlock, Panel, Plate, Toggle, Workbench, cn } from './ui';
 
-const STARTING_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+const REPO = 'https://github.com/Bot-Rakshit/chessiro-canvas';
+const NPM = 'https://www.npmjs.com/package/chessiro-canvas';
 
-function createInitialPosition() {
-  return Chess.fromSetup(parseFen(STARTING_FEN).unwrap()).unwrap();
-}
+/* ── Page furniture ───────────────────────────────────────────────── */
 
-const THEMES: BoardTheme[] = [
-  {
-    id: 'chessiro',
-    name: 'Chessiro',
-    darkSquare: '#785E45',
-    lightSquare: '#DFC29A',
-    margin: '#66503B',
-    lastMoveHighlight: '#DFAA4E',
-    selectedPiece: '#B57340',
-  },
-  {
-    id: 'slate',
-    name: 'Slate',
-    darkSquare: '#566073',
-    lightSquare: '#D2D8E1',
-    margin: '#3D4554',
-    lastMoveHighlight: '#6FA4D9',
-    selectedPiece: '#2E6C9E',
-  },
-  {
-    id: 'forest',
-    name: 'Forest',
-    darkSquare: '#6C7A3A',
-    lightSquare: '#E8E7C8',
-    margin: '#4F5929',
-    lastMoveHighlight: '#94B23B',
-    selectedPiece: '#4E6A2A',
-  },
-];
-
-const SECTION_LINKS = [
-  { id: 'overview', label: 'Overview' },
-  { id: 'playground', label: 'Playground' },
-  { id: 'studio', label: 'Arrows & Premove Studio' },
-  { id: 'teaching', label: 'Teaching Toolkit' },
-  { id: 'drills', label: 'Interactive Drills' },
-  { id: 'cinematics', label: 'Cinematic Studio' },
-  { id: 'quick-start', label: 'Quick Start' },
-  { id: 'customization', label: 'Customization' },
-  { id: 'props', label: 'Props' },
-  { id: 'integrations', label: 'Integrations' },
-] as const;
-
-const BOARD_ONLY_CODE = `import { useState } from 'react';
-import { ChessiroCanvas, INITIAL_FEN } from 'chessiro-canvas';
-
-export function Board() {
-  const [fen, setFen] = useState(INITIAL_FEN);
-
+function Section({
+  id,
+  index,
+  title,
+  lede,
+  children,
+}: {
+  id: SectionId;
+  index: number;
+  title: string;
+  lede?: ReactNode;
+  children: ReactNode;
+}) {
   return (
-    <div style={{ width: 520 }}>
-      <ChessiroCanvas
-        position={fen}
-        onMove={(from, to) => {
-          return true;
-        }}
-      />
+    <section id={id} className="scroll-mt-10 pt-16 first:pt-0">
+      <header className="mb-9">
+        <div className="flex items-baseline gap-4 sm:gap-6">
+          <span className="folio">{String(index).padStart(2, '0')}</span>
+          <h2 className="display-2">{title}</h2>
+        </div>
+        {lede && <p className="lede measure mt-4">{lede}</p>}
+        <hr className="rule mt-7" />
+      </header>
+      {children}
+    </section>
+  );
+}
+
+/** A titled block within a section — no card, just a rule and a label. */
+function Block({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div className="min-w-0">
+      <h3 className="display-3 mb-3">{title}</h3>
+      {children}
     </div>
   );
-}`;
+}
 
-const CHESSOPS_QUICKSTART_CODE = `import { useMemo, useState } from 'react';
-import { Chess } from 'chessops/chess';
-import { chessgroundDests } from 'chessops/compat';
-import { parseFen, makeFen } from 'chessops/fen';
-import { parseUci } from 'chessops/util';
-import { ChessiroCanvas, INITIAL_GAME_FEN } from 'chessiro-canvas';
-
-export function LegalBoard() {
-  const [pos, setPos] = useState(() =>
-    Chess.fromSetup(parseFen(INITIAL_GAME_FEN).unwrap()).unwrap()
-  );
-  const fen = useMemo(() => makeFen(pos.toSetup()), [pos]);
-  const dests = useMemo(() => chessgroundDests(pos), [pos]);
-  const turn = pos.turn === 'white' ? 'w' : 'b';
-
+function Rail({ active }: { active: SectionId }) {
   return (
-    <ChessiroCanvas
-      position={fen}
-      turnColor={turn}
-      movableColor={turn}
-      dests={dests}
-      onMove={(from, to, promotion) => {
-        const move = parseUci(from + to + (promotion ?? ''));
-        if (!move || !pos.isLegal(move)) return false;
-        const next = pos.clone();
-        next.play(move);
-        setPos(next);
-        return true;
-      }}
-    />
+    <nav aria-label="Sections" className="min-w-0">
+      <ol className="lg:sticky lg:top-10 flex gap-x-5 overflow-x-auto lg:flex-col lg:gap-x-0 lg:overflow-visible">
+        {SECTIONS.map((section, i) => (
+          <li key={section.id} className="flex-none lg:flex-auto">
+            <a
+              href={`#${section.id}`}
+              className={cn('nav-item whitespace-nowrap', active === section.id && 'nav-on')}
+            >
+              <span className="nav-num">{String(i + 1).padStart(2, '0')}</span>
+              {section.label}
+            </a>
+          </li>
+        ))}
+      </ol>
+    </nav>
   );
-}`;
+}
 
-const PROMPTS = {
-  board: `Build a React + TypeScript component named BoardOnly.tsx with chessiro-canvas.
-
-Requirements:
-- Use npm install command: npm i chessiro-canvas
-- Render <ChessiroCanvas /> inside a container width of 520px
-- Start from INITIAL_FEN and keep state in useState
-- Implement onMove(from, to, promotion?) and return true
-- No chess engine in this version (UI only)
-- Export the component
-
-Return only code (no explanation).`,
-  chessops: `Build a React + TypeScript component named LegalBoard.tsx with chessiro-canvas + chessops.
-
-Requirements:
-- Use npm install command: npm i chessops chessiro-canvas
-- Initialize chessops position from INITIAL_GAME_FEN
-- Compute FEN using makeFen(pos.toSetup())
-- Compute legal destinations with chessgroundDests(pos)
-- In onMove: parse UCI, validate with pos.isLegal(move), then clone/play/update state
-- Pass turnColor + movableColor so only side-to-move can move
-- Keep code production ready and concise
-
-Return only code (imports + component).`,
-};
-
-type PromptKey = keyof typeof PROMPTS;
-
-const CUSTOM_PIECES_CODE = `<ChessiroCanvas
-  position={fen}
-  pieceSet={{
-    id: 'alpha',
-    name: 'Alpha',
-    path: '/pieces/alpha',
-  }}
-/>`;
-
-const SQUARE_VISUALS_CODE = `<ChessiroCanvas
-  position={fen}
-  dests={dests}
-  squareVisuals={{
-    legalDot: 'rgba(30, 144, 255, 0.55)',
-    legalDotOutline: 'rgba(255, 255, 255, 0.95)',
-    legalCaptureRing: 'rgba(30, 144, 255, 0.8)',
-    premoveDot: 'rgba(155, 89, 182, 0.55)',
-    premoveCaptureRing: 'rgba(155, 89, 182, 0.75)',
-    selectedOutline: 'rgba(255, 255, 255, 1)',
-    markOverlay: 'rgba(244, 67, 54, 0.6)',
-  }}
-/>`;
-
-const UI_VISUALS_CODE = `<ChessiroCanvas
-  position={fen}
-  arrowVisuals={{ lineWidth: 0.2, opacity: 1 }}
-  notationVisuals={{ fontFamily: 'JetBrains Mono', fontSize: '11px' }}
-  promotionVisuals={{ panelColor: 'rgba(20, 24, 36, 0.98)' }}
-  overlayVisuals={{ background: 'rgba(2, 6, 23, 0.85)', borderRadius: '6px' }}
-/>`;
-
-const CHESS_JS_CODE = `import { useMemo, useState } from 'react';
-import { Chess } from 'chess.js';
-import { ChessiroCanvas, type Dests, type Square } from 'chessiro-canvas';
-
-export function ChessJsBoard() {
-  const [chess] = useState(() => new Chess());
-  const [fen, setFen] = useState(() => chess.fen());
-
-  const dests = useMemo<Dests>(() => {
-    const map = new Map<Square, Square[]>();
-    const moves = chess.moves({ verbose: true });
-    for (const move of moves) {
-      const from = move.from as Square;
-      const to = move.to as Square;
-      const current = map.get(from);
-      if (current) current.push(to);
-      else map.set(from, [to]);
-    }
-    return map;
-  }, [chess, fen]);
-
-  return (
-    <ChessiroCanvas
-      position={fen}
-      turnColor={chess.turn()}
-      movableColor={chess.turn()}
-      dests={dests}
-      onMove={(from, to, promotion) => {
-        const result = chess.move({ from, to, promotion });
-        if (!result) return false;
-        setFen(chess.fen());
-        return true;
-      }}
-    />
-  );
-}`;
-
-const CHESSOPS_CODE = `import { useMemo, useState } from 'react';
-import { Chess } from 'chessops/chess';
-import { chessgroundDests } from 'chessops/compat';
-import { parseFen, makeFen } from 'chessops/fen';
-import { parseUci } from 'chessops/util';
-import { ChessiroCanvas, INITIAL_GAME_FEN } from 'chessiro-canvas';
-
-export function ChessopsBoard() {
-  const [pos, setPos] = useState(() =>
-    Chess.fromSetup(parseFen(INITIAL_GAME_FEN).unwrap()).unwrap()
-  );
-  const fen = useMemo(() => makeFen(pos.toSetup()), [pos]);
-  const dests = useMemo(() => chessgroundDests(pos), [pos]);
-  const turn = pos.turn === 'white' ? 'w' : 'b';
-
-  return (
-    <ChessiroCanvas
-      position={fen}
-      turnColor={turn}
-      movableColor={turn}
-      dests={dests}
-      onMove={(from, to, promotion) => {
-        const uci = from + to + (promotion ?? '');
-        const move = parseUci(uci);
-        if (!move || !pos.isLegal(move)) return false;
-        const next = pos.clone();
-        next.play(move);
-        setPos(next);
-        return true;
-      }}
-    />
-  );
-}`;
-
-const PROPS: { prop: string; type: string; defaultValue: string; notes: string }[] = [
-  { prop: 'position', type: 'string', defaultValue: 'INITIAL_FEN', notes: 'FEN string for board position.' },
-  { prop: 'orientation', type: "'white' | 'black'", defaultValue: "'white'", notes: 'Board orientation.' },
-  { prop: 'interactive', type: 'boolean', defaultValue: 'true', notes: 'Enable move interactions.' },
-  { prop: 'turnColor', type: "'w' | 'b'", defaultValue: 'undefined', notes: 'Current side to move.' },
-  { prop: 'movableColor', type: "'w' | 'b' | 'both'", defaultValue: 'undefined', notes: 'Restricts movable side.' },
-  { prop: 'onMove', type: '(from, to, promotion?) => boolean', defaultValue: 'undefined', notes: 'Move callback, return true to accept.' },
-  { prop: 'dests', type: 'Map<Square, Square[]>', defaultValue: 'undefined', notes: 'Legal move destinations.' },
-  { prop: 'autoPromoteTo', type: "'q' | 'r' | 'b' | 'n'", defaultValue: 'undefined', notes: 'Skip promotion dialog, always promote to this piece.' },
-  { prop: 'expectedMove', type: 'ExpectedMove | ExpectedMove[] | null', defaultValue: 'undefined', notes: 'Guided mode: only these moves are accepted; others shake.' },
-  { prop: 'onWrongMove', type: '(from, to) => void', defaultValue: 'undefined', notes: 'Fired when a non-expected move is attempted.' },
-  { prop: 'ghostPieces', type: 'GhostPiece[]', defaultValue: 'undefined', notes: 'Translucent hint pieces (teaching).' },
-  { prop: 'squareLabels', type: 'Record<string, string | SquareLabel>', defaultValue: 'undefined', notes: 'Text badges on squares (counts, annotations).' },
-  { prop: 'lastMove', type: '{ from; to } | null', defaultValue: 'undefined', notes: 'Last move highlight.' },
-  { prop: 'theme', type: 'BoardTheme', defaultValue: 'built-in', notes: 'Board color palette.' },
-  { prop: 'pieceSet', type: 'PieceSet', defaultValue: 'embedded', notes: 'Custom piece set path.' },
-  { prop: 'flipPieces', type: 'boolean', defaultValue: 'false', notes: 'Rotate piece artwork 180 degrees for pass-and-play.' },
-  { prop: 'showMargin', type: 'boolean', defaultValue: 'true', notes: 'Show outer margin frame.' },
-  { prop: 'showNotation', type: 'boolean', defaultValue: 'true', notes: 'Show file/rank labels.' },
-  { prop: 'squareVisuals', type: 'Partial<SquareVisuals>', defaultValue: 'undefined', notes: 'Legal/premove hints, marks.' },
-  { prop: 'arrowVisuals', type: 'Partial<ArrowVisuals>', defaultValue: 'undefined', notes: 'Arrow styling.' },
-  { prop: 'promotionVisuals', type: 'Partial<PromotionVisuals>', defaultValue: 'undefined', notes: 'Promotion modal style.' },
-  { prop: 'showAnimations', type: 'boolean', defaultValue: 'true', notes: 'Piece animation toggle.' },
-  { prop: 'className', type: 'string', defaultValue: 'undefined', notes: 'Wrapper class name.' },
-];
+/* ── Page ─────────────────────────────────────────────────────────── */
 
 export function App() {
   const [pos, setPos] = useState(createInitialPosition);
@@ -291,10 +102,8 @@ export function App() {
   const [showAnimations, setShowAnimations] = useState(true);
   const [showNotation, setShowNotation] = useState(true);
   const [showMargin, setShowMargin] = useState(true);
-  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>('idle');
-  const [promptDropdownOpen, setPromptDropdownOpen] = useState(false);
-  const [copiedPrompts, setCopiedPrompts] = useState<Record<PromptKey, 'idle' | 'copied'>>({ board: 'idle', chessops: 'idle' });
-  const [activeSection, setActiveSection] = useState<(typeof SECTION_LINKS)[number]['id']>('overview');
+  const [copied, setCopied] = useState(false);
+  const [active, setActive] = useState<SectionId>('overview');
 
   const theme = THEMES[themeIndex];
   const fen = useMemo(() => makeFen(pos.toSetup()), [pos]);
@@ -303,8 +112,7 @@ export function App() {
 
   const handleMove = useCallback(
     (from: string, to: string, promotion?: string): boolean => {
-      const promo = promotion?.toLowerCase();
-      const move = parseUci(`${from}${to}${promo ?? ''}`);
+      const move = parseUci(`${from}${to}${promotion?.toLowerCase() ?? ''}`);
       if (!move || !pos.isLegal(move)) return false;
       const next = pos.clone();
       next.play(move);
@@ -320,27 +128,13 @@ export function App() {
     setLastMove(null);
   }, []);
 
-  const copyInstallCommand = useCallback(async () => {
+  const copyInstall = useCallback(async () => {
     try {
       await navigator.clipboard.writeText('npm i chessiro-canvas');
-      setCopyState('copied');
-      window.setTimeout(() => setCopyState('idle'), 2000);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
     } catch {
-      setCopyState('error');
-      window.setTimeout(() => setCopyState('idle'), 2000);
-    }
-  }, []);
-
-  const copyPrompt = useCallback(async (key: PromptKey) => {
-    try {
-      await navigator.clipboard.writeText(PROMPTS[key]);
-      setCopiedPrompts((prev) => ({ ...prev, [key]: 'copied' }));
-      window.setTimeout(() => {
-        setCopiedPrompts((prev) => ({ ...prev, [key]: 'idle' }));
-        setPromptDropdownOpen(false);
-      }, 1500);
-    } catch {
-      setCopiedPrompts((prev) => ({ ...prev, [key]: 'idle' }));
+      /* clipboard unavailable */
     }
   }, []);
 
@@ -348,13 +142,11 @@ export function App() {
     const observer = new IntersectionObserver(
       (entries) => {
         const visible = entries.filter((e) => e.isIntersecting);
-        if (visible[0]) {
-          setActiveSection(visible[0].target.id as (typeof SECTION_LINKS)[number]['id']);
-        }
+        if (visible[0]) setActive(visible[0].target.id as SectionId);
       },
       { rootMargin: '-20% 0px -65% 0px' },
     );
-    for (const section of SECTION_LINKS) {
+    for (const section of SECTIONS) {
       const el = document.getElementById(section.id);
       if (el) observer.observe(el);
     }
@@ -362,1965 +154,407 @@ export function App() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-[#0a0e17] text-slate-100">
-      <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-0 left-1/4 w-[600px] h-[600px] bg-amber-500/5 rounded-full blur-3xl" />
-        <div className="absolute bottom-0 right-1/4 w-[500px] h-[500px] bg-sky-500/5 rounded-full blur-3xl" />
-      </div>
-
-      <div className="relative flex">
-        <aside className="fixed left-0 top-0 w-64 h-screen border-r border-slate-800/50 bg-[#0a0e17]/80 backdrop-blur-xl p-6 flex flex-col">
-          <div className="mb-8">
-            <p className="text-xs font-medium text-amber-500 uppercase tracking-wider mb-1">Chess UI Toolkit</p>
-            <h1 className="text-2xl font-bold text-white">chessiro-canvas</h1>
-            <p className="text-sm text-slate-400 mt-1">Lightweight, controlled React chessboard</p>
-          </div>
-
-          <nav className="flex-1 space-y-1">
-            {SECTION_LINKS.map((section) => (
-              <a
-                key={section.id}
-                href={`#${section.id}`}
-                className={cn(
-                  'block px-3 py-2 rounded-lg text-sm font-medium transition-colors',
-                  activeSection === section.id
-                    ? 'bg-amber-500/10 text-amber-500'
-                    : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
-                )}
-              >
-                {section.label}
-              </a>
-            ))}
-          </nav>
-
-          <div className="flex gap-2 flex-wrap">
-            <span className="px-2 py-1 rounded-md bg-slate-800/50 text-xs text-slate-400">14.8 KB</span>
-            <span className="px-2 py-1 rounded-md bg-slate-800/50 text-xs text-slate-400">TypeScript</span>
-            <span className="px-2 py-1 rounded-md bg-slate-800/50 text-xs text-slate-400">No deps</span>
-          </div>
-        </aside>
-
-        <main className="ml-64 flex-1 p-8 max-w-4xl">
-          <section id="overview" className="mb-16">
-            <p className="text-amber-500 font-medium mb-2">Overview</p>
-            <h2 className="text-4xl font-bold text-white mb-4">Professional chessboard UI for React</h2>
-            <p className="text-slate-400 text-lg mb-6 max-w-2xl">
-              High-performance canvas-based chessboard with controlled state, flexible visuals, 
-              and seamless integration with chess logic libraries.
+    <div className="relative isolate">
+      {/* Masthead — set like the head of a tournament bulletin. */}
+      <header className="border-b border-ink">
+        <div className="mx-auto max-w-[86rem] px-6 lg:px-10">
+          <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-3 py-5">
+            <p className="eyebrow reveal" style={{ ['--i' as string]: 0 }}>
+              A React chessboard library
             </p>
+            <p className="eyebrow reveal flex gap-4" style={{ ['--i' as string]: 1 }}>
+              <span>v0.1.42</span>
+              <span aria-hidden>·</span>
+              <span>MIT</span>
+              <span aria-hidden>·</span>
+              <a className="link" href={NPM}>npm</a>
+              <a className="link" href={REPO}>GitHub</a>
+            </p>
+          </div>
+        </div>
+      </header>
 
-            <div className="flex flex-wrap gap-3 mb-8">
-              <button
-                onClick={copyInstallCommand}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold transition-colors"
+      <div className="mx-auto max-w-[86rem] px-6 lg:px-10">
+        <div className="grid gap-x-12 lg:grid-cols-[13rem_minmax(0,1fr)]">
+          {/* Rail */}
+          <div className="min-w-0 border-b border-rule py-5 lg:border-b-0 lg:border-r lg:border-rule lg:py-14 lg:pr-8">
+            <div className="min-w-0 lg:sticky lg:top-10">
+              <p className="hidden lg:block eyebrow mb-4">Contents</p>
+              <Rail active={active} />
+            </div>
+          </div>
+
+          {/* Body */}
+          <main className="min-w-0 py-14 lg:pl-4 pb-28">
+            {/* ── Hero ── */}
+            <section id="overview" className="scroll-mt-10">
+              <h1
+                className="display-1 reveal max-w-[24ch]"
+                style={{ ['--i' as string]: 2 }}
               >
-                {copyState === 'copied' ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                {copyState === 'copied' ? 'Copied!' : copyState === 'error' ? 'Failed' : 'npm i chessiro-canvas'}
-              </button>
-              <a href="#quick-start" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-700 hover:bg-slate-800 text-slate-300 transition-colors">
-                Quick Start
-              </a>
-              <a href="#props" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-700 hover:bg-slate-800 text-slate-300 transition-colors">
-                Props Reference
-              </a>
+                chessiro<span style={{ color: 'var(--color-wood-2)' }}>-canvas</span>
+              </h1>
 
-              <div className="relative">
-                <button
-                  onClick={() => setPromptDropdownOpen(!promptDropdownOpen)}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-700 hover:bg-slate-800 text-slate-300 transition-colors"
-                >
-                  <Sparkles className="w-4 h-4 text-amber-500" />
-                  Copy prompt
-                  <ChevronDown className={cn("w-4 h-4 transition-transform", promptDropdownOpen && "rotate-180")} />
+              <p className="lede measure mt-6 reveal" style={{ ['--i' as string]: 3 }}>
+                The interaction primitives of a serious chess interface — drag and drop,
+                click-to-move, legal-move hints, arrows, premoves, promotion — as one typed
+                React component with no runtime dependencies and no opinion about the rules.
+              </p>
+
+              <div
+                className="mt-8 flex flex-wrap items-center gap-3 reveal"
+                style={{ ['--i' as string]: 4 }}
+              >
+                <button onClick={copyInstall} className="btn btn-primary">
+                  <code>{copied ? 'Copied' : 'npm i chessiro-canvas'}</code>
                 </button>
-                {promptDropdownOpen && (
-                  <div className="absolute top-full mt-2 left-0 w-56 bg-slate-900 border border-slate-700 rounded-lg shadow-xl z-50 overflow-hidden">
-                    <button
-                      onClick={() => copyPrompt('board')}
-                      className="w-full px-4 py-3 text-left text-sm hover:bg-slate-800 flex items-center justify-between"
-                    >
-                      <span>Board only</span>
-                      {copiedPrompts.board === 'copied' && <Check className="w-4 h-4 text-green-500" />}
-                    </button>
-                    <button
-                      onClick={() => copyPrompt('chessops')}
-                      className="w-full px-4 py-3 text-left text-sm hover:bg-slate-800 flex items-center justify-between"
-                    >
-                      <span>Board + chessops</span>
-                      {copiedPrompts.chessops === 'copied' && <Check className="w-4 h-4 text-green-500" />}
-                    </button>
+                <a href="#start" className="btn">Getting started</a>
+                <a href="#api" className="btn">API reference</a>
+              </div>
+
+              {/* Facts, set as a ruled specimen line rather than stat cards. */}
+              <dl
+                className="mt-12 grid grid-cols-2 border-t border-rule sm:grid-cols-4 reveal"
+                style={{ ['--i' as string]: 5 }}
+              >
+                {FACTS.map((fact) => (
+                  <div key={fact.label} className="border-b border-rule py-3.5 pr-6 sm:border-b-0">
+                    <dt className="eyebrow">{fact.label}</dt>
+                    <dd className="font-display text-3xl mt-1 leading-none">{fact.value}</dd>
                   </div>
-                )}
+                ))}
+              </dl>
+
+              <p className="note measure-wide mt-5">
+                Measured against react-chessboard v5 on the same harness: 77% faster to mount,
+                81% faster to update, 13% smaller gzipped. Numbers vary by machine — the harness
+                lives in the repository.
+              </p>
+            </section>
+
+            {/* ── Getting started ── */}
+            <Section
+              id="start"
+              index={2}
+              title="Getting started"
+              lede={
+                <>
+                  The board is controlled: you pass a FEN, it reports intent through <C>onMove</C>,
+                  and you decide what happens next. It ships no rules engine, so pair it with one.
+                </>
+              }
+            >
+              <div className="grid gap-10 lg:grid-cols-2">
+                <Block title="Board only">
+                  <p className="body-text measure mb-4">
+                    Enough for a display board, an editor, or a puzzle you validate yourself.
+                    Give the wrapper a width; the board stays square.
+                  </p>
+                  <div className="space-y-3">
+                    <CodeBlock code="npm i chessiro-canvas" language="bash" />
+                    <CodeBlock code={BOARD_ONLY_CODE} language="tsx" />
+                  </div>
+                </Block>
+
+                <Block title="With a rules engine">
+                  <p className="body-text measure mb-4">
+                    Recommended for real gameplay. <C>chessops</C> handles legality, castling,
+                    en passant and promotion, and its <C>chessgroundDests()</C> returns exactly the
+                    shape <C>dests</C> expects.
+                  </p>
+                  <div className="space-y-3">
+                    <CodeBlock code="npm i chessops chessiro-canvas" language="bash" />
+                    <CodeBlock code={CHESSOPS_QUICKSTART_CODE} language="tsx" />
+                  </div>
+                </Block>
               </div>
-            </div>
+            </Section>
 
-            <div className="inline-flex items-center gap-3 px-4 py-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
-              <Zap className="w-5 h-5 text-amber-500" />
-              <span className="text-sm">
-                <strong className="text-amber-500">Recommended:</strong> Pair with{' '}
-                <code className="px-1.5 py-0.5 rounded bg-slate-800 text-amber-400">chessops</code> for complete 
-                legal-move validation, castling, en passant, and promotions in just 20 lines.
-              </span>
-            </div>
-          </section>
+            {/* ── Playground ── */}
+            <Section
+              id="playground"
+              index={3}
+              title="Playground"
+              lede="A fully legal board, wired to chessops. Drag or click to move; right-drag to draw."
+            >
+              <Workbench
+                board={
+                  <Plate>
+                    <ChessiroCanvas
+                      position={fen}
+                      lastMove={lastMove}
+                      turnColor={turnColor}
+                      movableColor={turnColor}
+                      dests={dests}
+                      onMove={handleMove}
+                      interactive
+                      orientation={orientation}
+                      theme={theme}
+                      showAnimations={showAnimations}
+                      showNotation={showNotation}
+                      showMargin={showMargin}
+                    />
+                  </Plate>
+                }
+                controls={
+                  <>
+                    <Panel title="Theme">
+                      <div className="flex flex-wrap -space-x-px">
+                        {THEMES.map((t, i) => (
+                          <button
+                            key={t.id}
+                            onClick={() => setThemeIndex(i)}
+                            className={cn('seg flex items-center gap-2', themeIndex === i && 'seg-on')}
+                          >
+                            <span
+                              aria-hidden
+                              className="block w-3 h-3"
+                              style={{
+                                background: `linear-gradient(135deg, ${t.lightSquare} 50%, ${t.darkSquare} 50%)`,
+                              }}
+                            />
+                            {t.name}
+                          </button>
+                        ))}
+                      </div>
+                    </Panel>
 
-          <section id="playground" className="mb-16">
-            <div className="mb-8">
-              <h2 className="text-2xl font-bold text-white mb-2">Live Playground</h2>
-              <p className="text-slate-400">Test interactions exactly as users will experience them.</p>
-            </div>
+                    <Panel title="Board">
+                      <Choice
+                        label="Orientation"
+                        options={['white', 'black'] as const}
+                        value={orientation}
+                        onChange={setOrientation}
+                      />
+                      <Toggle label="Animations" checked={showAnimations} onChange={setShowAnimations} />
+                      <Toggle label="Notation" checked={showNotation} onChange={setShowNotation} />
+                      <Toggle label="Margin frame" checked={showMargin} onChange={setShowMargin} />
+                      <button onClick={resetBoard} className="btn btn-block">Reset position</button>
+                    </Panel>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="aspect-square rounded-xl overflow-hidden border border-slate-800 bg-slate-900/50">
-                <ChessiroCanvas
-                  position={fen}
-                  lastMove={lastMove}
-                  turnColor={turnColor}
-                  movableColor={turnColor}
-                  dests={dests}
-                  onMove={handleMove}
-                  interactive
-                  orientation={orientation}
-                  theme={theme}
-                  showAnimations={showAnimations}
-                  showNotation={showNotation}
-                  showMargin={showMargin}
-                />
+                    <Panel title="Position">
+                      <p className="val break-all leading-relaxed">{fen}</p>
+                    </Panel>
+                  </>
+                }
+              />
+            </Section>
+
+            {/* ── Arrows & premoves ── */}
+            <Section
+              id="arrows"
+              index={4}
+              title="Arrows & premoves"
+              lede={
+                <>
+                  Every arrow knob is a first-class prop. Tune the look here, then copy the
+                  configuration straight into your app.
+                </>
+              }
+            >
+              <ArrowPremoveStudio theme={theme} />
+            </Section>
+
+            {/* ── Teaching ── */}
+            <Section
+              id="teaching"
+              index={5}
+              title="Teaching"
+              lede={
+                <>
+                  Coaching gestures without a coach: pick a piece up slowly and set it down,
+                  preview an idea as a ghost, pulse a square to direct attention, shake a piece to
+                  reject a move. All through the imperative <C>ref</C>.
+                </>
+              }
+            >
+              <TeachingStudio theme={theme} />
+            </Section>
+
+            {/* ── Drills ── */}
+            <Section
+              id="drills"
+              index={6}
+              title="Drills"
+              lede={
+                <>
+                  Two lesson patterns built only from public API: a guided move, where
+                  <C>expectedMove</C> rejects everything else, and a placement puzzle driven by
+                  <C>getSquareAtPoint</C> and your own drag tray.
+                </>
+              }
+            >
+              <div className="space-y-16">
+                <GuidedDrill theme={theme} />
+                <hr className="rule" />
+                <ForkTrainer theme={theme} />
               </div>
+            </Section>
 
-              <div className="space-y-4">
-                <div className="p-4 rounded-lg bg-slate-900/50 border border-slate-800">
-                  <h3 className="text-sm font-medium text-slate-400 mb-3">Theme</h3>
-                  <div className="flex gap-2">
-                    {THEMES.map((t, i) => (
-                      <button
-                        key={t.id}
-                        onClick={() => setThemeIndex(i)}
-                        className={cn(
-                          "flex items-center gap-2 px-3 py-2 rounded-lg border transition-all",
-                          themeIndex === i
-                            ? "border-amber-500 bg-amber-500/10"
-                            : "border-slate-700 hover:border-slate-600"
-                        )}
-                      >
-                        <span
-                          className="w-5 h-5 rounded"
-                          style={{ background: `linear-gradient(135deg, ${t.lightSquare} 50%, ${t.darkSquare} 50%)` }}
-                        />
-                        <span className="text-sm">{t.name}</span>
-                      </button>
+            {/* ── Cinematics ── */}
+            <Section
+              id="cinematics"
+              index={7}
+              title="Cinematics"
+              lede={
+                <>
+                  Replay primitives for share-game screens: brilliant moves fly with 3D spins,
+                  the camera zooms and shakes, sparkles and badges land on contact. Free when
+                  unused — no DOM, no listeners, no animation loop while idle.
+                </>
+              }
+            >
+              <CinematicStudio theme={theme} />
+            </Section>
+
+            {/* ── Styling ── */}
+            <Section
+              id="styling"
+              index={8}
+              title="Styling"
+              lede="Every layer the board draws is themable from props. Nothing needs a fork or a stylesheet override."
+            >
+              <div className="space-y-10">
+                <Block title="Pieces">
+                  <p className="body-text measure mb-4">
+                    Default artwork is embedded, so nothing needs hosting. Point <C>pieceSet.path</C> at
+                    your own SVGs, or render each piece yourself with <C>pieces</C>.
+                  </p>
+                  <CodeBlock code={CUSTOM_PIECES_CODE} language="tsx" />
+                </Block>
+                <Block title="Squares, legal hints and premoves">
+                  <CodeBlock code={SQUARE_VISUALS_CODE} language="tsx" />
+                </Block>
+                <Block title="Frame, notation, promotion and overlays">
+                  <CodeBlock code={UI_VISUALS_CODE} language="tsx" />
+                </Block>
+              </div>
+            </Section>
+
+            {/* ── API ── */}
+            <Section
+              id="api"
+              index={9}
+              title="API reference"
+              lede={
+                <>
+                  Every prop is optional. The component forwards a <C>ChessiroCanvasRef</C> for the
+                  imperative surface.
+                </>
+              }
+            >
+              <div className="space-y-12">
+                <div>
+                  <p className="eyebrow mb-4">Props</p>
+                  <div className="space-y-9">
+                    {PROP_GROUPS.map((group) => (
+                      <div key={group.title}>
+                        <h3 className="display-3 mb-3">{group.title}</h3>
+                        <div className="overflow-x-auto">
+                          <table className="table-api table-props">
+                            <thead>
+                              <tr>
+                                <th>Prop</th>
+                                <th>Type</th>
+                                <th>Default</th>
+                                <th>Notes</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {group.rows.map((row) => (
+                                <tr key={row.prop}>
+                                  <td><code className="text-ink font-medium">{row.prop}</code></td>
+                                  <td><code style={{ color: 'var(--color-wood)' }}>{row.type}</code></td>
+                                  <td><code className="text-ink-3">{row.def}</code></td>
+                                  <td>{row.notes}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
                     ))}
                   </div>
                 </div>
 
-                <div className="p-4 rounded-lg bg-slate-900/50 border border-slate-800">
-                  <h3 className="text-sm font-medium text-slate-400 mb-3">Board</h3>
-                  <div className="flex gap-2 mb-4">
-                    <button
-                      onClick={() => setOrientation('white')}
-                      className={cn("px-3 py-1.5 rounded text-sm border", orientation === 'white' ? "border-amber-500 bg-amber-500/10" : "border-slate-700")}
-                    >
-                      White
-                    </button>
-                    <button
-                      onClick={() => setOrientation('black')}
-                      className={cn("px-3 py-1.5 rounded text-sm border", orientation === 'black' ? "border-amber-500 bg-amber-500/10" : "border-slate-700")}
-                    >
-                      Black
-                    </button>
-                    <button
-                      onClick={resetBoard}
-                      className="px-3 py-1.5 rounded text-sm border border-slate-700 hover:bg-slate-800"
-                    >
-                      Reset
-                    </button>
+                <div>
+                  <p className="eyebrow mb-4">Imperative ref</p>
+                  <div className="space-y-9">
+                    {REF_GROUPS.map((group) => (
+                      <div key={group.title}>
+                        <h3 className="display-3 mb-3">{group.title}</h3>
+                        <div className="overflow-x-auto">
+                          <table className="table-api table-ref">
+                            <thead>
+                              <tr>
+                                <th>Method</th>
+                                <th>Signature</th>
+                                <th>Notes</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {group.rows.map((row) => (
+                                <tr key={row.name}>
+                                  <td><code className="text-ink font-medium">{row.name}</code></td>
+                                  <td><code style={{ color: 'var(--color-wood)' }}>{row.sig}</code></td>
+                                  <td>{row.notes}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                  <div className="space-y-3">
-                    <Toggle label="Animations" checked={showAnimations} onChange={setShowAnimations} />
-                    <Toggle label="Notation" checked={showNotation} onChange={setShowNotation} />
-                    <Toggle label="Margin" checked={showMargin} onChange={setShowMargin} />
-                  </div>
-                </div>
-
-                <div className="p-4 rounded-lg bg-slate-900/50 border border-slate-800">
-                  <span className="text-xs text-slate-500">Current FEN</span>
-                  <code className="block mt-1 text-xs text-amber-400 break-all">{fen}</code>
+                  <p className="note measure-wide mt-5">
+                    None of the ref methods commit a position — they are pure visuals. Update
+                    <C>position</C> yourself when the returned promise resolves.
+                  </p>
                 </div>
               </div>
-            </div>
-          </section>
+            </Section>
 
-          <section id="studio" className="mb-16">
-            <div className="mb-8">
-              <h2 className="text-2xl font-bold text-white mb-2">Arrows & Premove Studio</h2>
-              <p className="text-slate-400">
-                Tune the default arrow look, simulate touch-drag behaviour, and try premoves. Every prop shown here is a
-                first-class API — copy the JSON into your own app.
-              </p>
-            </div>
-            <ArrowPremoveStudio theme={theme} />
-          </section>
-
-          <section id="teaching" className="mb-16">
-            <div className="mb-8">
-              <h2 className="text-2xl font-bold text-white mb-2">Teaching Toolkit</h2>
-              <p className="text-slate-400">
-                Coach-style demonstrations without a human coach: slowly pick a piece up and place it on a square,
-                preview ideas with ghost pieces, pulse squares to direct attention, and shake pieces for wrong-move
-                feedback. All available through the imperative ref API.
-              </p>
-            </div>
-            <TeachingStudio theme={theme} />
-          </section>
-
-          <section id="drills" className="mb-16">
-            <div className="mb-8">
-              <h2 className="text-2xl font-bold text-white mb-2">Interactive Drills</h2>
-              <p className="text-slate-400">
-                Two lesson patterns built entirely on the public API: a guided move drill
-                (<code className="text-amber-400">expectedMove</code> auto-rejects and shakes wrong moves) and a
-                piece-placement puzzle (<code className="text-amber-400">getSquareAtPoint</code> +
-                a palette you drag from).
-              </p>
-            </div>
-            <div className="space-y-10">
-              <GuidedDrill theme={theme} />
-              <ForkTrainer theme={theme} />
-            </div>
-          </section>
-
-          <section id="cinematics" className="mb-16">
-            <div className="mb-8">
-              <h2 className="text-2xl font-bold text-white mb-2">Cinematic Studio</h2>
-              <p className="text-slate-400">
-                Replay primitives for "share game" screens: brilliant moves fly with 3D spins and arcs, the camera
-                zooms and shakes, sparkles and badges pop on landing. Scripted with{' '}
-                <code className="text-amber-400">playCinematic</code> — and completely free when unused: no DOM, no
-                listeners, no rAF loops while idle.
-              </p>
-            </div>
-            <CinematicStudio theme={theme} />
-          </section>
-
-          <section id="quick-start" className="mb-16">
-            <div className="mb-8">
-              <h2 className="text-2xl font-bold text-white mb-2">Quick Start</h2>
-              <p className="text-slate-400">Choose your setup path.</p>
-            </div>
-
-            <div className="space-y-8">
-              <div>
-                <div className="flex items-center gap-2 mb-3">
-                  <Code2 className="w-5 h-5 text-slate-400" />
-                  <h3 className="text-lg font-semibold text-white">Board only (UI scaffold)</h3>
-                </div>
-                <CodeBlock code="npm i chessiro-canvas" language="bash" />
-                <CodeBlock code={BOARD_ONLY_CODE} language="tsx" />
-              </div>
-
-              <div>
-                <div className="flex items-center gap-2 mb-3">
-                  <Layers className="w-5 h-5 text-amber-500" />
-                  <h3 className="text-lg font-semibold text-white">Board + chessops (recommended)</h3>
-                </div>
-                <CodeBlock code="npm i chessops chessiro-canvas" language="bash" />
-                <CodeBlock code={CHESSOPS_QUICKSTART_CODE} language="tsx" />
-                <div className="mt-3 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-sm text-slate-300">
-                  For production gameplay, use chessops. It prevents illegal moves and handles castling, en passant, and promotions correctly.
-                </div>
-              </div>
-            </div>
-          </section>
-
-          <section id="customization" className="mb-16">
-            <div className="mb-8">
-              <h2 className="text-2xl font-bold text-white mb-2">Customization</h2>
-              <p className="text-slate-400">Customize board visuals without forking the library.</p>
-            </div>
-
-            <div className="space-y-6">
-              <div>
-                <h3 className="text-sm font-medium text-slate-400 mb-3">Custom piece set</h3>
-                <CodeBlock code={CUSTOM_PIECES_CODE} language="tsx" />
-              </div>
-              <div>
-                <h3 className="text-sm font-medium text-slate-400 mb-3">Legal and premove indicators</h3>
-                <CodeBlock code={SQUARE_VISUALS_CODE} language="tsx" />
-              </div>
-              <div>
-                <h3 className="text-sm font-medium text-slate-400 mb-3">Arrows, notation, promotion, overlays</h3>
-                <CodeBlock code={UI_VISUALS_CODE} language="tsx" />
-              </div>
-            </div>
-          </section>
-
-          <section id="props" className="mb-16">
-            <div className="mb-8">
-              <h2 className="text-2xl font-bold text-white mb-2">Props Reference</h2>
-              <p className="text-slate-400">Complete ChessiroCanvas API.</p>
-            </div>
-
-            <div className="overflow-x-auto rounded-lg border border-slate-800">
-              <table className="w-full text-sm">
-                <thead className="bg-slate-900/50">
-                  <tr>
-                    <th className="text-left p-3 font-medium text-slate-400">Prop</th>
-                    <th className="text-left p-3 font-medium text-slate-400">Type</th>
-                    <th className="text-left p-3 font-medium text-slate-400">Default</th>
-                    <th className="text-left p-3 font-medium text-slate-400">Notes</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800">
-                  {PROPS.map((row) => (
-                    <tr key={row.prop} className="hover:bg-slate-900/30">
-                      <td className="p-3"><code className="text-amber-400">{row.prop}</code></td>
-                      <td className="p-3"><code className="text-slate-300">{row.type}</code></td>
-                      <td className="p-3"><code className="text-slate-500">{row.defaultValue}</code></td>
-                      <td className="p-3 text-slate-400">{row.notes}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
-
-          <section id="integrations" className="mb-16">
-            <div className="mb-8">
-              <h2 className="text-2xl font-bold text-white mb-2">Engine Integrations</h2>
-              <p className="text-slate-400">Use your preferred rules engine. chessops is recommended.</p>
-            </div>
-
-            <div className="space-y-6">
-              <div>
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="px-2 py-0.5 rounded text-xs font-medium bg-amber-500/20 text-amber-500">Recommended</span>
-                  <h3 className="text-lg font-semibold text-white">chessops</h3>
-                </div>
-                <CodeBlock code="npm i chessops chessiro-canvas" language="bash" />
-                <CodeBlock code={CHESSOPS_CODE} language="tsx" />
-              </div>
-
-              <div>
-                <h3 className="text-lg font-semibold text-white mb-3">chess.js</h3>
-                <CodeBlock code="npm i chess.js chessiro-canvas" language="bash" />
-                <CodeBlock code={CHESS_JS_CODE} language="tsx" />
-              </div>
-            </div>
-          </section>
-        </main>
-      </div>
-    </div>
-  );
-}
-
-const STUDIO_FEN = 'r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 2 3';
-
-function createStudioPos() {
-  return Chess.fromSetup(parseFen(STUDIO_FEN).unwrap()).unwrap();
-}
-
-const DEFAULT_PRESET_ARROWS: Arrow[] = [
-  { startSquare: 'f3', endSquare: 'e5', color: DEFAULT_ARROW_BRUSHES.green, brush: 'green' },
-  { startSquare: 'c4', endSquare: 'f7', color: DEFAULT_ARROW_BRUSHES.red, brush: 'red' },
-  { startSquare: 'd1', endSquare: 'h5', color: DEFAULT_ARROW_BRUSHES.blue, brush: 'blue' },
-];
-
-type PremoveMode = 'off' | 'waiting';
-
-function ArrowPremoveStudio({ theme }: { theme: BoardTheme }) {
-  const [pos, setPos] = useState(createStudioPos);
-  const [lastMove, setLastMove] = useState<{ from: string; to: string } | null>(null);
-  const [userArrows, setUserArrows] = useState<Arrow[]>(DEFAULT_PRESET_ARROWS);
-
-  // Arrow visual controls
-  const [lineWidth, setLineWidth] = useState(0.086);
-  const [opacity, setOpacity] = useState(0.85);
-  const [headLength, setHeadLength] = useState(3.2);
-  const [headWidth, setHeadWidth] = useState(3.5);
-  const [margin, setMargin] = useState(0.18);
-  const [startOffset, setStartOffset] = useState(0);
-  const [lineCap, setLineCap] = useState<'round' | 'butt' | 'square'>('round');
-  const [lineJoin, setLineJoin] = useState<'round' | 'miter' | 'bevel'>('miter');
-  const [headShape, setHeadShape] = useState<ArrowHeadShape>('classic');
-  const [headCornerRadius, setHeadCornerRadius] = useState(0);
-  const [dashed, setDashed] = useState(false);
-  const [dashArray, setDashArray] = useState('0.22 0.16');
-  const [dashOffset, setDashOffset] = useState(0);
-  const [outlineWidth, setOutlineWidth] = useState(0);
-  const [outlineColor, setOutlineColor] = useState('rgba(0,0,0,0.45)');
-  const [brushes, setBrushes] = useState<ArrowBrushes>({ ...DEFAULT_ARROW_BRUSHES });
-
-  // Touch-drag controls
-  const [touchDragScale, setTouchDragScale] = useState(1.9);
-  const [touchDragLiftSquares, setTouchDragLiftSquares] = useState(0.6);
-  const [dragScale, setDragScale] = useState(1);
-  const [dragLiftSquares, setDragLiftSquares] = useState(0);
-
-  // Premove controls
-  const [premoveMode, setPremoveMode] = useState<PremoveMode>('off');
-  const [premoveColor, setPremoveColor] = useState('rgba(155, 89, 182, 0.55)');
-  const [premoveRingColor, setPremoveRingColor] = useState('rgba(155, 89, 182, 0.75)');
-  const [premoveCurrentColor, setPremoveCurrentColor] = useState('rgba(155, 89, 182, 0.35)');
-  const [showPremoveDests, setShowPremoveDests] = useState(true);
-  const [currentPremove, setCurrentPremove] = useState<[string, string] | null>(null);
-  const [premoveCurrentStyle, setPremoveCurrentStyle] = useState<'fill' | 'dashed' | 'both'>('fill');
-  const [premoveBorderWidth, setPremoveBorderWidth] = useState(3);
-  const [premoveBorderColor, setPremoveBorderColor] = useState('rgba(155, 89, 182, 0.9)');
-  const [captureRingShape, setCaptureRingShape] = useState<'circle' | 'square'>('square');
-  const [captureRingWidth, setCaptureRingWidth] = useState(3);
-  const [captureRingCornerRadius, setCaptureRingCornerRadius] = useState(14);
-
-  const fen = useMemo(() => makeFen(pos.toSetup()), [pos]);
-  const dests = useMemo(() => chessgroundDests(pos), [pos]);
-  const realTurn: PieceColor = pos.turn === 'white' ? 'w' : 'b';
-  // Premove mode pretends it's the opponent's turn so the user can queue a move.
-  const turnColor: PieceColor = premoveMode === 'waiting' ? (realTurn === 'w' ? 'b' : 'w') : realTurn;
-  const movableColor: PieceColor = realTurn;
-
-  const arrowVisuals = useMemo<Partial<ArrowVisuals>>(
-    () => ({
-      lineWidth,
-      opacity,
-      margin,
-      startOffset,
-      headLength,
-      headWidth,
-      headShape,
-      headCornerRadius,
-      lineCap,
-      lineJoin,
-      dashArray: dashed ? dashArray : undefined,
-      dashOffset: dashed ? dashOffset : undefined,
-      outlineWidth,
-      outlineColor,
-    }),
-    [lineWidth, opacity, margin, startOffset, headLength, headWidth, headShape, headCornerRadius, lineCap, lineJoin, dashed, dashArray, dashOffset, outlineWidth, outlineColor],
-  );
-
-  const squareVisuals = useMemo<Partial<SquareVisuals>>(
-    () => ({
-      premoveDot: premoveColor,
-      premoveCaptureRing: premoveRingColor,
-      premoveCurrent: premoveCurrentColor,
-      premoveCurrentStyle,
-      premoveCurrentBorderWidth: premoveBorderWidth,
-      premoveCurrentBorderColor: premoveBorderColor,
-      legalCaptureRingShape: captureRingShape,
-      legalCaptureRingWidth: captureRingWidth,
-      legalCaptureRingCornerRadius: captureRingCornerRadius,
-    }),
-    [premoveColor, premoveRingColor, premoveCurrentColor, premoveCurrentStyle, premoveBorderWidth, premoveBorderColor, captureRingShape, captureRingWidth, captureRingCornerRadius],
-  );
-
-  const handleMove = useCallback(
-    (from: string, to: string, promotion?: string) => {
-      const move = parseUci(`${from}${to}${promotion ?? ''}`);
-      if (!move || !pos.isLegal(move)) return false;
-      const next = pos.clone();
-      next.play(move);
-      setPos(next);
-      setLastMove({ from, to });
-      return true;
-    },
-    [pos],
-  );
-
-  const resetStudio = useCallback(() => {
-    setPos(createStudioPos());
-    setLastMove(null);
-    setUserArrows(DEFAULT_PRESET_ARROWS);
-    setCurrentPremove(null);
-  }, []);
-
-  const resetArrowDefaults = useCallback(() => {
-    setLineWidth(0.086);
-    setOpacity(0.85);
-    setHeadLength(3.2);
-    setHeadWidth(3.5);
-    setMargin(0.18);
-    setStartOffset(0);
-    setLineCap('round');
-    setLineJoin('miter');
-    setHeadShape('classic');
-    setHeadCornerRadius(0);
-    setDashed(false);
-    setDashArray('0.22 0.16');
-    setDashOffset(0);
-    setOutlineWidth(0);
-    setOutlineColor('rgba(0,0,0,0.45)');
-    setBrushes({ ...DEFAULT_ARROW_BRUSHES });
-  }, []);
-
-  const addPresetArrows = useCallback(() => {
-    setUserArrows(
-      DEFAULT_PRESET_ARROWS.map((a) => ({
-        ...a,
-        color: a.brush ? brushes[a.brush] : a.color,
-      })),
-    );
-  }, [brushes]);
-
-  const snippet = useMemo(() => {
-    const arrowObj: Record<string, unknown> = {
-      lineWidth: round(lineWidth, 3),
-      opacity: round(opacity, 2),
-      margin: round(margin, 2),
-      startOffset: round(startOffset, 2),
-      headLength: round(headLength, 2),
-      headWidth: round(headWidth, 2),
-      headShape,
-      lineCap,
-      lineJoin,
-    };
-    if (headCornerRadius > 0) arrowObj.headCornerRadius = round(headCornerRadius, 2);
-    if (dashed) {
-      arrowObj.dashArray = dashArray;
-      if (dashOffset) arrowObj.dashOffset = round(dashOffset, 2);
-    }
-    if (outlineWidth > 0) {
-      arrowObj.outlineWidth = round(outlineWidth, 3);
-      arrowObj.outlineColor = outlineColor;
-    }
-    return `<ChessiroCanvas
-  position={fen}
-  arrowVisuals={${JSON.stringify(arrowObj, null, 2).replace(/\n/g, '\n  ')}}
-  arrowBrushes={${JSON.stringify(brushes, null, 2).replace(/\n/g, '\n  ')}}
-  dragScale={${dragScale}}
-  touchDragScale={${touchDragScale}}
-  dragLiftSquares={${dragLiftSquares}}
-  touchDragLiftSquares={${touchDragLiftSquares}}
-/>`;
-  }, [lineWidth, opacity, margin, startOffset, headLength, headWidth, headShape, headCornerRadius, lineCap, lineJoin, dashed, dashArray, dashOffset, outlineWidth, outlineColor, brushes, dragScale, touchDragScale, dragLiftSquares, touchDragLiftSquares]);
-
-  return (
-    <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px] gap-6">
-      <div className="space-y-4">
-        <div className="aspect-square rounded-xl overflow-hidden border border-slate-800 bg-slate-900/50">
-          <ChessiroCanvas
-            position={fen}
-            lastMove={lastMove}
-            turnColor={turnColor}
-            movableColor={movableColor}
-            dests={dests}
-            onMove={handleMove}
-            interactive
-            theme={theme}
-            showNotation
-            showMargin
-            arrows={userArrows}
-            onArrowsChange={setUserArrows}
-            arrowVisuals={arrowVisuals}
-            arrowBrushes={brushes}
-            squareVisuals={squareVisuals}
-            dragScale={dragScale}
-            touchDragScale={touchDragScale}
-            dragLiftSquares={dragLiftSquares}
-            touchDragLiftSquares={touchDragLiftSquares}
-            premovable={{
-              enabled: true,
-              showDests: showPremoveDests,
-              current: currentPremove ?? undefined,
-              events: {
-                set: (from, to) => setCurrentPremove([from, to]),
-                unset: () => setCurrentPremove(null),
-              },
-            }}
-          />
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button onClick={resetStudio} className="px-3 py-1.5 rounded text-sm border border-slate-700 hover:bg-slate-800">
-            Reset board
-          </button>
-          <button onClick={addPresetArrows} className="px-3 py-1.5 rounded text-sm border border-slate-700 hover:bg-slate-800">
-            Re-add preset arrows
-          </button>
-          <button onClick={() => setUserArrows([])} className="px-3 py-1.5 rounded text-sm border border-slate-700 hover:bg-slate-800">
-            Clear arrows
-          </button>
-          <button onClick={resetArrowDefaults} className="px-3 py-1.5 rounded text-sm border border-slate-700 hover:bg-slate-800">
-            Reset arrow style
-          </button>
-        </div>
-        <div className="text-xs text-slate-500">
-          Tip: right-click-drag on the board to draw more arrows. Shift/Alt/Ctrl + right-drag picks a different brush.
-        </div>
-      </div>
-
-      <div className="space-y-4">
-        <ControlCard title="Arrow geometry">
-          <Slider label="Line width" value={lineWidth} min={0.02} max={0.25} step={0.005} onChange={setLineWidth} format={(v) => v.toFixed(3)} />
-          <Slider label="Opacity" value={opacity} min={0.1} max={1} step={0.05} onChange={setOpacity} format={(v) => v.toFixed(2)} />
-          <Slider label="Head length" value={headLength} min={1.5} max={6} step={0.1} onChange={setHeadLength} format={(v) => v.toFixed(1)} />
-          <Slider label="Head width" value={headWidth} min={1.5} max={6} step={0.1} onChange={setHeadWidth} format={(v) => v.toFixed(1)} />
-          <Slider label="Tip margin" value={margin} min={0} max={0.5} step={0.01} onChange={setMargin} format={(v) => v.toFixed(2)} />
-          <Slider label="Start offset" value={startOffset} min={0} max={0.5} step={0.01} onChange={setStartOffset} format={(v) => v.toFixed(2)} />
-        </ControlCard>
-
-        <ControlCard title="Head & line style">
-          <Slider
-            label="Head roundness"
-            value={headCornerRadius}
-            min={0}
-            max={1}
-            step={0.02}
-            onChange={setHeadCornerRadius}
-            format={(v) => (v === 0 ? 'triangle' : v === 1 ? 'circle' : v.toFixed(2))}
-          />
-          <p className="text-xs text-slate-500">
-            Morphs the arrowhead from a sharp triangle (0) into a rounded bullet/circle (1). The base edge where the shaft meets stays straight and untouched.
-          </p>
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-slate-300">Head shape</span>
-            <div className="flex gap-1 flex-wrap justify-end">
-              {(['classic', 'open', 'concave', 'diamond'] as const).map((s) => (
-                <button
-                  key={s}
-                  onClick={() => setHeadShape(s)}
-                  className={cn(
-                    'px-2 py-1 rounded text-xs border',
-                    headShape === s ? 'border-amber-500 bg-amber-500/10 text-amber-400' : 'border-slate-700 text-slate-400',
-                  )}
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-slate-300">Line cap</span>
-            <div className="flex gap-1">
-              {(['round', 'butt', 'square'] as const).map((c) => (
-                <button
-                  key={c}
-                  onClick={() => setLineCap(c)}
-                  className={cn(
-                    'px-2 py-1 rounded text-xs border',
-                    lineCap === c ? 'border-amber-500 bg-amber-500/10 text-amber-400' : 'border-slate-700 text-slate-400',
-                  )}
-                >
-                  {c}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-slate-300">Line join</span>
-            <div className="flex gap-1">
-              {(['round', 'miter', 'bevel'] as const).map((j) => (
-                <button
-                  key={j}
-                  onClick={() => setLineJoin(j)}
-                  className={cn(
-                    'px-2 py-1 rounded text-xs border',
-                    lineJoin === j ? 'border-amber-500 bg-amber-500/10 text-amber-400' : 'border-slate-700 text-slate-400',
-                  )}
-                >
-                  {j}
-                </button>
-              ))}
-            </div>
-          </div>
-        </ControlCard>
-
-        <ControlCard title="Dashing">
-          <Toggle label="Dashed shaft" checked={dashed} onChange={setDashed} />
-          <label className="block">
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-sm text-slate-300">Dash pattern</span>
-              <code className="text-xs text-amber-400">{dashArray}</code>
-            </div>
-            <input
-              type="text"
-              value={dashArray}
-              onChange={(e) => setDashArray(e.target.value)}
-              disabled={!dashed}
-              placeholder="0.22 0.16"
-              className="w-full px-2 py-1 rounded bg-slate-950 border border-slate-700 text-xs text-slate-200 font-mono disabled:opacity-40"
-            />
-          </label>
-          <Slider
-            label="Dash offset"
-            value={dashOffset}
-            min={0}
-            max={1}
-            step={0.02}
-            onChange={setDashOffset}
-            format={(v) => v.toFixed(2)}
-          />
-        </ControlCard>
-
-        <ControlCard title="Outline">
-          <Slider label="Outline width" value={outlineWidth} min={0} max={0.06} step={0.002} onChange={setOutlineWidth} format={(v) => v.toFixed(3)} />
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-slate-300">Outline color</span>
-            <input
-              type="color"
-              value={toHex(outlineColor)}
-              onChange={(e) => setOutlineColor(e.target.value)}
-              className="w-8 h-8 rounded border border-slate-700 bg-transparent cursor-pointer"
-            />
-          </div>
-          <p className="text-xs text-slate-500">
-            Wraps shaft and arrowhead with a crisp border for legibility on busy boards. Set to 0 to disable.
-          </p>
-        </ControlCard>
-
-        <ControlCard title="Brushes">
-          {(['green', 'red', 'blue', 'yellow'] as const).map((brush) => (
-            <div key={brush} className="flex items-center justify-between">
-              <span className="text-sm text-slate-300 capitalize">{brush}</span>
-              <div className="flex items-center gap-2">
-                <input
-                  type="color"
-                  value={toHex(brushes[brush])}
-                  onChange={(e) => setBrushes((prev) => ({ ...prev, [brush]: e.target.value }))}
-                  className="w-8 h-8 rounded border border-slate-700 bg-transparent cursor-pointer"
-                />
-                <code className="text-xs text-slate-500 w-20 text-right">{toHex(brushes[brush])}</code>
-              </div>
-            </div>
-          ))}
-        </ControlCard>
-
-        <ControlCard title="Touch-drag lift (mobile)">
-          <Slider label="Touch scale" value={touchDragScale} min={1} max={2.5} step={0.05} onChange={setTouchDragScale} format={(v) => `${v.toFixed(2)}×`} />
-          <Slider label="Touch lift (squares)" value={touchDragLiftSquares} min={0} max={1.5} step={0.05} onChange={setTouchDragLiftSquares} format={(v) => v.toFixed(2)} />
-          <div className="border-t border-slate-800 my-2" />
-          <Slider label="Mouse scale" value={dragScale} min={1} max={2} step={0.05} onChange={setDragScale} format={(v) => `${v.toFixed(2)}×`} />
-          <Slider label="Mouse lift (squares)" value={dragLiftSquares} min={0} max={1} step={0.05} onChange={setDragLiftSquares} format={(v) => v.toFixed(2)} />
-          <p className="text-xs text-slate-500">
-            Touch values only apply when dragging via touch events. Set <code className="text-amber-400">dragScale</code> &gt; 1 to preview on desktop.
-          </p>
-        </ControlCard>
-
-        <ControlCard title="Premove">
-          <div className="flex gap-2">
-            <button
-              onClick={() => setPremoveMode('off')}
-              className={cn('flex-1 px-3 py-1.5 rounded text-sm border', premoveMode === 'off' ? 'border-amber-500 bg-amber-500/10 text-amber-400' : 'border-slate-700 text-slate-400')}
+            {/* ── Engines ── */}
+            <Section
+              id="engines"
+              index={10}
+              title="Engines"
+              lede="Bring your own rules. Both popular options drop in cleanly."
             >
-              Your turn
-            </button>
-            <button
-              onClick={() => setPremoveMode('waiting')}
-              className={cn('flex-1 px-3 py-1.5 rounded text-sm border', premoveMode === 'waiting' ? 'border-amber-500 bg-amber-500/10 text-amber-400' : 'border-slate-700 text-slate-400')}
-            >
-              Opponent thinking
-            </button>
-          </div>
-          <p className="text-xs text-slate-500">
-            Switch to &ldquo;Opponent thinking&rdquo; to queue a premove, then back to &ldquo;Your turn&rdquo; to see it fire.
-          </p>
-          <Toggle label="Show premove destinations" checked={showPremoveDests} onChange={setShowPremoveDests} />
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-slate-300">Dest dot</span>
-            <input
-              type="color"
-              value={toHex(premoveColor)}
-              onChange={(e) => setPremoveColor(e.target.value)}
-              className="w-8 h-8 rounded border border-slate-700 bg-transparent cursor-pointer"
-            />
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-slate-300">Capture ring</span>
-            <input
-              type="color"
-              value={toHex(premoveRingColor)}
-              onChange={(e) => setPremoveRingColor(e.target.value)}
-              className="w-8 h-8 rounded border border-slate-700 bg-transparent cursor-pointer"
-            />
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-slate-300">Queued highlight</span>
-            <input
-              type="color"
-              value={toHex(premoveCurrentColor)}
-              onChange={(e) => setPremoveCurrentColor(e.target.value)}
-              className="w-8 h-8 rounded border border-slate-700 bg-transparent cursor-pointer"
-            />
-          </div>
-          <div className="border-t border-slate-800 my-2" />
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-slate-300">Queued style</span>
-            <div className="flex gap-1">
-              {(['fill', 'dashed', 'both'] as const).map((s) => (
-                <button
-                  key={s}
-                  onClick={() => setPremoveCurrentStyle(s)}
-                  className={cn(
-                    'px-2 py-1 rounded text-xs border',
-                    premoveCurrentStyle === s ? 'border-amber-500 bg-amber-500/10 text-amber-400' : 'border-slate-700 text-slate-400',
-                  )}
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
-          </div>
-          {(premoveCurrentStyle === 'dashed' || premoveCurrentStyle === 'both') && (
-            <>
-              <Slider
-                label="Dash border width"
-                value={premoveBorderWidth}
-                min={1}
-                max={8}
-                step={0.5}
-                onChange={setPremoveBorderWidth}
-                format={(v) => `${v}px`}
-              />
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-slate-300">Dash color</span>
-                <input
-                  type="color"
-                  value={toHex(premoveBorderColor)}
-                  onChange={(e) => setPremoveBorderColor(e.target.value)}
-                  className="w-8 h-8 rounded border border-slate-700 bg-transparent cursor-pointer"
-                />
+              <div className="grid gap-10 lg:grid-cols-2">
+                <Block title="chessops">
+                  <p className="body-text measure mb-4">
+                    Immutable positions and a ready-made <C>dests</C> helper. Recommended.
+                  </p>
+                  <CodeBlock code={CHESSOPS_QUICKSTART_CODE} language="tsx" />
+                </Block>
+                <Block title="chess.js">
+                  <p className="body-text measure mb-4">
+                    Mutates one instance in place, so derive state from <C>fen</C> — never from the
+                    <C>chess</C> object reference, which never changes.
+                  </p>
+                  <CodeBlock code={CHESS_JS_CODE} language="tsx" />
+                </Block>
               </div>
-            </>
-          )}
-          <div className="text-xs text-slate-500">
-            Queued: <code className="text-amber-400">{currentPremove ? `${currentPremove[0]} → ${currentPremove[1]}` : 'none'}</code>
-          </div>
-        </ControlCard>
+            </Section>
 
-        <ControlCard title="Capture ring (kill square)">
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-slate-300">Shape</span>
-            <div className="flex gap-1">
-              {(['square', 'circle'] as const).map((s) => (
-                <button
-                  key={s}
-                  onClick={() => setCaptureRingShape(s)}
-                  className={cn(
-                    'px-2 py-1 rounded text-xs border',
-                    captureRingShape === s ? 'border-amber-500 bg-amber-500/10 text-amber-400' : 'border-slate-700 text-slate-400',
-                  )}
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
-          </div>
-          <Slider
-            label="Ring width"
-            value={captureRingWidth}
-            min={1}
-            max={10}
-            step={0.5}
-            onChange={setCaptureRingWidth}
-            format={(v) => `${v}px`}
-          />
-          {captureRingShape === 'square' && (
-            <Slider
-              label="Corner radius"
-              value={captureRingCornerRadius}
-              min={0}
-              max={50}
-              step={1}
-              onChange={setCaptureRingCornerRadius}
-              format={(v) => `${v}%`}
-            />
-          )}
-          <p className="text-xs text-slate-500">
-            The thin ring painted on squares you can capture on. Also applies to premove captures.
-          </p>
-        </ControlCard>
-      </div>
-
-      <div className="lg:col-span-2">
-        <h3 className="text-sm font-medium text-slate-400 mb-3">Copy-paste the current config</h3>
-        <CodeBlock code={snippet} language="tsx" />
-      </div>
-    </div>
-  );
-}
-
-const TEACHING_CODE = `const boardRef = useRef<ChessiroCanvasRef>(null);
-
-// Coach hand: slowly pick the piece up and place it on the square
-await boardRef.current.animateMove('e2', 'e4', { durationMs: 1000 });
-commitMove('e2', 'e4'); // update position once it resolves
-
-// Preview an idea without touching the position (fading copy)
-await boardRef.current.animateMove('g1', 'f3', { ghost: true });
-
-// Direct the student's attention to a square
-await boardRef.current.pulseSquare('f7', { color: 'rgba(239,68,68,0.9)', times: 2 });
-
-// Wrong-move feedback
-await boardRef.current.shakePiece('d1');
-
-// Persistent placement hints
-<ChessiroCanvas
-  ref={boardRef}
-  position={fen}
-  ghostPieces={[{ square: 'f3', piece: 'wN' }, { square: 'c4', piece: 'wB' }]}
-/>`;
-
-const LESSON_GHOSTS: GhostPiece[] = [
-  { square: 'f3', piece: 'wN' },
-  { square: 'c4', piece: 'wB' },
-  { square: 'd4', piece: 'wP', opacity: 0.35 },
-];
-
-function sleep(ms: number) {
-  return new Promise<void>((resolve) => setTimeout(resolve, ms));
-}
-
-function TeachingStudio({ theme }: { theme: BoardTheme }) {
-  const boardRef = useRef<ChessiroCanvasRef>(null);
-  const [pos, setPos] = useState(createInitialPosition);
-  const [lastMove, setLastMove] = useState<{ from: string; to: string } | null>(null);
-  const [instant, setInstant] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [showGhosts, setShowGhosts] = useState(false);
-  const [boardWidthPct, setBoardWidthPct] = useState(100);
-  const [status, setStatus] = useState<string>('Idle — try the buttons, or drag pieces yourself.');
-
-  const posRef = useRef(pos);
-  posRef.current = pos;
-
-  const fen = useMemo(() => makeFen(pos.toSetup()), [pos]);
-  const dests = useMemo(() => chessgroundDests(pos), [pos]);
-  const turnColor: PieceColor = pos.turn === 'white' ? 'w' : 'b';
-
-  const commitMove = useCallback((from: string, to: string): boolean => {
-    const move = parseUci(`${from}${to}`);
-    const current = posRef.current;
-    if (!move || !current.isLegal(move)) return false;
-    const next = current.clone();
-    next.play(move);
-    setPos(next);
-    setLastMove({ from, to });
-    return true;
-  }, []);
-
-  const handleMove = useCallback(
-    (from: string, to: string, promotion?: string): boolean => {
-      const move = parseUci(`${from}${to}${promotion ?? ''}`);
-      const current = posRef.current;
-      if (!move || !current.isLegal(move)) return false;
-      const next = current.clone();
-      next.play(move);
-      setPos(next);
-      setLastMove({ from, to });
-      return true;
-    },
-    [],
-  );
-
-  // Demonstrate a move like a coach: pulse the target, glide the piece there,
-  // then commit the position with animations suppressed for one tick so the
-  // move does not animate twice.
-  const demonstrate = useCallback(async (from: string, to: string, note?: string) => {
-    if (note) setStatus(note);
-    await boardRef.current?.pulseSquare(to, { times: 1, durationMs: 500 });
-    await boardRef.current?.animateMove(from, to, { durationMs: 950 });
-    setInstant(true);
-    commitMove(from, to);
-    window.setTimeout(() => setInstant(false), 80);
-    await sleep(120);
-  }, [commitMove]);
-
-  const runLesson = useCallback(async () => {
-    if (busy) return;
-    setBusy(true);
-    try {
-      setPos(createInitialPosition());
-      setLastMove(null);
-      await sleep(400);
-      await demonstrate('e2', 'e4', 'Lesson: control the center with 1. e4');
-      await sleep(300);
-      await demonstrate('e7', 'e5', 'Black mirrors with 1... e5');
-      await sleep(300);
-      setStatus('Preview the idea first as a ghost...');
-      await boardRef.current?.animateMove('g1', 'f3', { ghost: true, durationMs: 900 });
-      await sleep(150);
-      await demonstrate('g1', 'f3', '...then play it: 2. Nf3 attacks e5');
-      await sleep(300);
-      await demonstrate('b8', 'c6', 'Black defends with 2... Nc6');
-      await sleep(300);
-      setStatus('f7 is the weakest square in Black\u2019s camp!');
-      await boardRef.current?.pulseSquare('f7', { color: 'rgba(239, 68, 68, 0.9)', times: 2 });
-      await demonstrate('f1', 'c4', '3. Bc4 — the Italian Game, eyeing f7');
-      setStatus('Lesson complete. Your move!');
-    } finally {
-      setBusy(false);
-    }
-  }, [busy, demonstrate]);
-
-  const previewRandomMove = useCallback(async () => {
-    if (busy) return;
-    const entries = Array.from(dests.entries()).filter(([, tos]) => tos.length > 0);
-    if (entries.length === 0) return;
-    const [from, tos] = entries[Math.floor(Math.random() * entries.length)];
-    const to = tos[Math.floor(Math.random() * tos.length)];
-    setBusy(true);
-    setStatus(`Ghost preview: ${from} \u2192 ${to} (position untouched)`);
-    try {
-      await boardRef.current?.animateMove(from, to, { ghost: true, durationMs: 900 });
-    } finally {
-      setBusy(false);
-    }
-  }, [busy, dests]);
-
-  const pulseCenter = useCallback(() => {
-    setStatus('Pulse: look at d4/e4!');
-    boardRef.current?.pulseSquare('d4', { times: 2 });
-    boardRef.current?.pulseSquare('e4', { color: 'rgba(56, 189, 248, 0.95)', times: 2 });
-  }, []);
-
-  const shakeKing = useCallback(() => {
-    const board = posRef.current.board;
-    const kingIdx = board.kingOf(posRef.current.turn);
-    if (kingIdx === undefined) return;
-    const file = 'abcdefgh'[kingIdx % 8];
-    const rank = Math.floor(kingIdx / 8) + 1;
-    setStatus(`Shake: not the king! (${file}${rank})`);
-    boardRef.current?.shakePiece(`${file}${rank}`);
-  }, []);
-
-  const resetLesson = useCallback(() => {
-    boardRef.current?.clearTeachingEffects();
-    setPos(createInitialPosition());
-    setLastMove(null);
-    setStatus('Board reset.');
-  }, []);
-
-  return (
-    <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px] gap-6">
-      <div className="space-y-4">
-        <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-4 flex items-start justify-center">
-          <div style={{ width: `${boardWidthPct}%`, transition: 'width 0.2s ease' }}>
-            <ChessiroCanvas
-              ref={boardRef}
-              position={fen}
-              lastMove={lastMove}
-              turnColor={turnColor}
-              movableColor={turnColor}
-              dests={dests}
-              onMove={handleMove}
-              interactive={!busy}
-              theme={theme}
-              showAnimations={!instant}
-              showNotation
-              showMargin
-              ghostPieces={showGhosts ? LESSON_GHOSTS : undefined}
-            />
-          </div>
-        </div>
-        <div className="p-3 rounded-lg bg-slate-900/50 border border-slate-800 text-sm text-amber-400 min-h-[42px]">
-          {status}
+            {/* ── Colophon ── */}
+            <footer className="mt-24 border-t border-ink pt-6">
+              <div className="flex flex-wrap items-baseline justify-between gap-x-8 gap-y-2">
+                <p className="caption">
+                  chessiro-canvas is MIT licensed. Built for{' '}
+                  <a className="link" href="https://chessiro.com">chessiro.com</a>, free for anyone.
+                </p>
+                <p className="eyebrow flex gap-4">
+                  <a className="link" href={NPM}>npm</a>
+                  <a className="link" href={REPO}>Source</a>
+                  <a className="link" href={`${REPO}/issues`}>Issues</a>
+                </p>
+              </div>
+            </footer>
+          </main>
         </div>
       </div>
-
-      <div className="space-y-4">
-        <ControlCard title="Coach demonstrations">
-          <button
-            onClick={runLesson}
-            disabled={busy}
-            className="w-full px-3 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-900 font-semibold text-sm transition-colors"
-          >
-            {busy ? 'Teaching…' : 'Run scripted lesson (Italian Game)'}
-          </button>
-          <button
-            onClick={previewRandomMove}
-            disabled={busy}
-            className="w-full px-3 py-2 rounded-lg border border-slate-700 hover:bg-slate-800 disabled:opacity-50 text-sm"
-          >
-            Ghost-preview a legal move
-          </button>
-          <p className="text-xs text-slate-500">
-            <code className="text-amber-400">animateMove()</code> slowly lifts the piece, glides it to the square and
-            sets it down. With <code className="text-amber-400">ghost: true</code> a translucent copy fades out and the
-            position is untouched.
-          </p>
-        </ControlCard>
-
-        <ControlCard title="Attention & feedback">
-          <button onClick={pulseCenter} className="w-full px-3 py-2 rounded-lg border border-slate-700 hover:bg-slate-800 text-sm">
-            Pulse the center (pulseSquare)
-          </button>
-          <button onClick={shakeKing} className="w-full px-3 py-2 rounded-lg border border-slate-700 hover:bg-slate-800 text-sm">
-            Shake the king (shakePiece)
-          </button>
-          <Toggle label="Ghost placement hints (ghostPieces)" checked={showGhosts} onChange={setShowGhosts} />
-          <p className="text-xs text-slate-500">
-            Ghost pieces show where pieces belong ("your knight goes to f3") without changing the position.
-          </p>
-        </ControlCard>
-
-        <ControlCard title="Resize robustness">
-          <Slider
-            label="Container width"
-            value={boardWidthPct}
-            min={45}
-            max={100}
-            step={1}
-            onChange={setBoardWidthPct}
-            format={(v) => `${v}%`}
-          />
-          <p className="text-xs text-slate-500">
-            Pieces are positioned with CSS percentages, so they stay glued to their squares through any resize,
-            container reflow or layout shift — even mid-animation.
-          </p>
-        </ControlCard>
-
-        <button onClick={resetLesson} className="w-full px-3 py-2 rounded-lg border border-slate-700 hover:bg-slate-800 text-sm">
-          Reset board & effects
-        </button>
-      </div>
-
-      <div className="lg:col-span-2">
-        <h3 className="text-sm font-medium text-slate-400 mb-3">Teaching API</h3>
-        <CodeBlock code={TEACHING_CODE} language="tsx" />
-      </div>
-    </div>
-  );
-}
-
-// ── Guided move drill: find the mate ────────────────────────────────
-
-const DRILL_FEN = 'r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5Q2/PPPP1PPP/RNB1K1NR w KQkq - 0 1';
-
-function createDrillPos() {
-  return Chess.fromSetup(parseFen(DRILL_FEN).unwrap()).unwrap();
-}
-
-const CONCEPT_ARROWS: Arrow[] = [
-  { startSquare: 'f3', endSquare: 'f7', color: 'rgba(34, 197, 94, 0.9)' },
-  { startSquare: 'c4', endSquare: 'f7', color: 'rgba(34, 197, 94, 0.9)' },
-];
-
-const CONCEPT_LABELS: Record<string, SquareLabel> = {
-  f7: { text: '2 v 1', corner: 'center', background: 'rgba(185, 28, 28, 0.92)' },
-  f3: { text: 'A', corner: 'topRight', background: 'rgba(21, 128, 61, 0.92)' },
-  c4: { text: 'A', corner: 'topRight', background: 'rgba(21, 128, 61, 0.92)' },
-  e8: { text: 'D', corner: 'topLeft', background: 'rgba(30, 64, 175, 0.92)' },
-};
-
-function GuidedDrill({ theme }: { theme: BoardTheme }) {
-  const boardRef = useRef<ChessiroCanvasRef>(null);
-  const [pos, setPos] = useState(createDrillPos);
-  const [lastMove, setLastMove] = useState<{ from: string; to: string } | null>(null);
-  const [solved, setSolved] = useState(false);
-  const [wrongCount, setWrongCount] = useState(0);
-  const [showConcept, setShowConcept] = useState(false);
-  const [status, setStatus] = useState('White to move. There is a mate in one — find it!');
-
-  const posRef = useRef(pos);
-  posRef.current = pos;
-
-  const fen = useMemo(() => makeFen(pos.toSetup()), [pos]);
-  const dests = useMemo(() => chessgroundDests(pos), [pos]);
-  const turnColor: PieceColor = pos.turn === 'white' ? 'w' : 'b';
-
-  const handleMove = useCallback((from: string, to: string, promotion?: string): boolean => {
-    const move = parseUci(`${from}${to}${promotion ?? ''}`);
-    const current = posRef.current;
-    if (!move || !current.isLegal(move)) return false;
-    const next = current.clone();
-    next.play(move);
-    setPos(next);
-    setLastMove({ from, to });
-    setSolved(true);
-    setStatus('Qxf7# — Scholar\u2019s Mate! The queen is protected by the bishop on c4.');
-    boardRef.current?.pulseSquare('f7', { color: 'rgba(34, 197, 94, 0.95)', times: 2 });
-    return true;
-  }, []);
-
-  const handleWrongMove = useCallback((from: string, to: string) => {
-    setWrongCount((c) => c + 1);
-    setStatus(`${from} \u2192 ${to} doesn\u2019t mate. Look for the weakest square around the black king.`);
-  }, []);
-
-  const showHint = useCallback(async () => {
-    setStatus('Hint: watch the ghost piece...');
-    await boardRef.current?.animateMove('f3', 'f7', { ghost: true, durationMs: 1000 });
-    setStatus('Now you play it!');
-  }, []);
-
-  const reset = useCallback(() => {
-    boardRef.current?.clearTeachingEffects();
-    setPos(createDrillPos());
-    setLastMove(null);
-    setSolved(false);
-    setWrongCount(0);
-    setShowConcept(false);
-    setStatus('White to move. There is a mate in one — find it!');
-  }, []);
-
-  return (
-    <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px] gap-6">
-      <div className="space-y-4">
-        <h3 className="text-lg font-semibold text-white">Drill 1 — Guided move: find the mate</h3>
-        <div className="aspect-square rounded-xl overflow-hidden border border-slate-800 bg-slate-900/50">
-          <ChessiroCanvas
-            ref={boardRef}
-            position={fen}
-            lastMove={lastMove}
-            turnColor={turnColor}
-            movableColor={turnColor}
-            dests={dests}
-            onMove={handleMove}
-            expectedMove={solved ? null : { from: 'f3', to: 'f7' }}
-            onWrongMove={handleWrongMove}
-            interactive={!solved}
-            theme={theme}
-            showNotation
-            showMargin
-            arrows={showConcept && !solved ? CONCEPT_ARROWS : undefined}
-            squareLabels={showConcept && !solved ? CONCEPT_LABELS : undefined}
-          />
-        </div>
-        <div className="p-3 rounded-lg bg-slate-900/50 border border-slate-800 text-sm text-amber-400 min-h-[42px]">
-          {status}
-        </div>
-      </div>
-
-      <div className="space-y-4">
-        <ControlCard title="Guided mode">
-          <p className="text-xs text-slate-500">
-            <code className="text-amber-400">expectedMove=&#123;&#123; from: 'f3', to: 'f7' &#125;&#125;</code> — every
-            other move is rejected: the piece snaps back and shakes automatically, and{' '}
-            <code className="text-amber-400">onWrongMove</code> fires so you can coach.
-          </p>
-          <div className="text-sm text-slate-300">
-            Wrong attempts: <code className="text-red-400">{wrongCount}</code>
-          </div>
-          <button onClick={showHint} disabled={solved} className="w-full px-3 py-2 rounded-lg border border-slate-700 hover:bg-slate-800 disabled:opacity-50 text-sm">
-            Ghost hint (animateMove ghost)
-          </button>
-          <Toggle label="Explain the concept (labels + arrows)" checked={showConcept} onChange={setShowConcept} />
-          <p className="text-xs text-slate-500">
-            <code className="text-amber-400">squareLabels</code> teaches the counting rule: f7 is attacked twice
-            (A = queen + bishop) but defended once (D = king), so the capture wins.
-          </p>
-          <button onClick={reset} className="w-full px-3 py-2 rounded-lg border border-slate-700 hover:bg-slate-800 text-sm">
-            Reset drill
-          </button>
-        </ControlCard>
-      </div>
-    </div>
-  );
-}
-
-// ── Placement drill: knight fork trainer ────────────────────────────
-
-const FORK_FEN = 'r3k3/8/8/8/8/8/8/4K3 w - - 0 1';
-const FORK_SOLVED_FEN = 'r3k3/2N5/8/8/8/8/8/4K3 b - - 0 1';
-const FORK_TARGET = 'c7';
-
-function ForkTrainer({ theme }: { theme: BoardTheme }) {
-  const boardRef = useRef<ChessiroCanvasRef>(null);
-  const [placed, setPlaced] = useState(false);
-  const [fails, setFails] = useState(0);
-  const [dragPos, setDragPos] = useState<[number, number] | null>(null);
-  const [status, setStatus] = useState('Drag the knight from the tray onto the square where it forks BOTH black pieces.');
-
-  const knightSrc = useMemo(() => resolvePieceImageSrc('wN'), []);
-
-  const handlePlacement = useCallback((sq: string) => {
-    if (sq === FORK_TARGET) {
-      setPlaced(true);
-      setStatus('Nc7+! One knight, two targets: check on e8 and the rook on a8 falls next move.');
-      boardRef.current?.pulseSquare('e8', { color: 'rgba(34, 197, 94, 0.95)', times: 2 });
-      boardRef.current?.pulseSquare('a8', { color: 'rgba(34, 197, 94, 0.95)', times: 2 });
-    } else {
-      setFails((f) => f + 1);
-      setStatus(`From ${sq} the knight doesn\u2019t hit both the king and the rook. Try again!`);
-      boardRef.current?.pulseSquare(sq, { color: 'rgba(239, 68, 68, 0.9)', times: 1 });
-    }
-  }, []);
-
-  const startPaletteDrag = useCallback((e: React.PointerEvent) => {
-    if (placed) return;
-    e.preventDefault();
-    setDragPos([e.clientX, e.clientY]);
-    const move = (ev: PointerEvent) => setDragPos([ev.clientX, ev.clientY]);
-    const up = (ev: PointerEvent) => {
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', up);
-      window.removeEventListener('pointercancel', up);
-      setDragPos(null);
-      const sq = boardRef.current?.getSquareAtPoint(ev.clientX, ev.clientY);
-      if (!sq) {
-        setStatus('Drop the knight on the board.');
-        return;
-      }
-      handlePlacement(sq);
-    };
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', up);
-    window.addEventListener('pointercancel', up);
-  }, [placed, handlePlacement]);
-
-  const reset = useCallback(() => {
-    boardRef.current?.clearTeachingEffects();
-    setPlaced(false);
-    setFails(0);
-    setStatus('Drag the knight from the tray onto the square where it forks BOTH black pieces.');
-  }, []);
-
-  const ghostHints = useMemo<GhostPiece[] | undefined>(() => {
-    if (placed || fails < 2) return undefined;
-    return [{ square: FORK_TARGET, piece: 'wN', opacity: 0.3 }];
-  }, [placed, fails]);
-
-  return (
-    <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px] gap-6">
-      <div className="space-y-4">
-        <h3 className="text-lg font-semibold text-white">Drill 2 — Placement: fork the king and rook</h3>
-        <div className="aspect-square rounded-xl overflow-hidden border border-slate-800 bg-slate-900/50">
-          <ChessiroCanvas
-            ref={boardRef}
-            position={placed ? FORK_SOLVED_FEN : FORK_FEN}
-            interactive={false}
-            theme={theme}
-            showNotation
-            showMargin
-            ghostPieces={ghostHints}
-            squareLabels={placed ? { e8: { text: '+', corner: 'center', background: 'rgba(21,128,61,0.92)' }, a8: { text: '\u2716', corner: 'center', background: 'rgba(185,28,28,0.92)' } } : undefined}
-          />
-        </div>
-        <div className="p-3 rounded-lg bg-slate-900/50 border border-slate-800 text-sm text-amber-400 min-h-[42px]">
-          {status}
-        </div>
-      </div>
-
-      <div className="space-y-4">
-        <ControlCard title="Piece tray">
-          <div className="flex items-center justify-center p-4 rounded-lg bg-slate-950 border border-dashed border-slate-700 min-h-[96px]">
-            {placed ? (
-              <span className="text-sm text-green-400">Placed! Nc7+ forks e8 and a8.</span>
-            ) : (
-              <img
-                src={knightSrc}
-                alt="White knight — drag me"
-                draggable={false}
-                onPointerDown={startPaletteDrag}
-                className="w-16 h-16 cursor-grab active:cursor-grabbing"
-                style={{ touchAction: 'none' }}
-              />
-            )}
-          </div>
-          <p className="text-xs text-slate-500">
-            Built with <code className="text-amber-400">ref.getSquareAtPoint(x, y)</code> +{' '}
-            <code className="text-amber-400">resolvePieceImageSrc('wN')</code> — track your own drag from any
-            palette and resolve the drop square on release. After two misses a{' '}
-            <code className="text-amber-400">ghostPieces</code> hint appears.
-          </p>
-          <div className="text-sm text-slate-300">
-            Misses: <code className="text-red-400">{fails}</code>
-          </div>
-          <button onClick={reset} className="w-full px-3 py-2 rounded-lg border border-slate-700 hover:bg-slate-800 text-sm">
-            Reset drill
-          </button>
-        </ControlCard>
-      </div>
-
-      {dragPos && (
-        <img
-          src={knightSrc}
-          alt=""
-          draggable={false}
-          style={{
-            position: 'fixed',
-            left: 0,
-            top: 0,
-            width: 64,
-            height: 64,
-            transform: `translate(${dragPos[0] - 32}px, ${dragPos[1] - 32}px)`,
-            pointerEvents: 'none',
-            zIndex: 1000,
-            filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.4))',
-          }}
-        />
-      )}
-    </div>
-  );
-}
-
-// ── Cinematic studio: replay effects for "share game" screens ───────
-
-const CINEMATIC_FEN = 'r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5Q2/PPPP1PPP/RNB1K1NR w KQkq - 0 1';
-
-// Minimal positions that set up each showcase effect.
-const PROMO_FEN = 'k7/4P3/8/8/8/8/8/4K3 w - - 0 1';
-const PROMO_DONE_FEN = 'k3Q3/8/8/8/8/8/8/4K3 b - - 0 1';
-const ENPASSANT_FEN = '4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 1';
-const ENPASSANT_DONE_FEN = '4k3/8/3P4/8/8/8/8/4K3 b - - 0 1';
-const CASTLE_FEN = 'r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1';
-const CASTLE_DONE_FEN = 'r3k2r/8/8/8/8/8/8/R4RK1 b kq - 1 1';
-
-function posFromFen(f: string) {
-  return Chess.fromSetup(parseFen(f).unwrap()).unwrap();
-}
-
-function createCinematicPos() {
-  return posFromFen(CINEMATIC_FEN);
-}
-
-const CINEMATIC_CODE = `const boardRef = useRef<ChessiroCanvasRef>(null);
-
-// Script a brilliant-move replay: zoom in, fly the queen with 3D spins,
-// commit the position, zoom back out. Impact effects (shockwave, flash,
-// victim blast, camera shake, onImpact) fire frame-accurately the instant
-// the piece touches the square — the approach animation's finish IS the hit.
-const playback = boardRef.current.playCinematic([
-  { type: 'camera', action: 'zoomTo', square: 'f7', options: { scale: 1.5 } },
-  {
-    type: 'move', from: 'f3', to: 'f7',
-    options: { style: 'brilliant', badge: '!!', onImpact: () => thud.play() },
-  },
-  { type: 'call', fn: () => commitMove('f3', 'f7') }, // your position update
-  { type: 'banner', options: { text: 'BRILLIANT!!' } },
-  { type: 'celebrate', options: { kind: 'both' } },
-  { type: 'camera', action: 'zoomOut' },
-]);
-await playback.finished;   // or playback.cancel() to stop mid-sequence
-
-// One-off primitives, outside a script:
-await boardRef.current.cinematicMove('g1', 'f3', { style: 'slam' });
-await boardRef.current.cinematicMove('c4', 'f7', { style: 'meteor' }); // trail + blast
-await boardRef.current.squareBurst('e4', { kind: 'both' });
-await boardRef.current.popBadge('f7', { text: '!!' });
-await boardRef.current.popBanner({ text: 'CHECKMATE' });
-await boardRef.current.celebrate();     // confetti + fireworks
-
-// Special-move spectacles:
-await boardRef.current.promotionBeam('e8', { fromPiece: 'wP', piece: 'wQ' }); // pillar of light + morph
-await boardRef.current.implode('d5');   // en passant "black hole"
-await boardRef.current.castleSwap('e1', 'g1', 'h1', 'f1'); // king+rook 3D teleport swap
-await boardRef.current.drawLaser('c4', 'f7', { persist: true }); // animated threat beam
-const spot = boardRef.current.spotlight(['c4', 'f7']); // dim all but these squares
-spot.clear();
-
-await boardRef.current.camera.tilt({ rotateX: 18 });
-const drift = boardRef.current.camera.drift(); // Ken Burns wander
-drift.stop();
-boardRef.current.clearCinematics(); // cancel everything + reset camera
-
-// Styles: brilliant | great | smooth | slam | meteor. Tune per move with
-// trail, flash, victimBlast, impactShake and onImpact (sound/haptics hook).
-// Respects prefers-reduced-motion (degrades to a plain glide);
-// pass { force: true } to override. Use interactive={false} —
-// camera transforms break pointer-to-square math until reset().`;
-
-function CinematicStudio({ theme }: { theme: BoardTheme }) {
-  const boardRef = useRef<ChessiroCanvasRef>(null);
-  const [pos, setPos] = useState(createCinematicPos);
-  const [lastMove, setLastMove] = useState<{ from: string; to: string } | null>(null);
-  const [instant, setInstant] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [status, setStatus] = useState('Idle — pick a cinematic. The board is non-interactive, like a replay screen.');
-  const driftRef = useRef<{ stop: () => void } | null>(null);
-
-  const posRef = useRef(pos);
-  posRef.current = pos;
-
-  const fen = useMemo(() => makeFen(pos.toSetup()), [pos]);
-
-  // Commit a move with piece animations suppressed for one tick so the
-  // position update doesn't animate on top of the cinematic landing.
-  const commitInstant = useCallback((from: string, to: string) => {
-    const move = parseUci(`${from}${to}`);
-    const current = posRef.current;
-    if (!move || !current.isLegal(move)) return;
-    const next = current.clone();
-    next.play(move);
-    setInstant(true);
-    setPos(next);
-    setLastMove({ from, to });
-    window.setTimeout(() => setInstant(false), 80);
-  }, []);
-
-  const resetTo = useCallback((factory: () => ReturnType<typeof createCinematicPos>) => {
-    driftRef.current?.stop();
-    driftRef.current = null;
-    boardRef.current?.clearCinematics();
-    setPos(factory());
-    setLastMove(null);
-  }, []);
-
-  const playBrilliant = useCallback(async () => {
-    if (busy || !boardRef.current) return;
-    setBusy(true);
-    setStatus('Qxf7!! — camera zooms in, the queen flies with 1.5 spins and lands with sparkles.');
-    try {
-      resetTo(createCinematicPos);
-      await sleep(400);
-      const playback = boardRef.current.playCinematic([
-        { type: 'camera', action: 'zoomTo', square: 'f7', options: { scale: 1.5 } },
-        { type: 'move', from: 'f3', to: 'f7', options: { style: 'brilliant', badge: '!!' } },
-        { type: 'call', fn: () => commitInstant('f3', 'f7') },
-        { type: 'wait', ms: 400 },
-        { type: 'camera', action: 'zoomOut' },
-      ]);
-      await playback.finished;
-      setStatus('Scholar\u2019s Mate: the pawn blasts away and the camera shakes the instant the queen drops.');
-    } finally {
-      setBusy(false);
-    }
-  }, [busy, resetTo, commitInstant]);
-
-  const playSlam = useCallback(async () => {
-    if (busy || !boardRef.current) return;
-    setBusy(true);
-    setStatus('Slam: the knight rises toward the viewer, hangs, then slams down with a shockwave.');
-    try {
-      resetTo(createInitialPosition);
-      await sleep(400);
-      const playback = boardRef.current.playCinematic([
-        { type: 'move', from: 'g1', to: 'f3', options: { style: 'slam' } },
-        { type: 'call', fn: () => commitInstant('g1', 'f3') },
-      ]);
-      await playback.finished;
-      setStatus('Nf3, slammed — flash, shockwave and camera shake all fire on the contact frame.');
-    } finally {
-      setBusy(false);
-    }
-  }, [busy, resetTo, commitInstant]);
-
-  const playSmoothReplay = useCallback(async () => {
-    if (busy || !boardRef.current) return;
-    setBusy(true);
-    setStatus('Smooth replay: gentle arcs, no landing effects — for the non-highlight moves.');
-    try {
-      resetTo(createInitialPosition);
-      await sleep(400);
-      const moves: Array<[Square, Square]> = [['e2', 'e4'], ['e7', 'e5'], ['g1', 'f3']];
-      const playback = boardRef.current.playCinematic(
-        moves.flatMap<CinematicStep>(([from, to]) => [
-          { type: 'move', from, to, options: { style: 'smooth' } },
-          { type: 'call', fn: () => commitInstant(from, to) },
-          { type: 'wait', ms: 120 },
-        ]),
-      );
-      await playback.finished;
-      setStatus('Three smooth replay moves, sequenced with playCinematic.');
-    } finally {
-      setBusy(false);
-    }
-  }, [busy, resetTo, commitInstant]);
-
-  const playMeteor = useCallback(async () => {
-    if (busy || !boardRef.current) return;
-    setBusy(true);
-    setStatus('Meteor: fiery arc with ghost trail — the f7 pawn is blasted off the board on contact.');
-    try {
-      resetTo(createCinematicPos);
-      await sleep(400);
-      const playback = boardRef.current.playCinematic([
-        { type: 'camera', action: 'zoomTo', square: 'f7', options: { scale: 1.35 } },
-        { type: 'move', from: 'c4', to: 'f7', options: { style: 'meteor', badge: '!' } },
-        { type: 'call', fn: () => commitInstant('c4', 'f7') },
-        { type: 'wait', ms: 400 },
-        { type: 'camera', action: 'zoomOut' },
-      ]);
-      await playback.finished;
-      setStatus('Bxf7+, meteor style: trail, flash, victim blast and a hard camera shake at touchdown.');
-    } finally {
-      setBusy(false);
-    }
-  }, [busy, resetTo, commitInstant]);
-
-  const playCheckmate = useCallback(async () => {
-    if (busy || !boardRef.current) return;
-    setBusy(true);
-    setStatus('Checkmate finale: banner + confetti rain + fireworks, all board-relative overlays.');
-    try {
-      const playback = boardRef.current.playCinematic([
-        {
-          type: 'parallel',
-          steps: [
-            { type: 'banner', options: { text: 'CHECKMATE' } },
-            { type: 'celebrate', options: { kind: 'both' } },
-          ],
-        },
-      ]);
-      await playback.finished;
-      setStatus('GG. celebrate() and popBanner() also work as one-off calls.');
-    } finally {
-      setBusy(false);
-    }
-  }, [busy]);
-
-  // Commit straight to a known FEN (for special moves — promotion, en
-  // passant, castling — where a plain from/to commit is awkward), with piece
-  // animations suppressed for one tick so nothing animates over the landing.
-  const commitFen = useCallback((f: string, move?: { from: string; to: string }) => {
-    setInstant(true);
-    setPos(posFromFen(f));
-    if (move) setLastMove(move);
-    window.setTimeout(() => setInstant(false), 80);
-  }, []);
-
-  const playPromotion = useCallback(async () => {
-    if (busy || !boardRef.current) return;
-    setBusy(true);
-    setStatus('Promotion Evolution: the pawn advances, then a pillar of light morphs it into a queen.');
-    try {
-      resetTo(() => posFromFen(PROMO_FEN));
-      await sleep(400);
-      const playback = boardRef.current.playCinematic([
-        { type: 'camera', action: 'zoomTo', square: 'e8', options: { scale: 1.6 } },
-        { type: 'move', from: 'e7', to: 'e8', options: { style: 'smooth' } },
-        { type: 'call', fn: () => commitFen(PROMO_DONE_FEN, { from: 'e7', to: 'e8' }) },
-        { type: 'promotionBeam', square: 'e8', options: { fromPiece: 'wP', piece: 'wQ' } },
-        { type: 'badge', square: 'e8', options: { text: '=Q' } },
-        { type: 'wait', ms: 300 },
-        { type: 'camera', action: 'zoomOut' },
-      ]);
-      await playback.finished;
-      setStatus('e8=Q — promotionBeam() shoots a pillar of light and spins the new queen into being.');
-    } finally {
-      setBusy(false);
-    }
-  }, [busy, resetTo, commitFen]);
-
-  const playEnPassant = useCallback(async () => {
-    if (busy || !boardRef.current) return;
-    setBusy(true);
-    setStatus('En passant Implosion: the captured pawn is sucked into a black hole as the pawn slides past.');
-    try {
-      resetTo(() => posFromFen(ENPASSANT_FEN));
-      await sleep(400);
-      const playback = boardRef.current.playCinematic([
-        { type: 'camera', action: 'zoomTo', square: 'd6', options: { scale: 1.7 } },
-        {
-          type: 'parallel',
-          steps: [
-            { type: 'move', from: 'e5', to: 'd6', options: { style: 'great' } },
-            { type: 'implode', square: 'd5' },
-          ],
-        },
-        { type: 'call', fn: () => commitFen(ENPASSANT_DONE_FEN, { from: 'e5', to: 'd6' }) },
-        { type: 'wait', ms: 300 },
-        { type: 'camera', action: 'zoomOut' },
-      ]);
-      await playback.finished;
-      setStatus('exd6 e.p. — implode() collapses the d5 pawn into a swirling vortex on contact.');
-    } finally {
-      setBusy(false);
-    }
-  }, [busy, resetTo, commitFen]);
-
-  const playCastle = useCallback(async () => {
-    if (busy || !boardRef.current) return;
-    setBusy(true);
-    setStatus('Castling Teleport: king and rook lift, spin in 3D and swap places at once.');
-    try {
-      resetTo(() => posFromFen(CASTLE_FEN));
-      await sleep(400);
-      const playback = boardRef.current.playCinematic([
-        { type: 'castleSwap', kingFrom: 'e1', kingTo: 'g1', rookFrom: 'h1', rookTo: 'f1' },
-        { type: 'call', fn: () => commitFen(CASTLE_DONE_FEN, { from: 'e1', to: 'g1' }) },
-        { type: 'burst', square: 'g1', options: { kind: 'sparkles', color: '#8fd0ff' } },
-      ]);
-      await playback.finished;
-      setStatus('O-O — castleSwap() flies both pieces simultaneously (the rook arcs lower so they never collide).');
-    } finally {
-      setBusy(false);
-    }
-  }, [busy, resetTo, commitFen]);
-
-  const playThreatVision = useCallback(async () => {
-    if (busy || !boardRef.current) return;
-    setBusy(true);
-    setStatus('Threat vision: spotlight the mating net, then a laser traces the bishop\u2019s path to f7.');
-    try {
-      resetTo(createCinematicPos);
-      await sleep(400);
-      const b = boardRef.current;
-      const spot = b.spotlight(['c4', 'f3', 'f7'], { radius: 0.85 });
-      await b.drawLaser('c4', 'f7', { persist: true, durationMs: 550 });
-      await b.drawLaser('f3', 'f7', { color: '#ffd65a', persist: true, durationMs: 550 });
-      await b.popBadge('f7', { text: '#', background: '#ff3b3b' });
-      await sleep(900);
-      await spot.clear();
-      b.clearCinematics();
-      setStatus('spotlight() dims all but the key squares; drawLaser() animates a glowing threat arrow.');
-    } finally {
-      setBusy(false);
-    }
-  }, [busy, resetTo]);
-
-  const playSparkles = useCallback(() => {
-    setStatus('squareBurst: sparkles + shockwave on e4.');
-    boardRef.current?.squareBurst('e4', { kind: 'both' });
-  }, []);
-
-  const playBadge = useCallback(() => {
-    setStatus('popBadge: chess.com-style \u201C!!\u201D annotation on f7.');
-    boardRef.current?.popBadge('f7', { text: '!!' });
-  }, []);
-
-  const playTiltDrift = useCallback(async () => {
-    if (!boardRef.current) return;
-    setStatus('camera.tilt + camera.drift: 3D tilt, then a slow Ken Burns wander until reset.');
-    driftRef.current?.stop();
-    await boardRef.current.camera.tilt({ rotateX: 18 });
-    driftRef.current = boardRef.current.camera.drift();
-  }, []);
-
-  const resetAll = useCallback(() => {
-    resetTo(createCinematicPos);
-    setStatus('Reset: cinematics cancelled, camera restored, position back to the start.');
-  }, [resetTo]);
-
-  return (
-    <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px] gap-6">
-      <div className="space-y-4">
-        <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-6 flex items-start justify-center overflow-hidden">
-          <div style={{ width: '92%' }}>
-            <ChessiroCanvas
-              ref={boardRef}
-              position={fen}
-              lastMove={lastMove}
-              interactive={false}
-              theme={theme}
-              showAnimations={!instant}
-              showNotation
-              showMargin
-            />
-          </div>
-        </div>
-        <div className="p-3 rounded-lg bg-slate-900/50 border border-slate-800 text-sm text-amber-400 min-h-[42px]">
-          {status}
-        </div>
-      </div>
-
-      <div className="space-y-4">
-        <ControlCard title="Scripted sequences (playCinematic)">
-          <button
-            onClick={playBrilliant}
-            disabled={busy}
-            className="w-full px-3 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-900 font-semibold text-sm transition-colors"
-          >
-            {busy ? 'Playing…' : 'Brilliant move (Qxf7!!)'}
-          </button>
-          <button
-            onClick={playSlam}
-            disabled={busy}
-            className="w-full px-3 py-2 rounded-lg border border-slate-700 hover:bg-slate-800 disabled:opacity-50 text-sm"
-          >
-            Slam (Nf3)
-          </button>
-          <button
-            onClick={playMeteor}
-            disabled={busy}
-            className="w-full px-3 py-2 rounded-lg border border-slate-700 hover:bg-slate-800 disabled:opacity-50 text-sm"
-          >
-            Meteor smash (Bxf7+)
-          </button>
-          <button
-            onClick={playSmoothReplay}
-            disabled={busy}
-            className="w-full px-3 py-2 rounded-lg border border-slate-700 hover:bg-slate-800 disabled:opacity-50 text-sm"
-          >
-            Smooth replay (3 quick moves)
-          </button>
-          <button
-            onClick={playCheckmate}
-            disabled={busy}
-            className="w-full px-3 py-2 rounded-lg border border-slate-700 hover:bg-slate-800 disabled:opacity-50 text-sm"
-          >
-            Checkmate finale (banner + confetti)
-          </button>
-          <p className="text-xs text-slate-500">
-            Scripts are arrays of steps: <code className="text-amber-400">move</code>,{' '}
-            <code className="text-amber-400">camera</code>, <code className="text-amber-400">burst</code>,{' '}
-            <code className="text-amber-400">badge</code>, <code className="text-amber-400">banner</code>,{' '}
-            <code className="text-amber-400">celebrate</code>, <code className="text-amber-400">wait</code>,{' '}
-            <code className="text-amber-400">parallel</code> and <code className="text-amber-400">call</code>{' '}
-            (commit your position after a move lands). Impact effects fire the exact frame the piece drops.
-          </p>
-        </ControlCard>
-
-        <ControlCard title="Special-move effects">
-          <button
-            onClick={playPromotion}
-            disabled={busy}
-            className="w-full px-3 py-2 rounded-lg border border-slate-700 hover:bg-slate-800 disabled:opacity-50 text-sm"
-          >
-            Promotion Evolution (e8=Q)
-          </button>
-          <button
-            onClick={playEnPassant}
-            disabled={busy}
-            className="w-full px-3 py-2 rounded-lg border border-slate-700 hover:bg-slate-800 disabled:opacity-50 text-sm"
-          >
-            En passant Implosion (exd6)
-          </button>
-          <button
-            onClick={playCastle}
-            disabled={busy}
-            className="w-full px-3 py-2 rounded-lg border border-slate-700 hover:bg-slate-800 disabled:opacity-50 text-sm"
-          >
-            Castling Teleport (O-O)
-          </button>
-          <button
-            onClick={playThreatVision}
-            disabled={busy}
-            className="w-full px-3 py-2 rounded-lg border border-slate-700 hover:bg-slate-800 disabled:opacity-50 text-sm"
-          >
-            Threat vision (spotlight + laser)
-          </button>
-          <p className="text-xs text-slate-500">
-            <code className="text-amber-400">promotionBeam</code>, <code className="text-amber-400">implode</code>,{' '}
-            <code className="text-amber-400">castleSwap</code>, <code className="text-amber-400">spotlight</code> and{' '}
-            <code className="text-amber-400">drawLaser</code> — all board-relative WAAPI overlays, usable as{' '}
-            <code className="text-amber-400">playCinematic</code> steps or one-off calls.
-          </p>
-        </ControlCard>
-
-        <ControlCard title="Primitives">
-          <button onClick={playSparkles} className="w-full px-3 py-2 rounded-lg border border-slate-700 hover:bg-slate-800 text-sm">
-            Sparkles (squareBurst)
-          </button>
-          <button onClick={playBadge} className="w-full px-3 py-2 rounded-lg border border-slate-700 hover:bg-slate-800 text-sm">
-            Badge (popBadge)
-          </button>
-          <button onClick={playTiltDrift} className="w-full px-3 py-2 rounded-lg border border-slate-700 hover:bg-slate-800 text-sm">
-            Tilt + drift (camera)
-          </button>
-          <p className="text-xs text-slate-500">
-            All effects run on the GPU compositor via WAAPI (transform/opacity/filter only) — zero React state
-            updates per frame. <code className="text-amber-400">prefers-reduced-motion</code> degrades flights to a
-            plain glide.
-          </p>
-        </ControlCard>
-
-        <button onClick={resetAll} className="w-full px-3 py-2 rounded-lg border border-slate-700 hover:bg-slate-800 text-sm">
-          Reset / Cancel (clearCinematics)
-        </button>
-      </div>
-
-      <div className="lg:col-span-2">
-        <h3 className="text-sm font-medium text-slate-400 mb-3">Cinematic API</h3>
-        <CodeBlock code={CINEMATIC_CODE} language="tsx" />
-      </div>
-    </div>
-  );
-}
-
-function ControlCard({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <div className="p-4 rounded-lg bg-slate-900/50 border border-slate-800 space-y-3">
-      <h3 className="text-sm font-medium text-slate-400">{title}</h3>
-      {children}
-    </div>
-  );
-}
-
-function Slider({
-  label,
-  value,
-  min,
-  max,
-  step,
-  onChange,
-  format,
-}: {
-  label: string;
-  value: number;
-  min: number;
-  max: number;
-  step: number;
-  onChange: (v: number) => void;
-  format?: (v: number) => string;
-}) {
-  return (
-    <label className="block">
-      <div className="flex items-center justify-between mb-1">
-        <span className="text-sm text-slate-300">{label}</span>
-        <code className="text-xs text-amber-400">{format ? format(value) : value}</code>
-      </div>
-      <input
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        onChange={(e) => onChange(parseFloat(e.target.value))}
-        className="w-full accent-amber-500"
-      />
-    </label>
-  );
-}
-
-function round(v: number, digits: number) {
-  const f = Math.pow(10, digits);
-  return Math.round(v * f) / f;
-}
-
-function toHex(color: string): string {
-  // Accept either hex or rgba()/rgb(); return a 7-char hex for <input type="color">.
-  if (color.startsWith('#')) {
-    if (color.length === 7) return color;
-    if (color.length === 4) {
-      return '#' + color.slice(1).split('').map((c) => c + c).join('');
-    }
-  }
-  const m = color.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
-  if (m) {
-    const [r, g, b] = [parseInt(m[1]), parseInt(m[2]), parseInt(m[3])];
-    return '#' + [r, g, b].map((n) => n.toString(16).padStart(2, '0')).join('');
-  }
-  return '#000000';
-}
-
-function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
-  return (
-    <label className="flex items-center justify-between cursor-pointer">
-      <span className="text-sm text-slate-300">{label}</span>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={checked}
-        onClick={() => onChange(!checked)}
-        className={cn(
-          "relative w-10 h-5 rounded-full transition-colors",
-          checked ? "bg-amber-500" : "bg-slate-700"
-        )}
-      >
-        <span
-          className={cn(
-            "absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform",
-            checked && "translate-x-5"
-          )}
-        />
-      </button>
-    </label>
-  );
-}
-
-function CodeBlock({ code, language }: { code: string; language: string }) {
-  const [copied, setCopied] = useState(false);
-
-  const copy = useCallback(async () => {
-    await navigator.clipboard.writeText(code);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }, [code]);
-
-  return (
-    <div className="rounded-lg border border-slate-800 overflow-hidden mb-3">
-      <div className="flex items-center justify-between px-4 py-2 bg-slate-900/50 border-b border-slate-800">
-        <span className="text-xs text-slate-500 uppercase">{language}</span>
-        <button
-          onClick={copy}
-          className="text-xs text-slate-400 hover:text-white transition-colors flex items-center gap-1"
-        >
-          {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-          {copied ? 'Copied' : 'Copy'}
-        </button>
-      </div>
-      <pre className="p-4 bg-slate-950 overflow-x-auto">
-        <code className="text-xs text-slate-300 font-mono">{code}</code>
-      </pre>
     </div>
   );
 }

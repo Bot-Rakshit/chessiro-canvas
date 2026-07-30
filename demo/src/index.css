@@ -1,35 +1,447 @@
 @import "tailwindcss";
 
-@layer base {
-  :root {
-    --background: 222 47% 11%;
-    --foreground: 210 40% 98%;
-    --card: 222 47% 14%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222 47% 14%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 38 92% 50%;
-    --primary-foreground: 222 47% 11%;
-    --secondary: 217 33% 17%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217 33% 17%;
-    --muted-foreground: 215 20% 65%;
-    --accent: 38 92% 50%;
-    --accent-foreground: 222 47% 11%;
-    --destructive: 0 63% 31%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217 33% 25%;
-    --input: 217 33% 25%;
-    --ring: 38 92% 50%;
-    --radius: 0.5rem;
-  }
+/* ─────────────────────────────────────────────────────────────────────
+   chessiro-canvas documentation — "tournament bulletin"
+   A print-editorial system: warm paper, ink, and the board's own wood
+   tones as the only accents. Rules and margins carry the structure;
+   there are deliberately almost no boxes.
+   ───────────────────────────────────────────────────────────────────── */
+
+@theme {
+  --font-display: "Instrument Serif", ui-serif, Georgia, serif;
+  --font-sans: "Instrument Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  /* Paper: warm, low-chroma, never pure white */
+  --color-paper: oklch(97.4% 0.009 80);
+  --color-paper-2: oklch(95.1% 0.013 80);
+  --color-paper-3: oklch(92.2% 0.016 78);
+
+  /* Ink: warm near-black, never pure black */
+  --color-ink: oklch(25% 0.018 55);
+  --color-ink-2: oklch(43% 0.018 55);
+  --color-ink-3: oklch(58% 0.016 58);
+
+  --color-rule: oklch(87.5% 0.014 74);
+  --color-rule-2: oklch(80% 0.018 72);
+
+  /* Accents lifted from the default board theme */
+  --color-wood: oklch(46% 0.052 52);
+  --color-wood-2: oklch(60% 0.048 55);
+  --color-wood-lt: oklch(85% 0.045 78);
+  --color-gold: oklch(72% 0.115 68);
+
+  /* Semantic */
+  --color-sage: oklch(48% 0.075 148);
+  --color-rust: oklch(50% 0.145 33);
+
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
 }
 
 @layer base {
-  * {
-    @apply border-slate-700;
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
+    scroll-padding-top: 2rem;
   }
+
   body {
-    @apply bg-slate-950 text-slate-100 font-sans antialiased;
+    background-color: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* The paper gets a faint tooth so it reads as stock, not as a div. */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    opacity: 0.35;
+    background-image: radial-gradient(
+      oklch(46% 0.052 52 / 0.055) 0.5px,
+      transparent 0.5px
+    );
+    background-size: 4px 4px;
+  }
+
+  ::selection { background: oklch(72% 0.115 68 / 0.35); }
+
+  :focus-visible {
+    outline: 2px solid var(--color-wood);
+    outline-offset: 2px;
+  }
+
+  h1, h2, h3, h4 {
+    font-family: var(--font-display);
+    font-weight: 400;
+    letter-spacing: -0.015em;
+    text-wrap: balance;
+  }
+
+  code, pre, kbd {
+    font-family: var(--font-mono);
+    font-feature-settings: "zero";
+  }
+}
+
+@layer components {
+  /* ── Structure ─────────────────────────────────────────────────── */
+
+  .measure { max-width: 66ch; }
+  .measure-wide { max-width: 78ch; }
+
+  .rule { border: 0; border-top: 1px solid var(--color-rule); margin: 0; }
+
+  /* Section number, set as a book folio. */
+  .folio {
+    font-family: var(--font-display);
+    font-size: clamp(2.5rem, 5vw, 3.75rem);
+    line-height: 0.8;
+    color: var(--color-rule-2);
+    font-variant-numeric: lining-nums tabular-nums;
+    user-select: none;
+  }
+
+  /* Small letterspaced label — the bulletin's running head. */
+  .eyebrow {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--color-ink-3);
+  }
+
+  .display-1 { font-size: clamp(2.75rem, 6.5vw, 5rem); line-height: 0.94; }
+  .display-2 { font-size: clamp(2rem, 3.6vw, 2.9rem); line-height: 1.02; }
+  .display-3 { font-size: clamp(1.375rem, 2vw, 1.6rem); line-height: 1.15; }
+
+  .lede {
+    font-family: var(--font-display);
+    font-size: clamp(1.125rem, 1.5vw, 1.375rem);
+    line-height: 1.5;
+    color: var(--color-ink-2);
+  }
+
+  .body-text { font-size: 0.9375rem; line-height: 1.65; color: var(--color-ink-2); }
+
+  /* Figure caption, italic serif like a plate in a chess book. */
+  .caption {
+    font-family: var(--font-display);
+    font-style: italic;
+    font-size: 0.875rem;
+    line-height: 1.45;
+    color: var(--color-ink-3);
+  }
+
+  /* ── Board plate ───────────────────────────────────────────────── */
+
+  /* Boards are presented as plates: hairline frame, paper mount, and a
+     printed-in highlight rather than a floating drop shadow. */
+  .plate {
+    background: var(--color-paper-2);
+    border: 1px solid var(--color-rule);
+    padding: clamp(0.75rem, 2vw, 1.25rem);
+    box-shadow: inset 0 0 0 1px oklch(100% 0 0 / 0.5);
+    /* Cinematic camera zoom scales the board past its frame; without this it
+       spills across the page and over the nav rail. */
+    overflow: hidden;
+  }
+
+  /* ── Panels (control columns) ──────────────────────────────────── */
+
+  .panel { border-top: 1px solid var(--color-rule); padding-top: 0.875rem; }
+
+  .panel-title {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--color-ink);
+    margin-bottom: 0.75rem;
+  }
+
+  .note { font-size: 0.8125rem; line-height: 1.55; color: var(--color-ink-3); }
+
+  /* Status readout under a demo: italic serif, so it reads as commentary. */
+  .status {
+    font-family: var(--font-display);
+    font-style: italic;
+    font-size: 0.9375rem;
+    line-height: 1.45;
+    color: var(--color-wood);
+    border-left: 2px solid var(--color-gold);
+    padding: 0.375rem 0 0.375rem 0.75rem;
+    min-height: 2.5rem;
+  }
+
+  /* ── Controls ──────────────────────────────────────────────────── */
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    font-family: var(--font-sans);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    padding: 0.5rem 0.875rem;
+    border: 1px solid var(--color-rule-2);
+    background: transparent;
+    color: var(--color-ink);
+    cursor: pointer;
+    text-align: center;
+    transition: background-color 0.15s var(--ease-out-quart),
+                border-color 0.15s var(--ease-out-quart),
+                color 0.15s var(--ease-out-quart);
+  }
+  .btn:hover:not(:disabled) { background: var(--color-paper-3); border-color: var(--color-wood-2); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-block { width: 100%; }
+
+  .btn-primary {
+    background: var(--color-ink);
+    border-color: var(--color-ink);
+    color: var(--color-paper);
+  }
+  .btn-primary:hover:not(:disabled) {
+    background: var(--color-wood);
+    border-color: var(--color-wood);
+    color: var(--color-paper);
+  }
+
+  /* Segmented choice — options sit shoulder to shoulder, no radius. */
+  .seg {
+    font-size: 0.75rem;
+    font-weight: 500;
+    padding: 0.3125rem 0.5625rem;
+    border: 1px solid var(--color-rule-2);
+    background: transparent;
+    color: var(--color-ink-3);
+    cursor: pointer;
+    transition: all 0.15s var(--ease-out-quart);
+  }
+  .seg:hover { color: var(--color-ink); border-color: var(--color-wood-2); }
+  .seg-on { background: var(--color-ink); border-color: var(--color-ink); color: var(--color-paper); }
+  .seg-on:hover { color: var(--color-paper); border-color: var(--color-ink); }
+
+  .field {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    font-size: 0.8125rem;
+    color: var(--color-ink);
+    min-height: 1.75rem;
+  }
+
+  .val {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    color: var(--color-wood);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .swatch {
+    inline-size: 1.75rem;
+    block-size: 1.5rem;
+    padding: 0;
+    border: 1px solid var(--color-rule-2);
+    background: transparent;
+    cursor: pointer;
+  }
+  .swatch::-webkit-color-swatch-wrapper { padding: 2px; }
+  .swatch::-webkit-color-swatch { border: none; }
+
+  .text-input {
+    inline-size: 100%;
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    padding: 0.3125rem 0.5rem;
+    border: 1px solid var(--color-rule-2);
+    background: var(--color-paper);
+    color: var(--color-ink);
+  }
+  .text-input:disabled { opacity: 0.4; }
+
+  /* Range: a thin wood rail with a gold pin. */
+  .range {
+    inline-size: 100%;
+    block-size: 1rem;
+    appearance: none;
+    background: transparent;
+    cursor: pointer;
+  }
+  .range::-webkit-slider-runnable-track { block-size: 1px; background: var(--color-rule-2); }
+  .range::-webkit-slider-thumb {
+    appearance: none;
+    inline-size: 0.625rem;
+    block-size: 0.625rem;
+    margin-top: -0.3125rem;
+    border-radius: 50%;
+    background: var(--color-gold);
+    border: 1px solid var(--color-wood);
+  }
+  .range::-moz-range-track { block-size: 1px; background: var(--color-rule-2); }
+  .range::-moz-range-thumb {
+    inline-size: 0.625rem;
+    block-size: 0.625rem;
+    border-radius: 50%;
+    background: var(--color-gold);
+    border: 1px solid var(--color-wood);
+  }
+
+  /* Switch — a printed toggle, not a glowing pill. Off reads as an empty
+     well; on fills with gold and drives the knob to the right. */
+  .switch {
+    position: relative;
+    inline-size: 2.25rem;
+    block-size: 1.125rem;
+    flex: none;
+    border: 1px solid var(--color-rule-2);
+    background: var(--color-paper-3);
+    cursor: pointer;
+    transition: background-color 0.18s var(--ease-out-quart),
+                border-color 0.18s var(--ease-out-quart);
+  }
+  .switch-on { background: var(--color-gold); border-color: var(--color-wood); }
+  .switch-knob {
+    position: absolute;
+    inset-block-start: 1px;
+    inset-inline-start: 1px;
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+    background: var(--color-rule-2);
+    transition: transform 0.18s var(--ease-out-quart),
+                background-color 0.18s var(--ease-out-quart);
+  }
+  .switch-on .switch-knob { background: var(--color-ink); transform: translateX(1.125rem); }
+
+  /* ── Code ──────────────────────────────────────────────────────── */
+
+  /* min-inline-size:0 lets the shell shrink below the code's intrinsic
+     width so .code-body scrolls instead of widening the page. */
+  .code-shell { border: 1px solid var(--color-rule); background: var(--color-paper-2); min-inline-size: 0; }
+  .code-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.375rem 0.75rem;
+    border-bottom: 1px solid var(--color-rule);
+  }
+  .code-lang {
+    font-family: var(--font-mono);
+    font-size: 0.625rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--color-ink-3);
+  }
+  .code-body {
+    margin: 0;
+    padding: 0.875rem 1rem;
+    overflow-x: auto;
+    font-size: 0.75rem;
+    line-height: 1.7;
+    color: var(--color-ink);
+    tab-size: 2;
+  }
+
+  /* Inline code inside prose — tinted, not boxed. */
+  .ic {
+    font-family: var(--font-mono);
+    font-size: 0.85em;
+    color: var(--color-wood);
+    background: oklch(46% 0.052 52 / 0.07);
+    padding: 0.05em 0.3em;
+  }
+
+  .link {
+    color: var(--color-wood);
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.15em;
+    transition: color 0.15s var(--ease-out-quart);
+  }
+  .link:hover { color: var(--color-ink); }
+
+  /* ── Navigation ────────────────────────────────────────────────── */
+
+  .nav-item {
+    display: flex;
+    align-items: baseline;
+    gap: 0.625rem;
+    padding: 0.3125rem 0;
+    font-size: 0.8125rem;
+    color: var(--color-ink-3);
+    transition: color 0.15s var(--ease-out-quart);
+  }
+  .nav-item:hover { color: var(--color-ink); }
+  .nav-num {
+    font-family: var(--font-mono);
+    font-size: 0.625rem;
+    color: var(--color-rule-2);
+    font-variant-numeric: tabular-nums;
+  }
+  .nav-on { color: var(--color-ink); font-weight: 500; }
+  .nav-on .nav-num { color: var(--color-gold); }
+
+  /* ── Data table ────────────────────────────────────────────────── */
+
+  /* Fixed layout so column edges line up across every group's table —
+     auto layout sizes each table independently and the rhythm breaks. */
+  .table-api {
+    inline-size: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    font-size: 0.8125rem;
+  }
+  .table-api code { overflow-wrap: anywhere; }
+
+  .table-props th:nth-child(1), .table-props td:nth-child(1) { inline-size: 21%; }
+  .table-props th:nth-child(2), .table-props td:nth-child(2) { inline-size: 27%; }
+  .table-props th:nth-child(3), .table-props td:nth-child(3) { inline-size: 11%; }
+
+  .table-ref th:nth-child(1), .table-ref td:nth-child(1) { inline-size: 21%; }
+  .table-ref th:nth-child(2), .table-ref td:nth-child(2) { inline-size: 32%; }
+  .table-api th {
+    text-align: start;
+    font-size: 0.625rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--color-ink-3);
+    padding: 0.5rem 0.75rem 0.5rem 0;
+    border-bottom: 1px solid var(--color-ink);
+  }
+  .table-api td {
+    padding: 0.5625rem 0.75rem 0.5625rem 0;
+    border-bottom: 1px solid var(--color-rule);
+    vertical-align: baseline;
+    color: var(--color-ink-2);
+  }
+  .table-api tbody tr:hover td { background: oklch(46% 0.052 52 / 0.035); }
+}
+
+@layer utilities {
+  /* One orchestrated page-load reveal, staggered by --i. */
+  .reveal {
+    animation: reveal 0.7s var(--ease-out-quart) backwards;
+    animation-delay: calc(var(--i, 0) * 70ms);
+  }
+  @keyframes reveal {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: none; }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .reveal { animation: none; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
   }
 }

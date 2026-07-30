@@ -45,8 +45,8 @@ async function main() {
 
   await page.goto(URL_BASE, { waitUntil: 'networkidle' });
 
-  // The playground board: a square container holding the ChessiroCanvas root.
-  const board = page.locator('#playground .aspect-square > div').first();
+  // The playground board: the plate mount holding the ChessiroCanvas root.
+  const board = page.locator('#playground .plate > div').first();
   await board.waitFor({ state: 'visible' });
   await board.scrollIntoViewIfNeeded();
   await page.waitForTimeout(600); // let fonts + piece SVGs settle
