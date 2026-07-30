@@ -1,8 +1,9 @@
 {
   "name": "chessiro-canvas",
   "version": "0.1.42",
-  "description": "Lightweight, high-performance React chessboard component",
+  "description": "Fast, lightweight React chessboard component in TypeScript. Zero dependencies, controlled FEN API, drag & drop, arrows, premoves, promotion, theming — works with chess.js and chessops.",
   "type": "module",
+  "sideEffects": false,
   "main": "dist/index.js",
   "module": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -33,7 +34,8 @@
     "benchmark:quick": "npm run build && BENCH_ROUNDS=3 BENCH_WARMUP_ROUNDS=1 BENCH_UPDATES=120 node scripts/benchmark.mjs",
     "benchmark:browser": "node scripts/benchmark-playwright.mjs",
     "benchmark:browser:quick": "BENCH_ROUNDS=3 BENCH_WARMUP_ROUNDS=1 BENCH_UPDATES=120 node scripts/benchmark-playwright.mjs",
-    "benchmark:browser:install": "playwright install chromium"
+    "benchmark:browser:install": "playwright install chromium",
+    "preview:generate": "node scripts/generate-readme-preview.mjs"
   },
   "peerDependencies": {
     "react": ">=18.0.0",
@@ -53,12 +55,32 @@
   "keywords": [
     "chess",
     "chessboard",
+    "chess-board",
     "react",
+    "react-chessboard",
+    "react-component",
+    "chess-ui",
+    "chessground",
+    "chess.js",
+    "chessops",
+    "fen",
+    "pgn",
+    "drag-and-drop",
+    "premove",
+    "chess-analysis",
+    "chess-engine-ui",
+    "board",
     "lightweight",
+    "zero-dependencies",
     "svg",
-    "typescript"
+    "typescript",
+    "hooks"
   ],
   "license": "MIT",
+  "homepage": "https://chessiro.dev",
+  "bugs": {
+    "url": "https://github.com/Bot-Rakshit/chessiro-canvas/issues"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Bot-Rakshit/chessiro-canvas.git"

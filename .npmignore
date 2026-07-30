@@ -1,4 +1,5 @@
 demo/
+media/
 .gitignore
 tsconfig.json
 tsup.config.ts
