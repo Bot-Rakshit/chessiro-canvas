@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
 interface UseKeyboardOptions {
   onPrevious?: () => void;
@@ -11,6 +11,9 @@ interface UseKeyboardOptions {
 }
 
 export function useKeyboard(opts: UseKeyboardOptions) {
+  const optsRef = useRef(opts);
+  optsRef.current = opts;
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const active = document.activeElement;
@@ -26,43 +29,43 @@ export function useKeyboard(opts: UseKeyboardOptions) {
         case 'ArrowLeft':
           e.preventDefault();
           e.stopPropagation();
-          opts.onPrevious?.();
+          optsRef.current.onPrevious?.();
           break;
         case 'ArrowRight':
           e.preventDefault();
           e.stopPropagation();
-          opts.onNext?.();
+          optsRef.current.onNext?.();
           break;
         case 'ArrowUp':
         case 'Home':
           e.preventDefault();
           e.stopPropagation();
-          opts.onFirst?.();
+          optsRef.current.onFirst?.();
           break;
         case 'ArrowDown':
         case 'End':
           e.preventDefault();
           e.stopPropagation();
-          opts.onLast?.();
+          optsRef.current.onLast?.();
           break;
         case 'f':
         case 'F':
           e.preventDefault();
-          opts.onFlipBoard?.();
+          optsRef.current.onFlipBoard?.();
           break;
         case 'x':
         case 'X':
           e.preventDefault();
-          opts.onShowThreat?.();
+          optsRef.current.onShowThreat?.();
           break;
         case 'Escape':
           e.preventDefault();
-          opts.onDeselect?.();
+          optsRef.current.onDeselect?.();
           break;
       }
     };
 
     document.addEventListener('keydown', handler, true);
     return () => document.removeEventListener('keydown', handler, true);
-  }, [opts.onPrevious, opts.onNext, opts.onFirst, opts.onLast, opts.onFlipBoard, opts.onShowThreat, opts.onDeselect]);
+  }, []);
 }

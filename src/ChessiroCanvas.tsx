@@ -1,4 +1,4 @@
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef } from 'react';
 import type {
   ChessiroCanvasProps, ChessiroCanvasRef, BoardTheme,
   AnimateMoveOptions, PulseSquareOptions, PromotionPiece, Square,
@@ -157,6 +157,15 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
     }, []);
 
     const piecesMap = useMemo(() => readFen(position || INITIAL_FEN), [position]);
+    // The imperative layers read this when a method fires, which is always after
+    // a commit — so publish it in a layout effect rather than assigning during
+    // render. Mutating a ref mid-render is not concurrent-safe: an interrupted
+    // or discarded render would leave it describing a position that was never
+    // committed. Writing only on change also avoids a per-render allocation.
+    const boardStateRef = useRef({ pieces: piecesMap, asWhite: orientation === 'white' });
+    useLayoutEffect(() => {
+      boardStateRef.current = { pieces: piecesMap, asWhite: orientation === 'white' };
+    }, [piecesMap, orientation]);
 
     const boundsToDomRect = useCallback((b: { left: number; top: number; width: number; height: number }): DOMRect => {
       return {
@@ -168,11 +177,6 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
         toJSON: () => ({}),
       } as DOMRect;
     }, []);
-
-    const boardDomRect = useMemo(() => {
-      if (!bounds) return null;
-      return boundsToDomRect(bounds);
-    }, [bounds, boundsToDomRect]);
 
     const getFreshDomRect = useCallback((): DOMRect | null => {
       const fresh = getFreshBounds();
@@ -211,7 +215,7 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
       allowDragging,
       allowDrawingArrows,
       boardRef,
-      boardBounds: boardDomRect,
+      boardBounds: null,
       onMove: onMove ? guardedOnMove : undefined,
       dests,
       autoPromoteTo,
@@ -265,18 +269,19 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
 
     useImperativeHandle(ref, () => ({
       getSquareRect(square: string) {
-        if (!bounds) return null;
+        const fresh = getFreshBounds();
+        if (!fresh) return null;
         const file = square.charCodeAt(0) - 97;
         const rank = parseInt(square[1]) - 1;
         const asWhite = orientation === 'white';
         const col = asWhite ? file : 7 - file;
         const row = asWhite ? 7 - rank : rank;
-        const sqW = bounds.width / 8;
-        const sqH = bounds.height / 8;
-        return new DOMRect(bounds.left + col * sqW, bounds.top + row * sqH, sqW, sqH);
+        const sqW = fresh.width / 8;
+        const sqH = fresh.height / 8;
+        return new DOMRect(fresh.left + col * sqW, fresh.top + row * sqH, sqW, sqH);
       },
       getBoardRect() {
-        return boardRef.current?.getBoundingClientRect() ?? null;
+        return getFreshDomRect();
       },
       getSquareAtPoint(clientX: number, clientY: number): Square | null {
         const fresh = getFreshDomRect();
@@ -365,7 +370,7 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
         drift: (options?: CameraDriftOptions) => getCameraController().drift(options),
         reset: () => cameraControllerRef.current?.reset(),
       },
-    }), [bounds, orientation, getFreshDomRect, getCameraController]);
+    }), [orientation, getFreshBounds, getFreshDomRect, getCameraController]);
 
     const hasValidSize = bounds && bounds.width > 0;
     const boardWidth = bounds?.width ?? 0;
@@ -478,8 +483,7 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
 
               <TeachingLayer
                 ref={teachingRef}
-                orientation={orientation}
-                pieces={piecesMap}
+                boardStateRef={boardStateRef}
                 pieceSet={pieceSet}
                 customPieces={customPieces}
                 flipPieces={flipPieces}
@@ -488,8 +492,7 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
 
               <CinematicLayer
                 ref={cinematicRef}
-                orientation={orientation}
-                pieces={piecesMap}
+                boardStateRef={boardStateRef}
                 pieceSet={pieceSet}
                 customPieces={customPieces}
                 flipPieces={flipPieces}

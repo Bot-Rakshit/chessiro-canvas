@@ -50,7 +50,7 @@ export const THEMES: BoardTheme[] = [
 export const FACTS = [
   { value: '44 KB', label: 'ESM, gzipped' },
   { value: '0', label: 'Runtime deps' },
-  { value: '0.42 ms', label: 'Mean update' },
+  { value: '0.33 ms', label: 'Mean update' },
   { value: '67', label: 'Typed props' },
 ];
 

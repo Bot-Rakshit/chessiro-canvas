@@ -884,16 +884,21 @@ v5 under an identical harness.
 
 | Metric | chessiro-canvas | react-chessboard | Delta |
 | --- | ---: | ---: | ---: |
-| Mount wall time (mean) | 2.55 ms | 13.25 ms | **80.8% faster** |
-| Update wall time (300 updates) | 126.13 ms | 676.33 ms | **81.4% faster** |
-| Update wall time per render | 0.42 ms | 2.25 ms | **81.4% faster** |
-| React Profiler update duration (mean) | 0.13 ms | 1.22 ms | **89.3% faster** |
-| Bundle ESM gzip | 43.7 KB | 37.4 KB | **16.9% larger** |
+| Mount wall time (mean) | 2.44 ms | 24.36 ms | **90.0% faster** |
+| Update wall time (300 updates) | 97.90 ms | 711.35 ms | **86.2% faster** |
+| Update wall time per render | 0.33 ms | 2.37 ms | **86.2% faster** |
+| React Profiler update duration (mean) | 0.13 ms | 1.32 ms | **90.6% faster** |
+| Bundle ESM gzip | 43.8 KB | 37.4 KB | **17.1% larger** |
 
-<sub>Generated 2026-07-30 · Node v26.0.0, macOS arm64, Apple M4 (10 cores), 16 GB RAM ·
+<sub>Generated 2026-07-31 · Node v26.0.0, macOS arm64, Apple M4 (10 cores), 16 GB RAM ·
 8 measured rounds + 2 warmup across 5 move-playthrough scenarios (40 samples,
 69 positions) · 300 position updates per round · 640 px board · animations disabled
 for both libraries.</sub>
+
+<sub>Treat the *ratios* as approximate: react-chessboard's own figures moved
+noticeably between runs on this machine (13.3 → 24.4 ms mount) without its code
+changing, which inflates the percentages. The dependable signal is this library's
+own absolute movement — 0.42 → 0.33 ms per update (−22%) release over release.</sub>
 
 **On bundle size:** the cinematics layer costs about 11 KB gzipped, which now puts
 the package above `react-chessboard`. It is statically imported, so an app that
@@ -918,14 +923,23 @@ memoization either holds or collapses:
 npm run benchmark:visuals
 ```
 
-| Metric | Before | After | Delta |
-| --- | ---: | ---: | ---: |
-| Wall time per update | 1.14 ms | 0.70 ms | **38.5% faster** |
-| React Profiler duration per commit | 0.56 ms | 0.36 ms | **35.2% faster** |
+It runs two phases: plain position updates, and the same updates with a piece
+selected so the legal-dot and capture-ring paths are actually live.
 
-<sub>200 updates per round, 10 kept rounds, inline `squareVisuals` +
-`highlightedSquares` + `dests`. "Before" is the same build with the merged
-visuals memoized on the prop's reference instead of its contents.</sub>
+Latest pass (removing per-commit style rewrites on non-animating pieces, and
+keeping idle imperative layers off position updates):
+
+| Phase | Metric | Before | After | Delta |
+| --- | --- | ---: | ---: | ---: |
+| Plain updates | Wall per update | 0.65 ms | 0.52 ms | **20.5% faster** |
+| Selected, indicators live | Wall per update | 0.68 ms | 0.55 ms | **18.8% faster** |
+| Plain updates | Profiler per commit | 0.33 ms | 0.32 ms | ~flat |
+| Selected, indicators live | Profiler per commit | 0.34 ms | 0.34 ms | ~flat |
+
+<sub>Medians over 12 rounds × 200 updates, both builds measured back to back on
+the same machine. Medians rather than means because the mean is noise-sensitive
+here (stdev ≈ 0.3 ms). Commit time is flat by design: the saving is in imperative
+DOM style writes, which sit outside React's measured commit.</sub>
 
 You do not need to wrap config props in `useMemo` — the board compares their
 contents internally.

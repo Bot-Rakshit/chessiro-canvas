@@ -79,6 +79,7 @@ export const PiecesLayer = memo(forwardRef<PiecesLayerRef, PiecesLayerProps>(fun
   const fadingElsRef = useRef<Map<string, HTMLDivElement>>(new Map());
   const refCallbacksRef = useRef<Map<string, (el: HTMLDivElement | null) => void>>(new Map());
   const fadingRefCallbacksRef = useRef<Map<string, (el: HTMLDivElement | null) => void>>(new Map());
+  const dirtySquaresRef = useRef<Set<Square>>(new Set());
 
   const animRef = useRef<{
     plan: AnimationPlan;
@@ -100,11 +101,22 @@ export const PiecesLayer = memo(forwardRef<PiecesLayerRef, PiecesLayerProps>(fun
     if (piecePath) preloadPieceSet(piecePath);
   }, [piecePath]);
 
-  // Set every piece to its resting transform, applying the current animation
-  // offset for pieces that are mid-flight. Runs on commit; the per-frame loop
-  // afterwards only touches animating/fading elements.
+  const restoreSquare = useCallback((sq: Square) => {
+    const el = pieceElsRef.current.get(sq);
+    if (!el) return;
+    const [col, row] = squareColRow(sq, asWhite);
+    el.style.transform = baseTransform(col, row);
+    el.style.zIndex = draggingSquare === sq ? '1' : '2';
+    el.style.willChange = '';
+  }, [asWhite, draggingSquare]);
+
+  // Resting transforms are React-owned. On commit, only continue the current
+  // animation and restore squares dirtied by an interrupted/previous plan.
   const syncTransforms = useCallback(() => {
     const anim = animRef.current;
+    const dirtySquares = dirtySquaresRef.current;
+
+    if (!anim && dirtySquares.size === 0) return false;
 
     let ease = 0;
     if (anim) {
@@ -118,28 +130,37 @@ export const PiecesLayer = memo(forwardRef<PiecesLayerRef, PiecesLayerProps>(fun
     }
 
     const currentAnim = animRef.current;
-    const mult = asWhite ? 1 : -1;
+    const currentSquares = currentAnim?.plan.anims;
 
-    for (const [sq, el] of pieceElsRef.current) {
-      const [col, row] = squareColRow(sq as Square, asWhite);
-      const vec = currentAnim?.plan.anims.get(sq as Square);
-      if (vec) {
-        let x = col + mult * (vec.fromPos[0] - vec.toPos[0]) * ease;
-        let y = row - mult * (vec.fromPos[1] - vec.toPos[1]) * ease;
-        x = Math.max(0, Math.min(7, x));
-        y = Math.max(0, Math.min(7, y));
-        el.style.transform = `translate(${x * 100}%, ${y * 100}%)`;
-        el.style.zIndex = '8';
-        el.style.willChange = 'transform';
-      } else {
-        el.style.transform = baseTransform(col, row);
-        el.style.zIndex = '2';
-        el.style.willChange = '';
-      }
+    for (const sq of dirtySquares) {
+      if (!currentSquares?.has(sq)) restoreSquare(sq);
     }
 
-    return !!animRef.current;
-  }, [asWhite]);
+    if (!currentAnim) {
+      dirtySquares.clear();
+      return false;
+    }
+
+    const mult = asWhite ? 1 : -1;
+    const nextDirtySquares = new Set<Square>();
+
+    for (const [sq, vec] of currentAnim.plan.anims) {
+      const el = pieceElsRef.current.get(sq);
+      if (!el) continue;
+      const [col, row] = squareColRow(sq as Square, asWhite);
+      let x = col + mult * (vec.fromPos[0] - vec.toPos[0]) * ease;
+      let y = row - mult * (vec.fromPos[1] - vec.toPos[1]) * ease;
+      x = Math.max(0, Math.min(7, x));
+      y = Math.max(0, Math.min(7, y));
+      el.style.transform = `translate(${x * 100}%, ${y * 100}%)`;
+      el.style.zIndex = '8';
+      el.style.willChange = 'transform';
+      nextDirtySquares.add(sq);
+    }
+    dirtySquaresRef.current = nextDirtySquares;
+
+    return true;
+  }, [asWhite, restoreSquare]);
 
   // Per-frame update: only animating pieces and fading captures are touched.
   const stepFrame = useCallback((): boolean => {
@@ -151,15 +172,8 @@ export const PiecesLayer = memo(forwardRef<PiecesLayerRef, PiecesLayerProps>(fun
 
     if (rest <= 0) {
       animRef.current = null;
-      for (const sq of anim.plan.anims.keys()) {
-        const el = pieceElsRef.current.get(sq);
-        if (el) {
-          const [col, row] = squareColRow(sq, asWhite);
-          el.style.transform = baseTransform(col, row);
-          el.style.zIndex = '2';
-          el.style.willChange = '';
-        }
-      }
+      for (const sq of dirtySquaresRef.current) restoreSquare(sq);
+      dirtySquaresRef.current.clear();
       if (anim.plan.fadings.size > 0) {
         setFadings(prev => (prev.length === 0 ? prev : []));
       }
@@ -178,6 +192,7 @@ export const PiecesLayer = memo(forwardRef<PiecesLayerRef, PiecesLayerProps>(fun
       x = Math.max(0, Math.min(7, x));
       y = Math.max(0, Math.min(7, y));
       el.style.transform = `translate(${x * 100}%, ${y * 100}%)`;
+      dirtySquaresRef.current.add(sq);
     }
 
     for (const sq of anim.plan.fadings.keys()) {
@@ -186,7 +201,7 @@ export const PiecesLayer = memo(forwardRef<PiecesLayerRef, PiecesLayerProps>(fun
     }
 
     return true;
-  }, [asWhite]);
+  }, [asWhite, restoreSquare]);
 
   const animLoop = useCallback(() => {
     if (stepFrame()) {

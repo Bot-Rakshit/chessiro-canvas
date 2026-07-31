@@ -7,8 +7,9 @@ import {
   useRef,
   useState,
 } from 'react';
+import type { RefObject } from 'react';
 import type {
-  Orientation, Pieces, PieceSet, PieceRenderer, Square,
+  Pieces, PieceSet, PieceRenderer, Square,
   CinematicMoveOptions, CinematicStyle, SquareBurstOptions, PopBadgeOptions,
   CelebrateOptions, PopBannerOptions, PromotionBeamOptions, ImplodeOptions,
   CheckmateOptions, AnnotationOptions, AnnotationHandle, SquareCorner,
@@ -35,8 +36,7 @@ export interface CinematicLayerRef {
 }
 
 interface CinematicLayerProps {
-  orientation: Orientation;
-  pieces: Pieces;
+  boardStateRef: RefObject<{ pieces: Pieces; asWhite: boolean }>;
   pieceSet?: PieceSet;
   customPieces?: PieceRenderer;
   flipPieces?: boolean;
@@ -628,16 +628,13 @@ function buildSettleAttitudeKeyframes(e: MoveEntry): Keyframe[] {
  * while a settle animation squashes and rebounds the piece.
  */
 export const CinematicLayer = memo(forwardRef<CinematicLayerRef, CinematicLayerProps>(function CinematicLayer({
-  orientation,
-  pieces,
+  boardStateRef,
   pieceSet,
   customPieces,
   flipPieces = false,
   getPieceElement,
   onImpactShake,
 }, ref) {
-  const asWhite = orientation === 'white';
-
   const [moves, setMoves] = useState<MoveEntry[]>([]);
   const [bursts, setBursts] = useState<BurstEntry[]>([]);
   const [badges, setBadges] = useState<BadgeEntry[]>([]);
@@ -656,10 +653,6 @@ export const CinematicLayer = memo(forwardRef<CinematicLayerRef, CinematicLayerP
   movesRef.current = moves;
 
   const idRef = useRef(0);
-  const piecesRef = useRef(pieces);
-  piecesRef.current = pieces;
-  const asWhiteRef = useRef(asWhite);
-  asWhiteRef.current = asWhite;
   const getPieceElementRef = useRef(getPieceElement);
   getPieceElementRef.current = getPieceElement;
   const onImpactShakeRef = useRef(onImpactShake);
@@ -783,7 +776,8 @@ export const CinematicLayer = memo(forwardRef<CinematicLayerRef, CinematicLayerP
   const finishDrawArrow = useRef(makeFinisher<DrawnArrowEntry>(setDrawnArrows)).current;
 
   const spawnBurst = useCallback((square: Square, options?: SquareBurstOptions): Promise<void> => {
-    const [col, row] = squareColRow(square, asWhiteRef.current);
+    const { asWhite } = boardStateRef.current;
+    const [col, row] = squareColRow(square, asWhite);
     const kind = options?.kind ?? 'both';
     const durationMs = Math.max(100, options?.durationMs ?? DEFAULT_BURST_DURATION_MS);
     const particles: Particle[] = [];
@@ -817,7 +811,8 @@ export const CinematicLayer = memo(forwardRef<CinematicLayerRef, CinematicLayerP
   }, []);
 
   const spawnBadge = useCallback((square: Square, options: PopBadgeOptions): Promise<void> => {
-    const [col, row] = squareColRow(square, asWhiteRef.current);
+    const { asWhite } = boardStateRef.current;
+    const [col, row] = squareColRow(square, asWhite);
     const entry: BadgeEntry = {
       id: ++idRef.current,
       col,
@@ -849,14 +844,15 @@ export const CinematicLayer = memo(forwardRef<CinematicLayerRef, CinematicLayerP
   }, []);
 
   const spawnVictimBlast = useCallback((moveId: number, square: Square): Promise<void> | null => {
-    const victim = piecesRef.current.get(square);
+    const { pieces, asWhite } = boardStateRef.current;
+    const victim = pieces.get(square);
     if (!victim) return null;
     const el = getPieceElementRef.current(square);
     if (el) {
       el.style.opacity = '0';
       hiddenVictimsRef.current.set(moveId, square);
     }
-    const [col, row] = squareColRow(square, asWhiteRef.current);
+    const [col, row] = squareColRow(square, asWhite);
     const dir = col < 4 ? -1 : 1;
     const entry: BlastEntry = {
       id: ++idRef.current,
@@ -1613,15 +1609,15 @@ export const CinematicLayer = memo(forwardRef<CinematicLayerRef, CinematicLayerP
     if (!isValidSquare(from) || !isValidSquare(to) || from === to) {
       return Promise.resolve();
     }
-    const existing = piecesRef.current.get(from);
+    const { pieces, asWhite } = boardStateRef.current;
+    const existing = pieces.get(from);
     const pieceKey = options?.piece
       ?? (existing ? `${existing.color}${existing.role.toUpperCase()}` : undefined);
     if (!pieceKey) return Promise.resolve();
 
     const reduced = prefersReducedMotion() && !options?.force;
-    const white = asWhiteRef.current;
-    const [fromCol, fromRow] = squareColRow(from, white);
-    const [toCol, toRow] = squareColRow(to, white);
+    const [fromCol, fromRow] = squareColRow(from, asWhite);
+    const [toCol, toRow] = squareColRow(to, asWhite);
 
     const entry: MoveEntry = {
       id: ++idRef.current,
@@ -1743,12 +1739,13 @@ export const CinematicLayer = memo(forwardRef<CinematicLayerRef, CinematicLayerP
     if (!isValidSquare(square)) return Promise.resolve();
     if (prefersReducedMotion() && !options?.force) return Promise.resolve();
 
-    const existing = piecesRef.current.get(square);
+    const { pieces, asWhite } = boardStateRef.current;
+    const existing = pieces.get(square);
     const fromPieceKey = options?.fromPiece
       ?? (existing ? `${existing.color}${existing.role.toUpperCase()}` : undefined);
     const toPieceKey = options?.piece;
 
-    const [col, row] = squareColRow(square, asWhiteRef.current);
+    const [col, row] = squareColRow(square, asWhite);
     const entry: PromoEntry = {
       id: ++idRef.current,
       col,
@@ -1782,11 +1779,12 @@ export const CinematicLayer = memo(forwardRef<CinematicLayerRef, CinematicLayerP
     if (!isValidSquare(square)) return Promise.resolve();
     if (prefersReducedMotion() && !options?.force) return Promise.resolve();
 
-    const existing = piecesRef.current.get(square);
+    const { pieces, asWhite } = boardStateRef.current;
+    const existing = pieces.get(square);
     const pieceKey = options?.piece
       ?? (existing ? `${existing.color}${existing.role.toUpperCase()}` : undefined);
 
-    const [col, row] = squareColRow(square, asWhiteRef.current);
+    const [col, row] = squareColRow(square, asWhite);
     const entry: ImplodeEntry = {
       id: ++idRef.current,
       col,
@@ -1818,7 +1816,8 @@ export const CinematicLayer = memo(forwardRef<CinematicLayerRef, CinematicLayerP
     if (!isValidSquare(square)) return Promise.resolve();
     const reduced = prefersReducedMotion() && !options?.force;
 
-    const existing = piecesRef.current.get(square);
+    const { pieces, asWhite } = boardStateRef.current;
+    const existing = pieces.get(square);
     const pieceKey = options?.piece
       ?? (existing ? `${existing.color}${existing.role.toUpperCase()}` : undefined);
     const color = options?.color ?? DEFAULT_CHECKMATE_COLOR;
@@ -1829,7 +1828,7 @@ export const CinematicLayer = memo(forwardRef<CinematicLayerRef, CinematicLayerP
       return bannerText ? popBanner({ text: bannerText, glowColor: color }) : Promise.resolve();
     }
 
-    const [col, row] = squareColRow(square, asWhiteRef.current);
+    const [col, row] = squareColRow(square, asWhite);
     // 'auto' tips the king away from the middle of the board, so it falls into
     // open space instead of over its own defenders.
     const dir: 1 | -1 = options?.direction === 'left'
@@ -1877,7 +1876,8 @@ export const CinematicLayer = memo(forwardRef<CinematicLayerRef, CinematicLayerP
     const noop: AnnotationHandle = { setText: () => {}, clear: () => Promise.resolve() };
     if (!isValidSquare(square)) return noop;
 
-    const [col, row] = squareColRow(square, asWhiteRef.current);
+    const { asWhite } = boardStateRef.current;
+    const [col, row] = squareColRow(square, asWhite);
     const id = ++idRef.current;
     const size = options?.fontSize;
     const entry: AnnotationEntry = {
@@ -1974,10 +1974,10 @@ export const CinematicLayer = memo(forwardRef<CinematicLayerRef, CinematicLayerP
     const valid = squares.filter(isValidSquare);
     if (valid.length === 0) return { clear: () => Promise.resolve() };
 
-    const white = asWhiteRef.current;
+    const { asWhite } = boardStateRef.current;
     const rPct = (options?.radius ?? DEFAULT_SPOTLIGHT_RADIUS) * 12.5;
     const holes: SpotHole[] = valid.map((sq) => {
-      const [col, row] = squareColRow(sq, white);
+      const [col, row] = squareColRow(sq, asWhite);
       return { cx: (col + 0.5) * 12.5, cy: (row + 0.5) * 12.5, r: rPct };
     });
     const entry: SpotlightEntry = {
@@ -2025,9 +2025,9 @@ export const CinematicLayer = memo(forwardRef<CinematicLayerRef, CinematicLayerP
     if (!isValidSquare(from) || !isValidSquare(to)) return Promise.resolve();
     if (prefersReducedMotion() && !options?.force) return Promise.resolve();
 
-    const white = asWhiteRef.current;
-    const [fc, fr] = squareColRow(from, white);
-    const [tc, tr] = squareColRow(to, white);
+    const { asWhite } = boardStateRef.current;
+    const [fc, fr] = squareColRow(from, asWhite);
+    const [tc, tr] = squareColRow(to, asWhite);
     const sx = (fc + 0.5) * 12.5;
     const sy = (fr + 0.5) * 12.5;
     const ex = (tc + 0.5) * 12.5;
@@ -2062,9 +2062,9 @@ export const CinematicLayer = memo(forwardRef<CinematicLayerRef, CinematicLayerP
     if (!isValidSquare(from) || !isValidSquare(to)) return Promise.resolve();
     if (prefersReducedMotion() && !options?.force) return Promise.resolve();
 
-    const white = asWhiteRef.current;
-    const [fc, fr] = squareColRow(from, white);
-    const [tc, tr] = squareColRow(to, white);
+    const { asWhite } = boardStateRef.current;
+    const [fc, fr] = squareColRow(from, asWhite);
+    const [tc, tr] = squareColRow(to, asWhite);
     const color = options?.color ?? DEFAULT_DRAW_ARROW_COLOR;
     const entry: DrawnArrowEntry = {
       id: ++idRef.current,

@@ -1,6 +1,6 @@
 {
   "name": "chessiro-canvas",
-  "version": "0.1.42",
+  "version": "0.1.43",
   "description": "Fast, lightweight React chessboard component in TypeScript. Zero dependencies, controlled FEN API, drag & drop, arrows, premoves, promotion, theming — works with chess.js and chessops.",
   "type": "module",
   "sideEffects": false,
@@ -26,7 +26,7 @@
     "docs:dev": "npm --prefix demo run dev",
     "docs:build": "npm --prefix demo run build",
     "docs:preview": "npm --prefix demo run preview",
-    "test": "npm run build && node scripts/test-premove.mjs",
+    "test": "npm run build && node scripts/test-premove.mjs && node scripts/test-cinematics.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/",
     "clean": "rm -rf dist",

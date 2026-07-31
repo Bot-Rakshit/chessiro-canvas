@@ -7,8 +7,13 @@ export interface BoardBounds {
   top: number;
 }
 
+interface BoardSize {
+  width: number;
+  height: number;
+}
+
 export function useBoardSize(boardRef: React.RefObject<HTMLDivElement | null>) {
-  const [bounds, setBounds] = useState<BoardBounds | null>(null);
+  const [bounds, setBounds] = useState<BoardSize | null>(null);
   const cachedBounds = useRef<BoardBounds | null>(null);
 
   // Read size from offsetWidth/offsetHeight so CSS transforms on the board (or
@@ -36,18 +41,11 @@ export function useBoardSize(boardRef: React.RefObject<HTMLDivElement | null>) {
     if (!newBounds) return;
 
     const prev = cachedBounds.current;
-    if (
-      prev &&
-      prev.width === newBounds.width &&
-      prev.height === newBounds.height &&
-      prev.left === newBounds.left &&
-      prev.top === newBounds.top
-    ) {
+    cachedBounds.current = newBounds;
+    if (prev && prev.width === newBounds.width && prev.height === newBounds.height) {
       return;
     }
-
-    cachedBounds.current = newBounds;
-    setBounds(newBounds);
+    setBounds({ width: newBounds.width, height: newBounds.height });
   }, [boardRef, readMetrics]);
 
   // Returns fresh bounds directly from the DOM — use this for pointer events

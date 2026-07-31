@@ -135,11 +135,11 @@ function useBoardSize(boardRef) {
     const newBounds = readMetrics(el);
     if (!newBounds) return;
     const prev = cachedBounds.current;
-    if (prev && prev.width === newBounds.width && prev.height === newBounds.height && prev.left === newBounds.left && prev.top === newBounds.top) {
+    cachedBounds.current = newBounds;
+    if (prev && prev.width === newBounds.width && prev.height === newBounds.height) {
       return;
     }
-    cachedBounds.current = newBounds;
-    setBounds(newBounds);
+    setBounds({ width: newBounds.width, height: newBounds.height });
   }, [boardRef, readMetrics]);
   const getFreshBounds = useCallback(() => {
     const el = boardRef.current;
@@ -1050,6 +1050,8 @@ function useInteraction(opts) {
   };
 }
 function useKeyboard(opts) {
+  const optsRef = useRef(opts);
+  optsRef.current = opts;
   useEffect(() => {
     const handler = (e) => {
       const active = document.activeElement;
@@ -1060,44 +1062,44 @@ function useKeyboard(opts) {
         case "ArrowLeft":
           e.preventDefault();
           e.stopPropagation();
-          opts.onPrevious?.();
+          optsRef.current.onPrevious?.();
           break;
         case "ArrowRight":
           e.preventDefault();
           e.stopPropagation();
-          opts.onNext?.();
+          optsRef.current.onNext?.();
           break;
         case "ArrowUp":
         case "Home":
           e.preventDefault();
           e.stopPropagation();
-          opts.onFirst?.();
+          optsRef.current.onFirst?.();
           break;
         case "ArrowDown":
         case "End":
           e.preventDefault();
           e.stopPropagation();
-          opts.onLast?.();
+          optsRef.current.onLast?.();
           break;
         case "f":
         case "F":
           e.preventDefault();
-          opts.onFlipBoard?.();
+          optsRef.current.onFlipBoard?.();
           break;
         case "x":
         case "X":
           e.preventDefault();
-          opts.onShowThreat?.();
+          optsRef.current.onShowThreat?.();
           break;
         case "Escape":
           e.preventDefault();
-          opts.onDeselect?.();
+          optsRef.current.onDeselect?.();
           break;
       }
     };
     document.addEventListener("keydown", handler, true);
     return () => document.removeEventListener("keydown", handler, true);
-  }, [opts.onPrevious, opts.onNext, opts.onFirst, opts.onLast, opts.onFlipBoard, opts.onShowThreat, opts.onDeselect]);
+  }, []);
 }
 
 // src/utils/colors.ts
@@ -1536,6 +1538,7 @@ var PiecesLayer = memo(forwardRef(function PiecesLayer2({
   const fadingElsRef = useRef(/* @__PURE__ */ new Map());
   const refCallbacksRef = useRef(/* @__PURE__ */ new Map());
   const fadingRefCallbacksRef = useRef(/* @__PURE__ */ new Map());
+  const dirtySquaresRef = useRef(/* @__PURE__ */ new Set());
   const animRef = useRef(null);
   const [fadings, setFadings] = useState([]);
   useImperativeHandle(ref, () => ({
@@ -1546,8 +1549,18 @@ var PiecesLayer = memo(forwardRef(function PiecesLayer2({
   useEffect(() => {
     if (piecePath) preloadPieceSet(piecePath);
   }, [piecePath]);
+  const restoreSquare = useCallback((sq2) => {
+    const el = pieceElsRef.current.get(sq2);
+    if (!el) return;
+    const [col, row] = squareColRow(sq2, asWhite);
+    el.style.transform = baseTransform(col, row);
+    el.style.zIndex = draggingSquare === sq2 ? "1" : "2";
+    el.style.willChange = "";
+  }, [asWhite, draggingSquare]);
   const syncTransforms = useCallback(() => {
     const anim = animRef.current;
+    const dirtySquares = dirtySquaresRef.current;
+    if (!anim && dirtySquares.size === 0) return false;
     let ease = 0;
     if (anim) {
       const elapsed = performance.now() - anim.startTime;
@@ -1559,26 +1572,32 @@ var PiecesLayer = memo(forwardRef(function PiecesLayer2({
       }
     }
     const currentAnim = animRef.current;
-    const mult = asWhite ? 1 : -1;
-    for (const [sq2, el] of pieceElsRef.current) {
-      const [col, row] = squareColRow(sq2, asWhite);
-      const vec = currentAnim?.plan.anims.get(sq2);
-      if (vec) {
-        let x = col + mult * (vec.fromPos[0] - vec.toPos[0]) * ease;
-        let y = row - mult * (vec.fromPos[1] - vec.toPos[1]) * ease;
-        x = Math.max(0, Math.min(7, x));
-        y = Math.max(0, Math.min(7, y));
-        el.style.transform = `translate(${x * 100}%, ${y * 100}%)`;
-        el.style.zIndex = "8";
-        el.style.willChange = "transform";
-      } else {
-        el.style.transform = baseTransform(col, row);
-        el.style.zIndex = "2";
-        el.style.willChange = "";
-      }
+    const currentSquares = currentAnim?.plan.anims;
+    for (const sq2 of dirtySquares) {
+      if (!currentSquares?.has(sq2)) restoreSquare(sq2);
     }
-    return !!animRef.current;
-  }, [asWhite]);
+    if (!currentAnim) {
+      dirtySquares.clear();
+      return false;
+    }
+    const mult = asWhite ? 1 : -1;
+    const nextDirtySquares = /* @__PURE__ */ new Set();
+    for (const [sq2, vec] of currentAnim.plan.anims) {
+      const el = pieceElsRef.current.get(sq2);
+      if (!el) continue;
+      const [col, row] = squareColRow(sq2, asWhite);
+      let x = col + mult * (vec.fromPos[0] - vec.toPos[0]) * ease;
+      let y = row - mult * (vec.fromPos[1] - vec.toPos[1]) * ease;
+      x = Math.max(0, Math.min(7, x));
+      y = Math.max(0, Math.min(7, y));
+      el.style.transform = `translate(${x * 100}%, ${y * 100}%)`;
+      el.style.zIndex = "8";
+      el.style.willChange = "transform";
+      nextDirtySquares.add(sq2);
+    }
+    dirtySquaresRef.current = nextDirtySquares;
+    return true;
+  }, [asWhite, restoreSquare]);
   const stepFrame = useCallback(() => {
     const anim = animRef.current;
     if (!anim) return false;
@@ -1586,15 +1605,8 @@ var PiecesLayer = memo(forwardRef(function PiecesLayer2({
     const rest = 1 - elapsed * anim.frequency;
     if (rest <= 0) {
       animRef.current = null;
-      for (const sq2 of anim.plan.anims.keys()) {
-        const el = pieceElsRef.current.get(sq2);
-        if (el) {
-          const [col, row] = squareColRow(sq2, asWhite);
-          el.style.transform = baseTransform(col, row);
-          el.style.zIndex = "2";
-          el.style.willChange = "";
-        }
-      }
+      for (const sq2 of dirtySquaresRef.current) restoreSquare(sq2);
+      dirtySquaresRef.current.clear();
       if (anim.plan.fadings.size > 0) {
         setFadings((prev) => prev.length === 0 ? prev : []);
       }
@@ -1611,13 +1623,14 @@ var PiecesLayer = memo(forwardRef(function PiecesLayer2({
       x = Math.max(0, Math.min(7, x));
       y = Math.max(0, Math.min(7, y));
       el.style.transform = `translate(${x * 100}%, ${y * 100}%)`;
+      dirtySquaresRef.current.add(sq2);
     }
     for (const sq2 of anim.plan.fadings.keys()) {
       const el = fadingElsRef.current.get(sq2);
       if (el) el.style.opacity = String(ease);
     }
     return true;
-  }, [asWhite]);
+  }, [asWhite, restoreSquare]);
   const animLoop = useCallback(() => {
     if (stepFrame()) {
       rafIdRef.current = requestAnimationFrame(animLoop);
@@ -1941,23 +1954,17 @@ function canAnimate(el) {
   return typeof el.animate === "function";
 }
 var TeachingLayer = memo(forwardRef(function TeachingLayer2({
-  orientation,
-  pieces,
+  boardStateRef,
   pieceSet,
   customPieces,
   flipPieces = false,
   getPieceElement
 }, ref) {
-  const asWhite = orientation === "white";
   const [demos, setDemos] = useState([]);
   const [pulses, setPulses] = useState([]);
   const demosRef = useRef(demos);
   demosRef.current = demos;
   const idRef = useRef(0);
-  const piecesRef = useRef(pieces);
-  piecesRef.current = pieces;
-  const asWhiteRef = useRef(asWhite);
-  asWhiteRef.current = asWhite;
   const demoResolversRef = useRef(/* @__PURE__ */ new Map());
   const demoAnimationsRef = useRef(/* @__PURE__ */ new Map());
   const startedRef = useRef(/* @__PURE__ */ new Set());
@@ -2025,14 +2032,14 @@ var TeachingLayer = memo(forwardRef(function TeachingLayer2({
     if (!isValidSquare3(from) || !isValidSquare3(to) || from === to) {
       return Promise.resolve();
     }
-    const existing = piecesRef.current.get(from);
+    const { pieces, asWhite } = boardStateRef.current;
+    const existing = pieces.get(from);
     const pieceKey = options?.piece ?? (existing ? `${existing.color}${existing.role.toUpperCase()}` : void 0);
     if (!pieceKey) return Promise.resolve();
     const ghost = options?.ghost ?? false;
     const hideOriginal = !ghost && (options?.hideOriginal ?? true) && !!existing;
-    const white = asWhiteRef.current;
-    const [fromCol, fromRow] = squareColRow4(from, white);
-    const [toCol, toRow] = squareColRow4(to, white);
+    const [fromCol, fromRow] = squareColRow4(from, asWhite);
+    const [toCol, toRow] = squareColRow4(to, asWhite);
     const entry = {
       id: ++idRef.current,
       pieceKey,
@@ -2057,7 +2064,8 @@ var TeachingLayer = memo(forwardRef(function TeachingLayer2({
   }, []);
   const pulseSquare = useCallback((square, options) => {
     if (!isValidSquare3(square)) return Promise.resolve();
-    const [col, row] = squareColRow4(square, asWhiteRef.current);
+    const { asWhite } = boardStateRef.current;
+    const [col, row] = squareColRow4(square, asWhite);
     const entry = {
       id: ++idRef.current,
       col,
@@ -2592,15 +2600,13 @@ function buildSettleAttitudeKeyframes(e) {
   ];
 }
 var CinematicLayer = memo(forwardRef(function CinematicLayer2({
-  orientation,
-  pieces,
+  boardStateRef,
   pieceSet,
   customPieces,
   flipPieces = false,
   getPieceElement,
   onImpactShake
 }, ref) {
-  const asWhite = orientation === "white";
   const [moves, setMoves] = useState([]);
   const [bursts, setBursts] = useState([]);
   const [badges, setBadges] = useState([]);
@@ -2618,10 +2624,6 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
   const movesRef = useRef(moves);
   movesRef.current = moves;
   const idRef = useRef(0);
-  const piecesRef = useRef(pieces);
-  piecesRef.current = pieces;
-  const asWhiteRef = useRef(asWhite);
-  asWhiteRef.current = asWhite;
   const getPieceElementRef = useRef(getPieceElement);
   getPieceElementRef.current = getPieceElement;
   const onImpactShakeRef = useRef(onImpactShake);
@@ -2720,7 +2722,8 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
   const finishLaser = useRef(makeFinisher(setLasers)).current;
   const finishDrawArrow = useRef(makeFinisher(setDrawnArrows)).current;
   const spawnBurst = useCallback((square, options) => {
-    const [col, row] = squareColRow5(square, asWhiteRef.current);
+    const { asWhite } = boardStateRef.current;
+    const [col, row] = squareColRow5(square, asWhite);
     const kind = options?.kind ?? "both";
     const durationMs = Math.max(100, options?.durationMs ?? DEFAULT_BURST_DURATION_MS);
     const particles = [];
@@ -2753,7 +2756,8 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
     });
   }, []);
   const spawnBadge = useCallback((square, options) => {
-    const [col, row] = squareColRow5(square, asWhiteRef.current);
+    const { asWhite } = boardStateRef.current;
+    const [col, row] = squareColRow5(square, asWhite);
     const entry = {
       id: ++idRef.current,
       col,
@@ -2783,14 +2787,15 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
     });
   }, []);
   const spawnVictimBlast = useCallback((moveId, square) => {
-    const victim = piecesRef.current.get(square);
+    const { pieces, asWhite } = boardStateRef.current;
+    const victim = pieces.get(square);
     if (!victim) return null;
     const el = getPieceElementRef.current(square);
     if (el) {
       el.style.opacity = "0";
       hiddenVictimsRef.current.set(moveId, square);
     }
-    const [col, row] = squareColRow5(square, asWhiteRef.current);
+    const [col, row] = squareColRow5(square, asWhite);
     const dir = col < 4 ? -1 : 1;
     const entry = {
       id: ++idRef.current,
@@ -3466,13 +3471,13 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
     if (!isValidSquare4(from) || !isValidSquare4(to) || from === to) {
       return Promise.resolve();
     }
-    const existing = piecesRef.current.get(from);
+    const { pieces, asWhite } = boardStateRef.current;
+    const existing = pieces.get(from);
     const pieceKey = options?.piece ?? (existing ? `${existing.color}${existing.role.toUpperCase()}` : void 0);
     if (!pieceKey) return Promise.resolve();
     const reduced = prefersReducedMotion() && !options?.force;
-    const white = asWhiteRef.current;
-    const [fromCol, fromRow] = squareColRow5(from, white);
-    const [toCol, toRow] = squareColRow5(to, white);
+    const [fromCol, fromRow] = squareColRow5(from, asWhite);
+    const [toCol, toRow] = squareColRow5(to, asWhite);
     const entry = {
       id: ++idRef.current,
       pieceKey,
@@ -3575,10 +3580,11 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
   const promotionBeam = useCallback((square, options) => {
     if (!isValidSquare4(square)) return Promise.resolve();
     if (prefersReducedMotion() && !options?.force) return Promise.resolve();
-    const existing = piecesRef.current.get(square);
+    const { pieces, asWhite } = boardStateRef.current;
+    const existing = pieces.get(square);
     const fromPieceKey = options?.fromPiece ?? (existing ? `${existing.color}${existing.role.toUpperCase()}` : void 0);
     const toPieceKey = options?.piece;
-    const [col, row] = squareColRow5(square, asWhiteRef.current);
+    const [col, row] = squareColRow5(square, asWhite);
     const entry = {
       id: ++idRef.current,
       col,
@@ -3603,9 +3609,10 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
   const implode = useCallback((square, options) => {
     if (!isValidSquare4(square)) return Promise.resolve();
     if (prefersReducedMotion() && !options?.force) return Promise.resolve();
-    const existing = piecesRef.current.get(square);
+    const { pieces, asWhite } = boardStateRef.current;
+    const existing = pieces.get(square);
     const pieceKey = options?.piece ?? (existing ? `${existing.color}${existing.role.toUpperCase()}` : void 0);
-    const [col, row] = squareColRow5(square, asWhiteRef.current);
+    const [col, row] = squareColRow5(square, asWhite);
     const entry = {
       id: ++idRef.current,
       col,
@@ -3629,14 +3636,15 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
   const checkmate = useCallback((square, options) => {
     if (!isValidSquare4(square)) return Promise.resolve();
     const reduced = prefersReducedMotion() && !options?.force;
-    const existing = piecesRef.current.get(square);
+    const { pieces, asWhite } = boardStateRef.current;
+    const existing = pieces.get(square);
     const pieceKey = options?.piece ?? (existing ? `${existing.color}${existing.role.toUpperCase()}` : void 0);
     const color = options?.color ?? DEFAULT_CHECKMATE_COLOR;
     const bannerText = options?.banner === void 0 ? "CHECKMATE" : options.banner;
     if (reduced) {
       return bannerText ? popBanner({ text: bannerText, glowColor: color }) : Promise.resolve();
     }
-    const [col, row] = squareColRow5(square, asWhiteRef.current);
+    const [col, row] = squareColRow5(square, asWhite);
     const dir = options?.direction === "left" ? -1 : options?.direction === "right" ? 1 : col <= 3 ? -1 : 1;
     const entry = {
       id: ++idRef.current,
@@ -3666,7 +3674,8 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
     const noop = { setText: () => {
     }, clear: () => Promise.resolve() };
     if (!isValidSquare4(square)) return noop;
-    const [col, row] = squareColRow5(square, asWhiteRef.current);
+    const { asWhite } = boardStateRef.current;
+    const [col, row] = squareColRow5(square, asWhite);
     const id = ++idRef.current;
     const size = options?.fontSize;
     const entry = {
@@ -3746,10 +3755,10 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
     if (prefersReducedMotion() && !options?.force) return { clear: () => Promise.resolve() };
     const valid = squares.filter(isValidSquare4);
     if (valid.length === 0) return { clear: () => Promise.resolve() };
-    const white = asWhiteRef.current;
+    const { asWhite } = boardStateRef.current;
     const rPct = (options?.radius ?? DEFAULT_SPOTLIGHT_RADIUS) * 12.5;
     const holes = valid.map((sq2) => {
-      const [col, row] = squareColRow5(sq2, white);
+      const [col, row] = squareColRow5(sq2, asWhite);
       return { cx: (col + 0.5) * 12.5, cy: (row + 0.5) * 12.5, r: rPct };
     });
     const entry = {
@@ -3793,9 +3802,9 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
   const drawLaser = useCallback((from, to, options) => {
     if (!isValidSquare4(from) || !isValidSquare4(to)) return Promise.resolve();
     if (prefersReducedMotion() && !options?.force) return Promise.resolve();
-    const white = asWhiteRef.current;
-    const [fc, fr] = squareColRow5(from, white);
-    const [tc, tr] = squareColRow5(to, white);
+    const { asWhite } = boardStateRef.current;
+    const [fc, fr] = squareColRow5(from, asWhite);
+    const [tc, tr] = squareColRow5(to, asWhite);
     const sx = (fc + 0.5) * 12.5;
     const sy = (fr + 0.5) * 12.5;
     const ex = (tc + 0.5) * 12.5;
@@ -3826,9 +3835,9 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
   const drawArrow = useCallback((from, to, options) => {
     if (!isValidSquare4(from) || !isValidSquare4(to)) return Promise.resolve();
     if (prefersReducedMotion() && !options?.force) return Promise.resolve();
-    const white = asWhiteRef.current;
-    const [fc, fr] = squareColRow5(from, white);
-    const [tc, tr] = squareColRow5(to, white);
+    const { asWhite } = boardStateRef.current;
+    const [fc, fr] = squareColRow5(from, asWhite);
+    const [tc, tr] = squareColRow5(to, asWhite);
     const color = options?.color ?? DEFAULT_DRAW_ARROW_COLOR;
     const entry = {
       id: ++idRef.current,
@@ -5868,6 +5877,10 @@ var ChessiroCanvas = forwardRef(
       };
     }, []);
     const piecesMap = useMemo(() => readFen(position || INITIAL_FEN), [position]);
+    const boardStateRef = useRef({ pieces: piecesMap, asWhite: orientation === "white" });
+    useLayoutEffect(() => {
+      boardStateRef.current = { pieces: piecesMap, asWhite: orientation === "white" };
+    }, [piecesMap, orientation]);
     const boundsToDomRect = useCallback((b) => {
       return {
         left: b.left,
@@ -5881,10 +5894,6 @@ var ChessiroCanvas = forwardRef(
         toJSON: () => ({})
       };
     }, []);
-    const boardDomRect = useMemo(() => {
-      if (!bounds) return null;
-      return boundsToDomRect(bounds);
-    }, [bounds, boundsToDomRect]);
     const getFreshDomRect = useCallback(() => {
       const fresh = getFreshBounds();
       return fresh ? boundsToDomRect(fresh) : null;
@@ -5915,7 +5924,7 @@ var ChessiroCanvas = forwardRef(
       allowDragging,
       allowDrawingArrows,
       boardRef,
-      boardBounds: boardDomRect,
+      boardBounds: null,
       onMove: onMove ? guardedOnMove : void 0,
       dests,
       autoPromoteTo,
@@ -5964,18 +5973,19 @@ var ChessiroCanvas = forwardRef(
     });
     useImperativeHandle(ref, () => ({
       getSquareRect(square) {
-        if (!bounds) return null;
+        const fresh = getFreshBounds();
+        if (!fresh) return null;
         const file = square.charCodeAt(0) - 97;
         const rank = parseInt(square[1]) - 1;
         const asWhite = orientation === "white";
         const col = asWhite ? file : 7 - file;
         const row = asWhite ? 7 - rank : rank;
-        const sqW = bounds.width / 8;
-        const sqH = bounds.height / 8;
-        return new DOMRect(bounds.left + col * sqW, bounds.top + row * sqH, sqW, sqH);
+        const sqW = fresh.width / 8;
+        const sqH = fresh.height / 8;
+        return new DOMRect(fresh.left + col * sqW, fresh.top + row * sqH, sqW, sqH);
       },
       getBoardRect() {
-        return boardRef.current?.getBoundingClientRect() ?? null;
+        return getFreshDomRect();
       },
       getSquareAtPoint(clientX, clientY) {
         const fresh = getFreshDomRect();
@@ -6062,7 +6072,7 @@ var ChessiroCanvas = forwardRef(
         drift: (options) => getCameraController().drift(options),
         reset: () => cameraControllerRef.current?.reset()
       }
-    }), [bounds, orientation, getFreshDomRect, getCameraController]);
+    }), [orientation, getFreshBounds, getFreshDomRect, getCameraController]);
     const hasValidSize = bounds && bounds.width > 0;
     const boardWidth = bounds?.width ?? 0;
     const boardHeight = bounds?.height ?? 0;
@@ -6179,8 +6189,7 @@ var ChessiroCanvas = forwardRef(
                             TeachingLayer,
                             {
                               ref: teachingRef,
-                              orientation,
-                              pieces: piecesMap,
+                              boardStateRef,
                               pieceSet,
                               customPieces,
                               flipPieces,
@@ -6191,8 +6200,7 @@ var ChessiroCanvas = forwardRef(
                             CinematicLayer,
                             {
                               ref: cinematicRef,
-                              orientation,
-                              pieces: piecesMap,
+                              boardStateRef,
                               pieceSet,
                               customPieces,
                               flipPieces,

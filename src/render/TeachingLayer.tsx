@@ -7,8 +7,9 @@ import {
   useRef,
   useState,
 } from 'react';
+import type { RefObject } from 'react';
 import type {
-  Orientation, Pieces, PieceSet, PieceRenderer, Square,
+  Pieces, PieceSet, PieceRenderer, Square,
   AnimateMoveOptions, PulseSquareOptions,
 } from '../types';
 import { PieceGlyph } from './PieceGlyph';
@@ -21,8 +22,7 @@ export interface TeachingLayerRef {
 }
 
 interface TeachingLayerProps {
-  orientation: Orientation;
-  pieces: Pieces;
+  boardStateRef: RefObject<{ pieces: Pieces; asWhite: boolean }>;
   pieceSet?: PieceSet;
   customPieces?: PieceRenderer;
   flipPieces?: boolean;
@@ -80,26 +80,18 @@ function canAnimate(el: Element): el is HTMLElement & { animate: Element['animat
  * - shakePiece: quick head-shake on a piece ("not that one / wrong move").
  */
 export const TeachingLayer = memo(forwardRef<TeachingLayerRef, TeachingLayerProps>(function TeachingLayer({
-  orientation,
-  pieces,
+  boardStateRef,
   pieceSet,
   customPieces,
   flipPieces = false,
   getPieceElement,
 }, ref) {
-  const asWhite = orientation === 'white';
-
   const [demos, setDemos] = useState<DemoEntry[]>([]);
   const [pulses, setPulses] = useState<PulseEntry[]>([]);
   const demosRef = useRef<DemoEntry[]>(demos);
   demosRef.current = demos;
 
   const idRef = useRef(0);
-  const piecesRef = useRef(pieces);
-  piecesRef.current = pieces;
-  const asWhiteRef = useRef(asWhite);
-  asWhiteRef.current = asWhite;
-
   const demoResolversRef = useRef<Map<number, () => void>>(new Map());
   const demoAnimationsRef = useRef<Map<number, Animation>>(new Map());
   const startedRef = useRef<Set<number>>(new Set());
@@ -180,7 +172,8 @@ export const TeachingLayer = memo(forwardRef<TeachingLayerRef, TeachingLayerProp
       return Promise.resolve();
     }
 
-    const existing = piecesRef.current.get(from);
+    const { pieces, asWhite } = boardStateRef.current;
+    const existing = pieces.get(from);
     const pieceKey = options?.piece
       ?? (existing ? `${existing.color}${existing.role.toUpperCase()}` : undefined);
     if (!pieceKey) return Promise.resolve();
@@ -188,9 +181,8 @@ export const TeachingLayer = memo(forwardRef<TeachingLayerRef, TeachingLayerProp
     const ghost = options?.ghost ?? false;
     const hideOriginal = !ghost && (options?.hideOriginal ?? true) && !!existing;
 
-    const white = asWhiteRef.current;
-    const [fromCol, fromRow] = squareColRow(from, white);
-    const [toCol, toRow] = squareColRow(to, white);
+    const [fromCol, fromRow] = squareColRow(from, asWhite);
+    const [toCol, toRow] = squareColRow(to, asWhite);
 
     const entry: DemoEntry = {
       id: ++idRef.current,
@@ -219,7 +211,8 @@ export const TeachingLayer = memo(forwardRef<TeachingLayerRef, TeachingLayerProp
 
   const pulseSquare = useCallback((square: string, options?: PulseSquareOptions): Promise<void> => {
     if (!isValidSquare(square)) return Promise.resolve();
-    const [col, row] = squareColRow(square, asWhiteRef.current);
+    const { asWhite } = boardStateRef.current;
+    const [col, row] = squareColRow(square, asWhite);
     const entry: PulseEntry = {
       id: ++idRef.current,
       col,

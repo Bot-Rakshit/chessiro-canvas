@@ -89,6 +89,7 @@ define('Image', dom.window.Image);
 
 const React = (await import('react')).default;
 const { createRoot } = await import('react-dom/client');
+const { flushSync } = await import('react-dom');
 const { ChessiroCanvas } = await import('../dist/index.js');
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -131,6 +132,146 @@ const hiddenPieceCount = () =>
   [...container.querySelectorAll('div')].filter(
     (d) => d.style.opacity === '0' && !d.closest('[data-cine-overlay]'),
   ).length;
+
+const START_POSITION = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR';
+const AFTER_E4 = 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR';
+const pieceOuters = (pieceKey) =>
+  [...container.querySelectorAll(`img[alt="${pieceKey}"]`)]
+    .map((img) => img.parentElement?.parentElement)
+    .filter(Boolean);
+
+console.log('\n-- piece animation interruption + cleanup --');
+flushSync(() => root.render(React.createElement(ChessiroCanvas, {
+  ref,
+  position: START_POSITION,
+  interactive: false,
+  showAnimations: false,
+})));
+flushSync(() => root.render(React.createElement(ChessiroCanvas, {
+  ref,
+  position: AFTER_E4,
+  interactive: false,
+  showAnimations: true,
+  animationDurationMs: 300,
+})));
+assert(
+  pieceOuters('wP').some((el) => el.style.willChange === 'transform' && el.style.zIndex === '8'),
+  'position move dirtied only its animated piece',
+);
+
+flushSync(() => root.render(React.createElement(ChessiroCanvas, {
+  ref,
+  position: AFTER_E4,
+  orientation: 'black',
+  interactive: false,
+  showAnimations: true,
+  animationDurationMs: 300,
+})));
+flushSync(() => root.render(React.createElement(ChessiroCanvas, {
+  ref,
+  position: AFTER_E4,
+  orientation: 'black',
+  interactive: false,
+  showAnimations: false,
+})));
+const interruptedPiece = pieceOuters('wP')
+  .find((el) => el.style.transform === 'translate(300%, 300%)');
+assert(
+  interruptedPiece?.style.willChange === '' && interruptedPiece?.style.zIndex === '2',
+  'orientation flip + interruption restored the resting transform',
+);
+
+const BEFORE_CAPTURE = '8/8/8/3p4/4P3/8/8/8';
+const AFTER_CAPTURE = '8/8/8/3P4/8/8/8/8';
+flushSync(() => root.render(React.createElement(ChessiroCanvas, {
+  ref,
+  position: BEFORE_CAPTURE,
+  interactive: false,
+  showAnimations: false,
+})));
+flushSync(() => root.render(React.createElement(ChessiroCanvas, {
+  ref,
+  position: AFTER_CAPTURE,
+  interactive: false,
+  showAnimations: true,
+  animationDurationMs: 120,
+})));
+await sleep(30);
+assert(pieceOuters('bP').length === 1, 'capture fade mounted the captured piece');
+await sleep(220);
+assert(pieceOuters('bP').length === 0, 'capture fade removed the captured piece');
+assert(
+  pieceOuters('wP').every((el) => el.style.willChange === '' && el.style.zIndex === '2'),
+  'capture animation restored resting piece styles',
+);
+
+let dragMoveCommitted = false;
+const dragDests = new Map([['e2', ['e4']]]);
+const renderDragBoard = (position) => {
+  root.render(React.createElement(ChessiroCanvas, {
+    ref,
+    position,
+    dests: dragDests,
+    turnColor: 'w',
+    movableColor: 'w',
+    interactive: true,
+    showAnimations: true,
+    animationDurationMs: 300,
+    onMove: (from, to) => {
+      dragMoveCommitted = from === 'e2' && to === 'e4';
+      flushSync(() => renderDragBoard(AFTER_E4));
+      return true;
+    },
+  }));
+};
+flushSync(() => root.render(React.createElement(ChessiroCanvas, {
+  ref,
+  position: START_POSITION,
+  interactive: false,
+  showAnimations: false,
+})));
+flushSync(() => renderDragBoard(START_POSITION));
+const dragBoardElement = [...container.querySelectorAll('div')]
+  .find((element) => element.style.paddingBottom === '100%');
+if (!dragBoardElement) throw new Error('could not find board element for drag test');
+Object.defineProperties(dragBoardElement, {
+  offsetWidth: { configurable: true, get: () => 800 },
+  offsetHeight: { configurable: true, get: () => 800 },
+  getBoundingClientRect: {
+    configurable: true,
+    value: () => ({
+      x: 0, y: 0, left: 0, top: 0,
+      right: 800, bottom: 800, width: 800, height: 800,
+      toJSON: () => ({}),
+    }),
+  },
+});
+dragBoardElement.dispatchEvent(new dom.window.MouseEvent('mousedown', {
+  bubbles: true, button: 0, clientX: 450, clientY: 650,
+}));
+await sleep(0);
+document.dispatchEvent(new dom.window.MouseEvent('mousemove', {
+  bubbles: true, button: 0, clientX: 450, clientY: 450,
+}));
+await sleep(0);
+document.dispatchEvent(new dom.window.MouseEvent('mouseup', {
+  bubbles: true, button: 0, clientX: 450, clientY: 450,
+}));
+await sleep(50);
+const droppedPiece = pieceOuters('wP')
+  .find((el) => el.style.transform === 'translate(400%, 400%)');
+assert(dragMoveCommitted, 'drag-drop committed the expected move');
+assert(
+  droppedPiece?.style.willChange === '' && droppedPiece?.style.zIndex === '2',
+  'drag-drop release skipped and cleaned the position animation',
+);
+
+flushSync(() => root.render(React.createElement(ChessiroCanvas, {
+  ref,
+  interactive: false,
+  showAnimations: false,
+})));
+await sleep(50);
 const baseline = countNodes();
 assert(baseline > 0, 'board rendered');
 assert(hiddenPieceCount() === 0, 'idle board has no hidden pieces');
