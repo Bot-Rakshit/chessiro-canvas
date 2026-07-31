@@ -36,6 +36,8 @@ export interface CinematicLayerRef {
 }
 
 interface CinematicLayerProps {
+  /** Squares to hold invisible while a clone covers them. See finishMove. */
+  suppressedSquaresRef?: React.RefObject<Set<string>>;
   boardStateRef: RefObject<{ pieces: Pieces; asWhite: boolean }>;
   pieceSet?: PieceSet;
   customPieces?: PieceRenderer;
@@ -629,6 +631,7 @@ function buildSettleAttitudeKeyframes(e: MoveEntry): Keyframe[] {
  */
 export const CinematicLayer = memo(forwardRef<CinematicLayerRef, CinematicLayerProps>(function CinematicLayer({
   boardStateRef,
+  suppressedSquaresRef: suppressedSquaresRefProp,
   pieceSet,
   customPieces,
   flipPieces = false,
@@ -662,6 +665,9 @@ export const CinematicLayer = memo(forwardRef<CinematicLayerRef, CinematicLayerP
   const animationsRef = useRef<Map<number, Animation[]>>(new Map());
   const timeoutsRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
   const hiddenVictimsRef = useRef<Map<number, string>>(new Map());
+  // The overlay wrapper per in-flight move, so cleanup can hide the clone
+  // imperatively in the same frame it un-hides the real piece.
+  const moveElsRef = useRef<Map<number, HTMLElement>>(new Map());
   const hiddenSquaresRef = useRef<Map<number, string>>(new Map());
   const spotlightElsRef = useRef<Map<number, HTMLElement>>(new Map());
   // Annotations outlive the call that created them, so their nodes and
@@ -675,12 +681,39 @@ export const CinematicLayer = memo(forwardRef<CinematicLayerRef, CinematicLayerP
     if (finishedRef.current.has(entry.id)) return;
     finishedRef.current.add(entry.id);
 
+    // Claim the destination BEFORE resolving. React commits the caller's move
+    // in a task that lands after our rAF but before paint, so hiding the piece
+    // afterwards is always one frame late — it gets painted twice. Suppressing
+    // up front means PiecesLayer's layout effect hides it in the same commit
+    // that creates it.
+    const suppressed = suppressedSquaresRefProp?.current;
+    suppressed?.add(entry.toSquare);
+
     // Resolve first so callers can commit the real move while the cinematic
     // piece (fill: forwards) still covers the destination square; cleanup a
     // couple of frames later avoids a flash of the piece back at origin.
     const resolve = resolversRef.current.get(entry.id);
     resolversRef.current.delete(entry.id);
     resolve?.();
+
+    // The caller commits the move inside resolve(), so the real piece pops in at
+    // the destination while the cinematic copy is still parked there by
+    // fill:forwards. Painting both for even one frame reads as the piece
+    // "appearing twice". Hide the freshly committed piece for the handoff
+    // frame; the clone is already covering that square, and cleanup below
+    // un-hides it in the same commit that unmounts the clone, so the swap is
+    // atomic and neither a doubled piece nor a gap is ever painted.
+    let handoffHidden: HTMLElement | null = null;
+    const hideHandoffPiece = () => {
+      if (cleaned || handoffHidden) return;
+      const el = getPieceElementRef.current(entry.toSquare);
+      // An element already at opacity 0 is a capture victim hidden by the
+      // blast path, not a newly committed piece — leave it to its owner.
+      if (el && el.style.opacity !== '0') {
+        handoffHidden = el;
+        el.style.opacity = '0';
+      }
+    };
 
     let cleaned = false;
     const cleanup = () => {
@@ -691,6 +724,20 @@ export const CinematicLayer = memo(forwardRef<CinematicLayerRef, CinematicLayerP
       animationsRef.current.delete(entry.id);
       startedRef.current.delete(entry.id);
       finishedRef.current.delete(entry.id);
+      // Hide the clone imperatively FIRST. Unmounting it goes through React
+      // state, which does not land until the next commit — restoring the real
+      // piece here while the clone is still in the DOM is exactly what painted
+      // the piece twice for one frame.
+      const wrapper = moveElsRef.current.get(entry.id);
+      moveElsRef.current.delete(entry.id);
+      if (wrapper) wrapper.style.display = 'none';
+      // Release the destination in the same synchronous block, so the clone
+      // vanishes and the real piece appears within one frame.
+      if (suppressed?.delete(entry.toSquare)) {
+        const el = getPieceElementRef.current(entry.toSquare);
+        if (el) el.style.opacity = '';
+      }
+      if (handoffHidden) handoffHidden.style.opacity = '';
       if (entry.hiddenSquare) {
         const orig = getPieceElementRef.current(entry.hiddenSquare);
         if (orig) orig.style.opacity = '';
@@ -704,7 +751,22 @@ export const CinematicLayer = memo(forwardRef<CinematicLayerRef, CinematicLayerP
       setMoves(prev => prev.filter(m => m.id !== entry.id));
     };
     if (typeof requestAnimationFrame === 'function') {
-      requestAnimationFrame(() => requestAnimationFrame(cleanup));
+      // We cannot know which frame the caller's commit lands on: a flushSync
+      // caller lands before the next frame, a plain setState may take a few.
+      // So retry the hide each frame until the new piece exists, then clean up
+      // on the following frame. rAF callbacks run after tasks and before paint,
+      // so whichever frame React commits on, the hide still beats the paint.
+      let attempts = 4;
+      const step = () => {
+        if (cleaned) return;
+        hideHandoffPiece();
+        if (handoffHidden || --attempts <= 0) {
+          requestAnimationFrame(cleanup);
+          return;
+        }
+        requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
       // rAF freezes in backgrounded tabs and frameless captures; without
       // this fallback the fill-forwards animations and overlay would leak.
       setTimeout(cleanup, 150);
@@ -903,6 +965,7 @@ export const CinematicLayer = memo(forwardRef<CinematicLayerRef, CinematicLayerP
   }, [spawnVictimBlast, spawnFlash, spawnBurst, spawnBadge]);
 
   const startMoveAnimation = useCallback((wrapper: HTMLDivElement, entry: MoveEntry) => {
+    moveElsRef.current.set(entry.id, wrapper);
     if (startedRef.current.has(entry.id)) return;
     startedRef.current.add(entry.id);
 
@@ -2112,6 +2175,7 @@ export const CinematicLayer = memo(forwardRef<CinematicLayerRef, CinematicLayerP
     }
     hiddenSquaresRef.current.clear();
     spotlightElsRef.current.clear();
+    moveElsRef.current.clear();
     for (const tid of annotationTimersRef.current.values()) clearTimeout(tid);
     annotationTimersRef.current.clear();
     annotationElsRef.current.clear();

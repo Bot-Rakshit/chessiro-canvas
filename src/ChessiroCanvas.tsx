@@ -162,6 +162,10 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
     // render. Mutating a ref mid-render is not concurrent-safe: an interrupted
     // or discarded render would leave it describing a position that was never
     // committed. Writing only on change also avoids a per-render allocation.
+    // Squares the cinematic layer is covering with a flying clone. Shared by
+    // reference so the suppression is already in place when the caller's
+    // position commit renders the piece.
+    const suppressedSquaresRef = useRef<Set<string>>(new Set());
     const boardStateRef = useRef({ pieces: piecesMap, asWhite: orientation === 'white' });
     useLayoutEffect(() => {
       boardStateRef.current = { pieces: piecesMap, asWhite: orientation === 'white' };
@@ -474,6 +478,7 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
                 showAnimations={showAnimations}
                 draggingSquare={interaction.drag?.origSquare}
                 selectedSquare={interaction.selectedSquare}
+                suppressedSquaresRef={suppressedSquaresRef}
                 selectedPieceScale={selectedPieceScale}
               />
 
@@ -493,6 +498,7 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
               <CinematicLayer
                 ref={cinematicRef}
                 boardStateRef={boardStateRef}
+                suppressedSquaresRef={suppressedSquaresRef}
                 pieceSet={pieceSet}
                 customPieces={customPieces}
                 flipPieces={flipPieces}

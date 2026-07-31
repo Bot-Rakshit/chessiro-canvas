@@ -20,6 +20,13 @@ export interface PiecesLayerRef {
 }
 
 interface PiecesLayerProps {
+  /**
+   * Squares whose piece must render invisible. The cinematic layer fills this
+   * before it resolves, so a piece committed by the caller is hidden in the
+   * very commit that creates it — a layout effect runs before paint, which
+   * chasing the element with rAF afterwards can never achieve.
+   */
+  suppressedSquaresRef?: React.RefObject<Set<string>>;
   position: string;
   pieces: Pieces;
   orientation: Orientation;
@@ -63,6 +70,7 @@ export const PiecesLayer = memo(forwardRef<PiecesLayerRef, PiecesLayerProps>(fun
   animationDurationMs,
   showAnimations,
   draggingSquare,
+  suppressedSquaresRef,
   selectedSquare,
   selectedPieceScale,
 }, ref) {
@@ -253,6 +261,16 @@ export const PiecesLayer = memo(forwardRef<PiecesLayerRef, PiecesLayerProps>(fun
     if (rafIdRef.current !== null) {
       cancelAnimationFrame(rafIdRef.current);
       rafIdRef.current = null;
+    }
+
+      // Enforce suppression before paint, in the same commit that mounted the
+    // piece. Applied after syncTransforms so it wins over resting transforms.
+    const suppressed = suppressedSquaresRef?.current;
+    if (suppressed && suppressed.size > 0) {
+      for (const sq of suppressed) {
+        const el = pieceElsRef.current.get(sq as Square);
+        if (el) el.style.opacity = '0';
+      }
     }
 
     const stillAnimating = syncTransforms();

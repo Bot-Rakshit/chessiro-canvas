@@ -1523,6 +1523,7 @@ var PiecesLayer = memo(forwardRef(function PiecesLayer2({
   animationDurationMs,
   showAnimations,
   draggingSquare,
+  suppressedSquaresRef,
   selectedSquare,
   selectedPieceScale
 }, ref) {
@@ -1676,6 +1677,13 @@ var PiecesLayer = memo(forwardRef(function PiecesLayer2({
     if (rafIdRef.current !== null) {
       cancelAnimationFrame(rafIdRef.current);
       rafIdRef.current = null;
+    }
+    const suppressed = suppressedSquaresRef?.current;
+    if (suppressed && suppressed.size > 0) {
+      for (const sq2 of suppressed) {
+        const el = pieceElsRef.current.get(sq2);
+        if (el) el.style.opacity = "0";
+      }
     }
     const stillAnimating = syncTransforms();
     if (stillAnimating) {
@@ -2601,6 +2609,7 @@ function buildSettleAttitudeKeyframes(e) {
 }
 var CinematicLayer = memo(forwardRef(function CinematicLayer2({
   boardStateRef,
+  suppressedSquaresRef: suppressedSquaresRefProp,
   pieceSet,
   customPieces,
   flipPieces = false,
@@ -2632,6 +2641,7 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
   const animationsRef = useRef(/* @__PURE__ */ new Map());
   const timeoutsRef = useRef(/* @__PURE__ */ new Map());
   const hiddenVictimsRef = useRef(/* @__PURE__ */ new Map());
+  const moveElsRef = useRef(/* @__PURE__ */ new Map());
   const hiddenSquaresRef = useRef(/* @__PURE__ */ new Map());
   const spotlightElsRef = useRef(/* @__PURE__ */ new Map());
   const annotationElsRef = useRef(/* @__PURE__ */ new Map());
@@ -2641,9 +2651,20 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
   const finishMove = useCallback((entry) => {
     if (finishedRef.current.has(entry.id)) return;
     finishedRef.current.add(entry.id);
+    const suppressed = suppressedSquaresRefProp?.current;
+    suppressed?.add(entry.toSquare);
     const resolve = resolversRef.current.get(entry.id);
     resolversRef.current.delete(entry.id);
     resolve?.();
+    let handoffHidden = null;
+    const hideHandoffPiece = () => {
+      if (cleaned || handoffHidden) return;
+      const el = getPieceElementRef.current(entry.toSquare);
+      if (el && el.style.opacity !== "0") {
+        handoffHidden = el;
+        el.style.opacity = "0";
+      }
+    };
     let cleaned = false;
     const cleanup = () => {
       if (cleaned) return;
@@ -2653,6 +2674,14 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
       animationsRef.current.delete(entry.id);
       startedRef.current.delete(entry.id);
       finishedRef.current.delete(entry.id);
+      const wrapper = moveElsRef.current.get(entry.id);
+      moveElsRef.current.delete(entry.id);
+      if (wrapper) wrapper.style.display = "none";
+      if (suppressed?.delete(entry.toSquare)) {
+        const el = getPieceElementRef.current(entry.toSquare);
+        if (el) el.style.opacity = "";
+      }
+      if (handoffHidden) handoffHidden.style.opacity = "";
       if (entry.hiddenSquare) {
         const orig = getPieceElementRef.current(entry.hiddenSquare);
         if (orig) orig.style.opacity = "";
@@ -2666,7 +2695,17 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
       setMoves((prev) => prev.filter((m) => m.id !== entry.id));
     };
     if (typeof requestAnimationFrame === "function") {
-      requestAnimationFrame(() => requestAnimationFrame(cleanup));
+      let attempts = 4;
+      const step = () => {
+        if (cleaned) return;
+        hideHandoffPiece();
+        if (handoffHidden || --attempts <= 0) {
+          requestAnimationFrame(cleanup);
+          return;
+        }
+        requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
       setTimeout(cleanup, 150);
     } else {
       cleanup();
@@ -2842,6 +2881,7 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
     return fx;
   }, [spawnVictimBlast, spawnFlash, spawnBurst, spawnBadge]);
   const startMoveAnimation = useCallback((wrapper, entry) => {
+    moveElsRef.current.set(entry.id, wrapper);
     if (startedRef.current.has(entry.id)) return;
     startedRef.current.add(entry.id);
     const hero = wrapper.querySelector("[data-cine-hero]");
@@ -3883,6 +3923,7 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
     }
     hiddenSquaresRef.current.clear();
     spotlightElsRef.current.clear();
+    moveElsRef.current.clear();
     for (const tid of annotationTimersRef.current.values()) clearTimeout(tid);
     annotationTimersRef.current.clear();
     annotationElsRef.current.clear();
@@ -5877,6 +5918,7 @@ var ChessiroCanvas = forwardRef(
       };
     }, []);
     const piecesMap = useMemo(() => readFen(position || INITIAL_FEN), [position]);
+    const suppressedSquaresRef = useRef(/* @__PURE__ */ new Set());
     const boardStateRef = useRef({ pieces: piecesMap, asWhite: orientation === "white" });
     useLayoutEffect(() => {
       boardStateRef.current = { pieces: piecesMap, asWhite: orientation === "white" };
@@ -6181,6 +6223,7 @@ var ChessiroCanvas = forwardRef(
                               showAnimations,
                               draggingSquare: interaction.drag?.origSquare,
                               selectedSquare: interaction.selectedSquare,
+                              suppressedSquaresRef,
                               selectedPieceScale
                             }
                           ),
@@ -6201,6 +6244,7 @@ var ChessiroCanvas = forwardRef(
                             {
                               ref: cinematicRef,
                               boardStateRef,
+                              suppressedSquaresRef,
                               pieceSet,
                               customPieces,
                               flipPieces,
