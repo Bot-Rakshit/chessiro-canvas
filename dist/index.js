@@ -1562,14 +1562,14 @@ var PiecesLayer = memo(forwardRef(function PiecesLayer2({
     const anim = animRef.current;
     const dirtySquares = dirtySquaresRef.current;
     if (!anim && dirtySquares.size === 0) return false;
-    let ease = 0;
+    let ease2 = 0;
     if (anim) {
       const elapsed = performance.now() - anim.startTime;
       const rest = 1 - elapsed * anim.frequency;
       if (rest <= 0) {
         animRef.current = null;
       } else {
-        ease = easing(rest);
+        ease2 = easing(rest);
       }
     }
     const currentAnim = animRef.current;
@@ -1587,8 +1587,8 @@ var PiecesLayer = memo(forwardRef(function PiecesLayer2({
       const el = pieceElsRef.current.get(sq2);
       if (!el) continue;
       const [col, row] = squareColRow(sq2, asWhite);
-      let x = col + mult * (vec.fromPos[0] - vec.toPos[0]) * ease;
-      let y = row - mult * (vec.fromPos[1] - vec.toPos[1]) * ease;
+      let x = col + mult * (vec.fromPos[0] - vec.toPos[0]) * ease2;
+      let y = row - mult * (vec.fromPos[1] - vec.toPos[1]) * ease2;
       x = Math.max(0, Math.min(7, x));
       y = Math.max(0, Math.min(7, y));
       el.style.transform = `translate(${x * 100}%, ${y * 100}%)`;
@@ -1613,14 +1613,14 @@ var PiecesLayer = memo(forwardRef(function PiecesLayer2({
       }
       return false;
     }
-    const ease = easing(rest);
+    const ease2 = easing(rest);
     const mult = asWhite ? 1 : -1;
     for (const [sq2, vec] of anim.plan.anims) {
       const el = pieceElsRef.current.get(sq2);
       if (!el) continue;
       const [col, row] = squareColRow(sq2, asWhite);
-      let x = col + mult * (vec.fromPos[0] - vec.toPos[0]) * ease;
-      let y = row - mult * (vec.fromPos[1] - vec.toPos[1]) * ease;
+      let x = col + mult * (vec.fromPos[0] - vec.toPos[0]) * ease2;
+      let y = row - mult * (vec.fromPos[1] - vec.toPos[1]) * ease2;
       x = Math.max(0, Math.min(7, x));
       y = Math.max(0, Math.min(7, y));
       el.style.transform = `translate(${x * 100}%, ${y * 100}%)`;
@@ -1628,7 +1628,7 @@ var PiecesLayer = memo(forwardRef(function PiecesLayer2({
     }
     for (const sq2 of anim.plan.fadings.keys()) {
       const el = fadingElsRef.current.get(sq2);
-      if (el) el.style.opacity = String(ease);
+      if (el) el.style.opacity = String(ease2);
     }
     return true;
   }, [asWhite, restoreSquare]);
@@ -4966,6 +4966,183 @@ function playCinematicScript(ctx, steps, options) {
   };
   return { finished, cancel };
 }
+function ease(t) {
+  return t < 0.5 ? 4 * t * t * t : (t - 1) * (2 * t - 2) * (2 * t - 2) + 1;
+}
+function arrowPresenceKey(arrow) {
+  return arrow.id ?? `${arrow.startSquare}-${arrow.endSquare}-${arrow.color}`;
+}
+function resolveFadeIn(arrow, visuals) {
+  const value = arrow.fadeInMs ?? visuals.fadeInMs ?? 0;
+  return Number.isFinite(value) ? Math.max(0, value) : 0;
+}
+function resolveFadeOut(arrow, visuals) {
+  const value = arrow.fadeOutMs ?? visuals.fadeOutMs ?? 0;
+  return Number.isFinite(value) ? Math.max(0, value) : 0;
+}
+function toPresent(tracked) {
+  return tracked.map((item) => ({
+    key: item.key,
+    arrow: item.arrow,
+    alpha: item.alpha,
+    exiting: item.exiting
+  }));
+}
+function useArrowPresence(arrows, visuals = {}) {
+  const [present, setPresent] = useState([]);
+  const trackedRef = useRef([]);
+  const visualsRef = useRef(visuals);
+  const rafRef = useRef(null);
+  visualsRef.current = visuals;
+  useEffect(() => {
+    return () => {
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+    };
+  }, []);
+  useLayoutEffect(() => {
+    const now = performance.now();
+    const nextVisuals = visualsRef.current;
+    const prev = trackedRef.current;
+    const prevByKey = new Map(prev.map((item) => [item.key, item]));
+    const incomingKeys = /* @__PURE__ */ new Set();
+    const next = [];
+    for (const arrow of arrows) {
+      const key = arrowPresenceKey(arrow);
+      if (incomingKeys.has(key)) continue;
+      incomingKeys.add(key);
+      const existing = prevByKey.get(key);
+      const fadeIn = resolveFadeIn(arrow, nextVisuals);
+      if (!existing) {
+        if (fadeIn <= 0) {
+          next.push({
+            key,
+            arrow,
+            alpha: 1,
+            from: 1,
+            to: 1,
+            start: now,
+            duration: 0,
+            exiting: false
+          });
+        } else {
+          next.push({
+            key,
+            arrow,
+            alpha: 0,
+            from: 0,
+            to: 1,
+            start: now,
+            duration: fadeIn,
+            exiting: false
+          });
+        }
+        continue;
+      }
+      if (existing.exiting) {
+        const reverseIn = fadeIn > 0 ? fadeIn : resolveFadeOut(existing.arrow, nextVisuals);
+        if (reverseIn <= 0) {
+          next.push({
+            key,
+            arrow,
+            alpha: 1,
+            from: 1,
+            to: 1,
+            start: now,
+            duration: 0,
+            exiting: false
+          });
+        } else {
+          next.push({
+            key,
+            arrow,
+            alpha: existing.alpha,
+            from: existing.alpha,
+            to: 1,
+            start: now,
+            duration: reverseIn,
+            exiting: false
+          });
+        }
+      } else {
+        next.push({
+          ...existing,
+          arrow,
+          // Keep any in-progress enter animation; otherwise stay fully visible.
+          exiting: false
+        });
+      }
+    }
+    for (const existing of prev) {
+      if (incomingKeys.has(existing.key)) continue;
+      if (existing.exiting) {
+        next.push(existing);
+        continue;
+      }
+      const fadeOut = resolveFadeOut(existing.arrow, nextVisuals);
+      if (fadeOut <= 0) {
+        continue;
+      }
+      next.push({
+        key: existing.key,
+        arrow: existing.arrow,
+        alpha: existing.alpha,
+        from: existing.alpha,
+        to: 0,
+        start: now,
+        duration: fadeOut,
+        exiting: true
+      });
+    }
+    trackedRef.current = next;
+    setPresent(toPresent(next));
+    if (rafRef.current !== null) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+    const needsFrames = next.some(
+      (item) => item.duration > 0 && item.from !== item.to
+    );
+    if (!needsFrames) return;
+    const step = (frameNow) => {
+      const current = trackedRef.current;
+      let animating = false;
+      const updated = [];
+      for (const item of current) {
+        if (item.duration <= 0 || item.from === item.to) {
+          if (!(item.exiting && item.alpha <= 0)) {
+            updated.push(item);
+          }
+          continue;
+        }
+        const t = Math.min(1, (frameNow - item.start) / item.duration);
+        const alpha = item.from + (item.to - item.from) * ease(t);
+        const done = t >= 1;
+        if (item.exiting && done) {
+          continue;
+        }
+        updated.push({
+          ...item,
+          alpha: done ? item.to : alpha,
+          from: done ? item.to : item.from,
+          duration: done ? 0 : item.duration
+        });
+        if (!done) animating = true;
+      }
+      trackedRef.current = updated;
+      setPresent(toPresent(updated));
+      if (animating) {
+        rafRef.current = requestAnimationFrame(step);
+      } else {
+        rafRef.current = null;
+      }
+    };
+    rafRef.current = requestAnimationFrame(step);
+  }, [arrows, visuals.fadeInMs, visuals.fadeOutMs]);
+  return present;
+}
 function pos2user(fileIdx, rankIdx, asWhite, boardWidth, boardHeight) {
   const f = asWhite ? fileIdx : 7 - fileIdx;
   const r = asWhite ? rankIdx : 7 - rankIdx;
@@ -5068,6 +5245,7 @@ var ArrowsLayer = memo(function ArrowsLayer2({
   visuals = {}
 }) {
   const asWhite = orientation === "white";
+  const presentArrows = useArrowPresence(arrows, visuals);
   const lineWidth = visuals.lineWidth ?? 0.086;
   const margin = visuals.margin ?? 0.18;
   const startOffset = visuals.startOffset ?? 0;
@@ -5115,10 +5293,10 @@ var ArrowsLayer = memo(function ArrowsLayer2({
   }, [headShape, headLength, lineWidth]);
   const uniqueColors = useMemo(() => {
     const set = /* @__PURE__ */ new Set();
-    for (const a of arrows) set.add(a.color);
+    for (const item of presentArrows) set.add(item.arrow.color);
     return [...set];
-  }, [arrows]);
-  if (arrows.length === 0 || boardWidth === 0) return null;
+  }, [presentArrows]);
+  if (presentArrows.length === 0 || boardWidth === 0) return null;
   return /* @__PURE__ */ jsxs(
     "svg",
     {
@@ -5174,7 +5352,7 @@ var ArrowsLayer = memo(function ArrowsLayer2({
             mainId
           );
         }) }),
-        arrows.map((arrow, i) => {
+        presentArrows.map(({ key, arrow, alpha }) => {
           const fromFR = squareToFileRank(arrow.startSquare);
           const toFR = squareToFileRank(arrow.endSquare);
           if (!fromFR || !toFR) return null;
@@ -5185,7 +5363,7 @@ var ArrowsLayer = memo(function ArrowsLayer2({
           const dist = Math.sqrt(dx * dx + dy * dy);
           if (dist === 0) return null;
           const markerUrl = `url(#${markerKey("h", arrow.color, headShape, markerVariant)})`;
-          const keyBase = `${arrow.startSquare}-${arrow.endSquare}-${arrow.color}-${i}`;
+          const opacity = lineOpacity * alpha;
           const lineShorten = margin + headForwardExtent;
           const df = toFR[0] - fromFR[0];
           const dr = toFR[1] - fromFR[1];
@@ -5204,7 +5382,7 @@ var ArrowsLayer = memo(function ArrowsLayer2({
             const eX = to[0] - l2x / l2 * lineShorten;
             const eY = to[1] - l2y / l2 * lineShorten;
             const d = `M${sX.toFixed(4)},${sY.toFixed(4)} L${corner[0].toFixed(4)},${corner[1].toFixed(4)} L${eX.toFixed(4)},${eY.toFixed(4)}`;
-            return /* @__PURE__ */ jsxs("g", { opacity: lineOpacity, children: [
+            return /* @__PURE__ */ jsxs("g", { opacity, children: [
               hasOutline && /* @__PURE__ */ jsx(
                 "path",
                 {
@@ -5232,7 +5410,7 @@ var ArrowsLayer = memo(function ArrowsLayer2({
                   markerEnd: markerUrl
                 }
               )
-            ] }, keyBase);
+            ] }, key);
           }
           const ux = dx / dist;
           const uy = dy / dist;
@@ -5240,7 +5418,7 @@ var ArrowsLayer = memo(function ArrowsLayer2({
           const startY = from[1] + uy * startOffset;
           const endX = to[0] - ux * lineShorten;
           const endY = to[1] - uy * lineShorten;
-          return /* @__PURE__ */ jsxs("g", { opacity: lineOpacity, children: [
+          return /* @__PURE__ */ jsxs("g", { opacity, children: [
             hasOutline && /* @__PURE__ */ jsx(
               "line",
               {
@@ -5271,7 +5449,7 @@ var ArrowsLayer = memo(function ArrowsLayer2({
                 markerEnd: markerUrl
               }
             )
-          ] }, keyBase);
+          ] }, key);
         })
       ]
     }

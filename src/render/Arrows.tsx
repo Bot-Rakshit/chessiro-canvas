@@ -1,4 +1,5 @@
 import { memo, useMemo } from 'react';
+import { useArrowPresence } from '../hooks/useArrowPresence';
 import type { Arrow, Orientation, ArrowVisuals, ArrowHeadShape } from '../types';
 
 interface ArrowsProps {
@@ -198,6 +199,8 @@ export const ArrowsLayer = memo(function ArrowsLayer({
   visuals = {},
 }: ArrowsProps) {
   const asWhite = orientation === 'white';
+  // Keep removed arrows mounted until their fade-out finishes.
+  const presentArrows = useArrowPresence(arrows, visuals);
 
   // ── Defaults ──
   const lineWidth = visuals.lineWidth ?? 0.086;
@@ -265,11 +268,11 @@ export const ArrowsLayer = memo(function ArrowsLayer({
 
   const uniqueColors = useMemo(() => {
     const set = new Set<string>();
-    for (const a of arrows) set.add(a.color);
+    for (const item of presentArrows) set.add(item.arrow.color);
     return [...set];
-  }, [arrows]);
+  }, [presentArrows]);
 
-  if (arrows.length === 0 || boardWidth === 0) return null;
+  if (presentArrows.length === 0 || boardWidth === 0) return null;
 
   return (
     <svg
@@ -330,7 +333,7 @@ export const ArrowsLayer = memo(function ArrowsLayer({
         })}
       </defs>
 
-      {arrows.map((arrow, i) => {
+      {presentArrows.map(({ key, arrow, alpha }) => {
         const fromFR = squareToFileRank(arrow.startSquare);
         const toFR = squareToFileRank(arrow.endSquare);
         if (!fromFR || !toFR) return null;
@@ -344,7 +347,7 @@ export const ArrowsLayer = memo(function ArrowsLayer({
         if (dist === 0) return null;
 
         const markerUrl = `url(#${markerKey('h', arrow.color, headShape, markerVariant)})`;
-        const keyBase = `${arrow.startSquare}-${arrow.endSquare}-${arrow.color}-${i}`;
+        const opacity = lineOpacity * alpha;
 
         // Shaft end: triangle sits in front of the line, so the head tip lands at (to - margin * dir).
         const lineShorten = margin + headForwardExtent;
@@ -381,7 +384,7 @@ export const ArrowsLayer = memo(function ArrowsLayer({
           const d = `M${sX.toFixed(4)},${sY.toFixed(4)} L${corner[0].toFixed(4)},${corner[1].toFixed(4)} L${eX.toFixed(4)},${eY.toFixed(4)}`;
 
           return (
-            <g key={keyBase} opacity={lineOpacity}>
+            <g key={key} opacity={opacity}>
               {hasOutline && (
                 <path
                   d={d}
@@ -420,7 +423,7 @@ export const ArrowsLayer = memo(function ArrowsLayer({
         const endY = to[1] - uy * lineShorten;
 
         return (
-          <g key={keyBase} opacity={lineOpacity}>
+          <g key={key} opacity={opacity}>
             {hasOutline && (
               <line
                 x1={startX}

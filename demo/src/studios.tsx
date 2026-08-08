@@ -71,6 +71,11 @@ export function ArrowPremoveStudio({ theme }: { theme: BoardTheme }) {
   const [dashOffset, setDashOffset] = useState(0);
   const [outlineWidth, setOutlineWidth] = useState(0);
   const [outlineColor, setOutlineColor] = useState('rgba(0,0,0,0.45)');
+  const [fadeInMs, setFadeInMs] = useState(400);
+  const [fadeOutMs, setFadeOutMs] = useState(350);
+  const [staggerMs, setStaggerMs] = useState(550);
+  const [fadeBusy, setFadeBusy] = useState(false);
+  const fadeSeqRef = useRef(0);
   const [brushes, setBrushes] = useState<ArrowBrushes>({ ...DEFAULT_ARROW_BRUSHES });
 
   const [touchDragScale, setTouchDragScale] = useState(1.9);
@@ -105,8 +110,10 @@ export function ArrowPremoveStudio({ theme }: { theme: BoardTheme }) {
       dashArray: dashed ? dashArray : undefined,
       dashOffset: dashed ? dashOffset : undefined,
       outlineWidth, outlineColor,
+      fadeInMs,
+      fadeOutMs,
     }),
-    [lineWidth, opacity, margin, startOffset, headLength, headWidth, headShape, headCornerRadius, lineCap, lineJoin, dashed, dashArray, dashOffset, outlineWidth, outlineColor],
+    [lineWidth, opacity, margin, startOffset, headLength, headWidth, headShape, headCornerRadius, lineCap, lineJoin, dashed, dashArray, dashOffset, outlineWidth, outlineColor, fadeInMs, fadeOutMs],
   );
 
   const squareVisuals = useMemo<Partial<SquareVisuals>>(
@@ -149,12 +156,47 @@ export function ArrowPremoveStudio({ theme }: { theme: BoardTheme }) {
     setMargin(0.18); setStartOffset(0); setLineCap('round'); setLineJoin('miter');
     setHeadShape('classic'); setHeadCornerRadius(0); setDashed(false);
     setDashArray('0.22 0.16'); setDashOffset(0); setOutlineWidth(0);
-    setOutlineColor('rgba(0,0,0,0.45)'); setBrushes({ ...DEFAULT_ARROW_BRUSHES });
+    setOutlineColor('rgba(0,0,0,0.45)'); setFadeInMs(400); setFadeOutMs(350);
+    setStaggerMs(550); setBrushes({ ...DEFAULT_ARROW_BRUSHES });
   }, []);
 
+  const coloredPresets = useCallback(
+    () =>
+      DEFAULT_PRESET_ARROWS.map((a) => ({
+        ...a,
+        id: `${a.startSquare}-${a.endSquare}`,
+        color: a.brush ? brushes[a.brush] : a.color,
+      })),
+    [brushes],
+  );
+
   const addPresetArrows = useCallback(() => {
-    setUserArrows(DEFAULT_PRESET_ARROWS.map((a) => ({ ...a, color: a.brush ? brushes[a.brush] : a.color })));
-  }, [brushes]);
+    setUserArrows(coloredPresets());
+  }, [coloredPresets]);
+
+  const playFadeSequence = useCallback(async () => {
+    const seq = ++fadeSeqRef.current;
+    setFadeBusy(true);
+    setUserArrows([]);
+    await sleep(Math.max(fadeOutMs, 50) + 40);
+    if (fadeSeqRef.current !== seq) return;
+
+    const presets = coloredPresets();
+    for (let i = 0; i < presets.length; i++) {
+      if (fadeSeqRef.current !== seq) return;
+      setUserArrows(presets.slice(0, i + 1));
+      if (i < presets.length - 1) {
+        await sleep(staggerMs);
+      }
+    }
+
+    await sleep(Math.max(fadeInMs, 200) + 600);
+    if (fadeSeqRef.current !== seq) return;
+    setUserArrows([]);
+    await sleep(Math.max(fadeOutMs, 50) + 40);
+    if (fadeSeqRef.current !== seq) return;
+    setFadeBusy(false);
+  }, [coloredPresets, fadeInMs, fadeOutMs, staggerMs]);
 
   const snippet = useMemo(() => {
     const arrowObj: Record<string, unknown> = {
@@ -165,6 +207,8 @@ export function ArrowPremoveStudio({ theme }: { theme: BoardTheme }) {
       headLength: round(headLength, 2),
       headWidth: round(headWidth, 2),
       headShape, lineCap, lineJoin,
+      fadeInMs,
+      fadeOutMs,
     };
     if (headCornerRadius > 0) arrowObj.headCornerRadius = round(headCornerRadius, 2);
     if (dashed) {
@@ -177,6 +221,7 @@ export function ArrowPremoveStudio({ theme }: { theme: BoardTheme }) {
     }
     return `<ChessiroCanvas
   position={fen}
+  arrows={arrows}
   arrowVisuals={${JSON.stringify(arrowObj, null, 2).replace(/\n/g, '\n  ')}}
   arrowBrushes={${JSON.stringify(brushes, null, 2).replace(/\n/g, '\n  ')}}
   dragScale={${dragScale}}
@@ -184,7 +229,7 @@ export function ArrowPremoveStudio({ theme }: { theme: BoardTheme }) {
   dragLiftSquares={${dragLiftSquares}}
   touchDragLiftSquares={${touchDragLiftSquares}}
 />`;
-  }, [lineWidth, opacity, margin, startOffset, headLength, headWidth, headShape, headCornerRadius, lineCap, lineJoin, dashed, dashArray, dashOffset, outlineWidth, outlineColor, brushes, dragScale, touchDragScale, dragLiftSquares, touchDragLiftSquares]);
+  }, [lineWidth, opacity, margin, startOffset, headLength, headWidth, headShape, headCornerRadius, lineCap, lineJoin, dashed, dashArray, dashOffset, outlineWidth, outlineColor, fadeInMs, fadeOutMs, brushes, dragScale, touchDragScale, dragLiftSquares, touchDragLiftSquares]);
 
   return (
     <Workbench
@@ -224,14 +269,52 @@ export function ArrowPremoveStudio({ theme }: { theme: BoardTheme }) {
           </Plate>
           <div className="flex flex-wrap gap-2">
             <button onClick={resetStudio} className="btn">Reset board</button>
-            <button onClick={addPresetArrows} className="btn">Re-add presets</button>
-            <button onClick={() => setUserArrows([])} className="btn">Clear arrows</button>
+            <button onClick={addPresetArrows} className="btn" disabled={fadeBusy}>Re-add presets</button>
+            <button onClick={() => setUserArrows([])} className="btn" disabled={fadeBusy}>Clear arrows</button>
+            <button onClick={() => void playFadeSequence()} className="btn" disabled={fadeBusy}>
+              {fadeBusy ? 'Playing fade…' : 'Play fade sequence'}
+            </button>
             <button onClick={resetArrowDefaults} className="btn">Reset style</button>
           </div>
         </>
       }
       controls={
         <>
+          <Panel title="Fade in / out">
+            <Slider
+              label="Fade in"
+              value={fadeInMs}
+              min={0}
+              max={1500}
+              step={50}
+              onChange={setFadeInMs}
+              format={(v) => (v === 0 ? 'instant' : `${v}ms`)}
+            />
+            <Slider
+              label="Fade out"
+              value={fadeOutMs}
+              min={0}
+              max={1500}
+              step={50}
+              onChange={setFadeOutMs}
+              format={(v) => (v === 0 ? 'instant' : `${v}ms`)}
+            />
+            <Slider
+              label="Sequence stagger"
+              value={staggerMs}
+              min={100}
+              max={1500}
+              step={50}
+              onChange={setStaggerMs}
+              format={(v) => `${v}ms`}
+            />
+            <p className="note">
+              Library-level fades: set <C>arrowVisuals.fadeInMs</C> / <C>fadeOutMs</C> (or per-arrow
+              overrides). Adding an arrow fades it in; removing it from the array fades it out.
+              “Play fade sequence” staggers the presets, then clears them so you can see both.
+            </p>
+          </Panel>
+
           <Panel title="Geometry">
             <Slider label="Line width" value={lineWidth} min={0.02} max={0.25} step={0.005} onChange={setLineWidth} format={(v) => v.toFixed(3)} />
             <Slider label="Opacity" value={opacity} min={0.1} max={1} step={0.05} onChange={setOpacity} format={(v) => v.toFixed(2)} />
