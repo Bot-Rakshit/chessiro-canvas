@@ -282,6 +282,38 @@ export function ArrowPremoveStudio({ theme }: { theme: BoardTheme }) {
       }
       controls={
         <>
+          <Panel title="Try it">
+            <button
+              type="button"
+              onClick={() => void playFadeSequence()}
+              disabled={fadeBusy}
+              className="btn btn-primary btn-block"
+            >
+              {fadeBusy ? 'Playing fade…' : 'Play fade sequence'}
+            </button>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={addPresetArrows}
+                disabled={fadeBusy}
+                className="btn flex-1"
+              >
+                Fade in presets
+              </button>
+              <button
+                type="button"
+                onClick={() => setUserArrows([])}
+                disabled={fadeBusy}
+                className="btn flex-1"
+              >
+                Fade out all
+              </button>
+            </div>
+            <p className="note">
+              Watch the board: arrows fade in when added and fade out when cleared.
+            </p>
+          </Panel>
+
           <Panel title="Fade in / out">
             <Slider
               label="Fade in"
@@ -313,7 +345,6 @@ export function ArrowPremoveStudio({ theme }: { theme: BoardTheme }) {
             <p className="note">
               Library-level fades: set <C>arrowVisuals.fadeInMs</C> / <C>fadeOutMs</C> (or per-arrow
               overrides). Adding an arrow fades it in; removing it from the array fades it out.
-              “Play fade sequence” staggers the presets, then clears them so you can see both.
             </p>
           </Panel>
 
