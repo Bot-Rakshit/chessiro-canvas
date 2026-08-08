@@ -387,7 +387,7 @@ function AnalysisBoard({ fen }: { fen: string }) {
 ```
 
 Arrow appearance is deeply tunable — shaft width, dash pattern, arrowhead shape,
-outline, and how knight moves bend:
+outline, how knight moves bend, and enter/exit fades:
 
 ```tsx
 <ChessiroCanvas
@@ -401,8 +401,22 @@ outline, and how knight moves bend:
     knightArrowShape: 'l-shaped',
     dashArray: '0.22 0.16',
     outlineWidth: 0.02,
+    fadeInMs: 400,              // 0 = instant (default)
+    fadeOutMs: 350,             // removed arrows stay mounted until fade ends
   }}
 />
+```
+
+**Fade-in / fade-out.** Defaults live on `arrowVisuals`; override per arrow with
+`fadeInMs` / `fadeOutMs`. Optional `id` gives a stable enter/exit key (defaults to
+`start-end-color`). Adding an arrow to the controlled list fades it in; removing
+it fades it out.
+
+```tsx
+const arrows: Arrow[] = [
+  { startSquare: 'f3', endSquare: 'e5', color: '#15781B', id: 'ne5' },
+  { startSquare: 'c4', endSquare: 'f7', color: '#882020', id: 'bf7', fadeInMs: 600 },
+];
 ```
 
 **Per-ply storage.** For analysis boards where each move in a game has its own
@@ -740,7 +754,7 @@ All props are optional. The component forwards a `ref` of type
 | `markedSquares` | `string[]` | internal | Controlled marked squares. |
 | `onMarkedSquaresChange` | `(squares: string[]) => void` | — | Called when the user marks or clears squares. |
 | `arrowBrushes` | `Partial<ArrowBrushes>` | `DEFAULT_ARROW_BRUSHES` | Override the green/red/blue/yellow brush colors. |
-| `arrowVisuals` | `Partial<ArrowVisuals>` | — | Geometry, dashes, arrowhead shape, outline, knight bend. |
+| `arrowVisuals` | `Partial<ArrowVisuals>` | — | Geometry, dashes, arrowhead shape, outline, knight bend, fade in/out. |
 | `snapArrowsToValidMoves` | `boolean` | `true` | Snap drawn arrows to queen/knight directions. |
 | `allowDrawingArrows` | `boolean` | `true` | Toggle right-click arrows and marks. |
 | `plyIndex` | `number` | — | Current ply, for per-ply annotation storage. |

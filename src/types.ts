@@ -38,6 +38,24 @@ export interface Arrow {
   endSquare: string;
   color: string;
   brush?: ArrowBrush;
+  /**
+   * Optional stable identity used for enter/exit fade tracking.
+   * Defaults to `${startSquare}-${endSquare}-${color}`.
+   * Prefer setting this when the same geometric arrow can reappear
+   * (e.g. staggered checkmate sequences).
+   */
+  id?: string;
+  /**
+   * Per-arrow fade-in duration in ms when this arrow is added.
+   * Overrides `arrowVisuals.fadeInMs`. `0` = instant appear.
+   */
+  fadeInMs?: number;
+  /**
+   * Per-arrow fade-out duration in ms when this arrow is removed
+   * from the controlled `arrows` array. Overrides `arrowVisuals.fadeOutMs`.
+   * `0` = instant remove.
+   */
+  fadeOutMs?: number;
 }
 
 export interface ArrowBrushes {
@@ -178,6 +196,19 @@ export interface ArrowVisuals {
   outlineColor?: string;
   /** Outline thickness in board-units. 0 disables outline rendering. Default: 0. */
   outlineWidth?: number;
+
+  // ── Enter / exit fade ──
+  /**
+   * Default fade-in duration (ms) for newly appearing arrows.
+   * Overridden by each arrow's `fadeInMs`. Default: `0` (instant).
+   */
+  fadeInMs?: number;
+  /**
+   * Default fade-out duration (ms) for arrows removed from the controlled list.
+   * Removed arrows stay rendered until the fade finishes.
+   * Overridden by each arrow's `fadeOutMs`. Default: `0` (instant).
+   */
+  fadeOutMs?: number;
 
   // ── Deprecated legacy marker knobs (still honored) ──
   /** @deprecated Use headLength. */
