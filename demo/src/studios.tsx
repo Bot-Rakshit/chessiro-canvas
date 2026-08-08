@@ -177,25 +177,27 @@ export function ArrowPremoveStudio({ theme }: { theme: BoardTheme }) {
   const playFadeSequence = useCallback(async () => {
     const seq = ++fadeSeqRef.current;
     setFadeBusy(true);
-    setUserArrows([]);
-    await sleep(Math.max(fadeOutMs, 50) + 40);
-    if (fadeSeqRef.current !== seq) return;
-
-    const presets = coloredPresets();
-    for (let i = 0; i < presets.length; i++) {
+    try {
+      setUserArrows([]);
+      await sleep(Math.max(fadeOutMs, 50) + 40);
       if (fadeSeqRef.current !== seq) return;
-      setUserArrows(presets.slice(0, i + 1));
-      if (i < presets.length - 1) {
-        await sleep(staggerMs);
-      }
-    }
 
-    await sleep(Math.max(fadeInMs, 200) + 600);
-    if (fadeSeqRef.current !== seq) return;
-    setUserArrows([]);
-    await sleep(Math.max(fadeOutMs, 50) + 40);
-    if (fadeSeqRef.current !== seq) return;
-    setFadeBusy(false);
+      const presets = coloredPresets();
+      for (let i = 0; i < presets.length; i++) {
+        if (fadeSeqRef.current !== seq) return;
+        setUserArrows(presets.slice(0, i + 1));
+        if (i < presets.length - 1) {
+          await sleep(staggerMs);
+        }
+      }
+
+      await sleep(Math.max(fadeInMs, 200) + 600);
+      if (fadeSeqRef.current !== seq) return;
+      setUserArrows([]);
+      await sleep(Math.max(fadeOutMs, 50) + 40);
+    } finally {
+      if (fadeSeqRef.current === seq) setFadeBusy(false);
+    }
   }, [coloredPresets, fadeInMs, fadeOutMs, staggerMs]);
 
   const snippet = useMemo(() => {
