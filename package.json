@@ -1,6 +1,6 @@
 {
   "name": "chessiro-canvas",
-  "version": "0.1.44",
+  "version": "0.1.46",
   "description": "Fast, lightweight React chessboard component in TypeScript. Zero dependencies, controlled FEN API, drag & drop, arrows, premoves, promotion, theming — works with chess.js and chessops.",
   "type": "module",
   "sideEffects": false,
@@ -79,7 +79,7 @@
     "hooks"
   ],
   "license": "MIT",
-  "homepage": "https://chessiro.dev",
+  "homepage": "https://chessiro-canvas.vercel.app/",
   "bugs": {
     "url": "https://github.com/Bot-Rakshit/chessiro-canvas/issues"
   },

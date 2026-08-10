@@ -8,7 +8,7 @@
 [![types](https://img.shields.io/npm/types/chessiro-canvas?style=flat-square)](https://www.npmjs.com/package/chessiro-canvas)
 [![license](https://img.shields.io/npm/l/chessiro-canvas.svg?style=flat-square)](./LICENSE)
 
-<a href="https://chessiro.dev">
+<a href="https://chessiro-canvas.vercel.app/">
   <img src="https://raw.githubusercontent.com/Bot-Rakshit/chessiro-canvas/main/media/board-preview.png" width="480" alt="chessiro-canvas React chessboard component rendering the position after 1.e4 e5 2.Nf3, with a last-move highlight on f3, hollow legal-move indicators on a6 and c6, and an L-shaped knight arrow drawn from f3 to e5." />
 </a>
 
@@ -34,7 +34,7 @@ package purely for the board.
 - 📱 **Touch-friendly** — chessground-style finger lift and scroll blocking
 - 🟦 **TypeScript-first** — every prop, option, and imperative method typed
 
-**[Live demo and docs → chessiro.dev](https://chessiro.dev)** ·
+**[Live demo and docs → chessiro-canvas.vercel.app](https://chessiro-canvas.vercel.app/)** ·
 [npm](https://www.npmjs.com/package/chessiro-canvas) ·
 [GitHub](https://github.com/Bot-Rakshit/chessiro-canvas)
 
