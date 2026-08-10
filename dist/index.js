@@ -1945,11 +1945,53 @@ var SquareLabelsLayer = memo(function SquareLabelsLayer2({
     );
   }) });
 });
+
+// src/cinematics/motion.ts
+function canAnimate(el) {
+  return typeof el.animate === "function";
+}
+function waitForAnimation(anim, fallbackMs) {
+  if (!anim) {
+    return new Promise((resolve) => setTimeout(resolve, fallbackMs));
+  }
+  return new Promise((resolve) => {
+    let settled = false;
+    const settle = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(watchdog);
+      resolve();
+    };
+    const watchdog = setTimeout(settle, fallbackMs * 2 + 1e3);
+    const finished = anim.finished;
+    if (finished && typeof finished.then === "function") {
+      finished.then(settle, settle);
+      return;
+    }
+    try {
+      anim.onfinish = settle;
+      anim.oncancel = settle;
+    } catch {
+    }
+  });
+}
+var reducedMotionQuery;
+function prefersReducedMotion() {
+  if (reducedMotionQuery === void 0) {
+    reducedMotionQuery = typeof window !== "undefined" && typeof window.matchMedia === "function" ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
+  }
+  return reducedMotionQuery?.matches ?? false;
+}
 var DEFAULT_DEMO_DURATION_MS = 900;
 var DEFAULT_LIFT_SCALE = 1.18;
 var DEFAULT_PULSE_COLOR = "rgba(255, 188, 66, 0.95)";
 var DEFAULT_PULSE_DURATION_MS = 700;
 var DEFAULT_PULSE_TIMES = 2;
+var DEFAULT_TILT_ANGLE_DEG = 84;
+var DEFAULT_TILT_DURATION_MS = 600;
+var DEFAULT_TILT_RESET_MS = 300;
+var DEFAULT_TILT_EASING = "cubic-bezier(0.34, 0.02, 0.62, 1)";
+var TILT_PIVOT = "50% 50%";
 function squareColRow4(sq2, asWhite) {
   const f = sq2.charCodeAt(0) - 97;
   const r = sq2.charCodeAt(1) - 49;
@@ -1958,8 +2000,20 @@ function squareColRow4(sq2, asWhite) {
 function isValidSquare3(sq2) {
   return typeof sq2 === "string" && /^[a-h][1-8]$/.test(sq2);
 }
-function canAnimate(el) {
+function canAnimate2(el) {
   return typeof el.animate === "function";
+}
+function currentTiltAngle(entry) {
+  if (!entry) return 0;
+  if (!entry.anim || entry.settled) return entry.rest;
+  try {
+    const progress = entry.anim.effect?.getComputedTiming?.().progress;
+    if (typeof progress === "number" && Number.isFinite(progress)) {
+      return entry.from + (entry.peak - entry.from) * progress;
+    }
+  } catch {
+  }
+  return entry.rest;
 }
 var TeachingLayer = memo(forwardRef(function TeachingLayer2({
   boardStateRef,
@@ -1975,6 +2029,7 @@ var TeachingLayer = memo(forwardRef(function TeachingLayer2({
   const idRef = useRef(0);
   const demoResolversRef = useRef(/* @__PURE__ */ new Map());
   const demoAnimationsRef = useRef(/* @__PURE__ */ new Map());
+  const tiltsRef = useRef(/* @__PURE__ */ new Map());
   const startedRef = useRef(/* @__PURE__ */ new Set());
   const finishedRef = useRef(/* @__PURE__ */ new Set());
   const getPieceElementRef = useRef(getPieceElement);
@@ -2004,7 +2059,7 @@ var TeachingLayer = memo(forwardRef(function TeachingLayer2({
   const startDemoAnimation = useCallback((el, entry) => {
     if (startedRef.current.has(entry.id)) return;
     startedRef.current.add(entry.id);
-    if (!canAnimate(el)) {
+    if (!canAnimate2(el)) {
       finishDemo(entry);
       return;
     }
@@ -2097,7 +2152,7 @@ var TeachingLayer = memo(forwardRef(function TeachingLayer2({
   const startPulseAnimation = useCallback((el, entry) => {
     if (startedRef.current.has(entry.id)) return;
     startedRef.current.add(entry.id);
-    if (!canAnimate(el)) {
+    if (!canAnimate2(el)) {
       finishPulse(entry.id);
       return;
     }
@@ -2120,7 +2175,7 @@ var TeachingLayer = memo(forwardRef(function TeachingLayer2({
     if (!isValidSquare3(square)) return Promise.resolve();
     const outer = getPieceElementRef.current(square);
     const inner = outer?.firstElementChild;
-    if (!inner || !canAnimate(inner)) return Promise.resolve();
+    if (!inner || !canAnimate2(inner)) return Promise.resolve();
     return new Promise((resolve) => {
       const anim = inner.animate(
         [
@@ -2138,6 +2193,112 @@ var TeachingLayer = memo(forwardRef(function TeachingLayer2({
       anim.oncancel = () => resolve();
     });
   }, []);
+  const runTilt = useCallback((square, inner, spec) => {
+    const prev = tiltsRef.current.get(square);
+    const from = currentTiltAngle(prev);
+    if (spec.hold && spec.to === from && prev?.settled !== false) {
+      if (spec.to === 0) tiltsRef.current.delete(square);
+      return Promise.resolve();
+    }
+    prev?.anim?.cancel();
+    const base = flipPieces ? " rotate(180deg)" : "";
+    const at = (deg, offset, easing2) => ({
+      transform: `rotateZ(${deg}deg)${base}`,
+      transformOrigin: spec.pivot,
+      ...offset === void 0 ? {} : { offset },
+      ...easing2 === void 0 ? {} : { easing: easing2 }
+    });
+    const timed = spec.holdMs !== void 0;
+    const travel = spec.durationMs;
+    const totalMs = timed ? travel * 2 + (spec.holdMs ?? 0) : travel;
+    const span = Math.max(1, totalMs);
+    let frames;
+    if (timed) {
+      frames = [
+        at(from, 0, spec.easing),
+        // 'linear' over the hold window: it is a pause, not a movement.
+        at(spec.to, travel / span, "linear"),
+        at(spec.to, (travel + (spec.holdMs ?? 0)) / span, spec.easing),
+        at(from, 1)
+      ];
+    } else if (spec.hold) {
+      frames = [at(from), at(spec.to)];
+    } else {
+      frames = [at(from, 0), at(spec.to, 0.45), at(spec.to, 0.6), at(from, 1)];
+    }
+    const anim = inner.animate(frames, {
+      duration: totalMs,
+      // Timed holds carry their easing per keyframe so the pause stays flat.
+      easing: timed ? "linear" : spec.hold ? spec.easing : "ease-in-out",
+      fill: "forwards"
+    });
+    const rest = spec.hold && !timed ? spec.to : from;
+    const entry = {
+      from,
+      peak: spec.to,
+      rest,
+      pivot: spec.pivot,
+      anim,
+      settled: false
+    };
+    tiltsRef.current.set(square, entry);
+    return waitForAnimation(anim, totalMs).then(() => {
+      if (tiltsRef.current.get(square) !== entry) return;
+      entry.settled = true;
+      if (rest === 0) {
+        entry.anim = null;
+        tiltsRef.current.delete(square);
+        anim.cancel();
+      }
+    });
+  }, [flipPieces]);
+  const tiltPiece = useCallback((square, options) => {
+    if (!isValidSquare3(square)) return Promise.resolve();
+    const outer = getPieceElementRef.current(square);
+    const inner = outer?.firstElementChild;
+    if (!inner || !canAnimate2(inner)) return Promise.resolve();
+    const { asWhite } = boardStateRef.current;
+    const [col] = squareColRow4(square, asWhite);
+    const dir = options?.direction === "left" ? -1 : options?.direction === "auto" ? col <= 3 ? -1 : 1 : 1;
+    const rawAngle = options?.angle;
+    const angle = typeof rawAngle === "number" && Number.isFinite(rawAngle) ? rawAngle : DEFAULT_TILT_ANGLE_DEG;
+    const rawHoldMs = options?.holdMs;
+    const holdMs = typeof rawHoldMs === "number" && Number.isFinite(rawHoldMs) ? Math.max(0, rawHoldMs) : void 0;
+    const reduced = prefersReducedMotion() && !options?.force;
+    return runTilt(square, inner, {
+      to: angle * dir,
+      hold: holdMs === void 0 && (options?.hold ?? true),
+      holdMs,
+      // Under reduced motion a toppled king is still information, so the end
+      // state is kept and only the travel is skipped.
+      durationMs: reduced ? 0 : Math.max(0, options?.durationMs ?? DEFAULT_TILT_DURATION_MS),
+      pivot: options?.pivot ?? TILT_PIVOT,
+      easing: options?.easing ?? DEFAULT_TILT_EASING
+    });
+  }, [runTilt]);
+  const resetPieceTilt = useCallback((square, durationMs) => {
+    const squares = square === void 0 ? Array.from(tiltsRef.current.keys()) : [square];
+    const duration = prefersReducedMotion() ? 0 : Math.max(0, durationMs ?? DEFAULT_TILT_RESET_MS);
+    const jobs = [];
+    for (const sq2 of squares) {
+      const entry = tiltsRef.current.get(sq2);
+      if (!entry) continue;
+      const inner = getPieceElementRef.current(sq2)?.firstElementChild;
+      if (!inner || !canAnimate2(inner)) {
+        entry.anim?.cancel();
+        tiltsRef.current.delete(sq2);
+        continue;
+      }
+      jobs.push(runTilt(sq2, inner, {
+        to: 0,
+        hold: true,
+        durationMs: duration,
+        pivot: entry.pivot,
+        easing: DEFAULT_TILT_EASING
+      }));
+    }
+    return jobs.length === 0 ? Promise.resolve() : Promise.all(jobs).then(() => void 0);
+  }, [runTilt]);
   const clearEffects = useCallback(() => {
     for (const anim of Array.from(demoAnimationsRef.current.values())) {
       anim.cancel();
@@ -2148,6 +2309,8 @@ var TeachingLayer = memo(forwardRef(function TeachingLayer2({
         if (orig) orig.style.opacity = "";
       }
     }
+    for (const entry of tiltsRef.current.values()) entry.anim?.cancel();
+    tiltsRef.current.clear();
     const resolvers = Array.from(demoResolversRef.current.values());
     demoResolversRef.current.clear();
     demoAnimationsRef.current.clear();
@@ -2160,13 +2323,17 @@ var TeachingLayer = memo(forwardRef(function TeachingLayer2({
     animateMove,
     pulseSquare,
     shakePiece,
+    tiltPiece,
+    resetPieceTilt,
     clearEffects
-  }), [animateMove, pulseSquare, shakePiece, clearEffects]);
+  }), [animateMove, pulseSquare, shakePiece, tiltPiece, resetPieceTilt, clearEffects]);
   useEffect(() => {
     return () => {
       for (const anim of demoAnimationsRef.current.values()) {
         anim.cancel();
       }
+      for (const entry of tiltsRef.current.values()) entry.anim?.cancel();
+      tiltsRef.current.clear();
       for (const resolve of demoResolversRef.current.values()) resolve();
       demoResolversRef.current.clear();
     };
@@ -2235,43 +2402,6 @@ var TeachingLayer = memo(forwardRef(function TeachingLayer2({
     ))
   ] });
 }));
-
-// src/cinematics/motion.ts
-function canAnimate2(el) {
-  return typeof el.animate === "function";
-}
-function waitForAnimation(anim, fallbackMs) {
-  if (!anim) {
-    return new Promise((resolve) => setTimeout(resolve, fallbackMs));
-  }
-  return new Promise((resolve) => {
-    let settled = false;
-    const settle = () => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(watchdog);
-      resolve();
-    };
-    const watchdog = setTimeout(settle, fallbackMs * 2 + 1e3);
-    const finished = anim.finished;
-    if (finished && typeof finished.then === "function") {
-      finished.then(settle, settle);
-      return;
-    }
-    try {
-      anim.onfinish = settle;
-      anim.oncancel = settle;
-    } catch {
-    }
-  });
-}
-var reducedMotionQuery;
-function prefersReducedMotion() {
-  if (reducedMotionQuery === void 0) {
-    reducedMotionQuery = typeof window !== "undefined" && typeof window.matchMedia === "function" ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
-  }
-  return reducedMotionQuery?.matches ?? false;
-}
 var BRILLIANT_TEAL = "#26c2a3";
 var DEFAULT_BURST_COLOR = "#ffd65a";
 var DEFAULT_BURST_DURATION_MS = 650;
@@ -2885,7 +3015,7 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
     if (startedRef.current.has(entry.id)) return;
     startedRef.current.add(entry.id);
     const hero = wrapper.querySelector("[data-cine-hero]");
-    if (!hero || !canAnimate2(hero)) {
+    if (!hero || !canAnimate(hero)) {
       entry.opts.onImpact?.();
       finishMove(entry);
       return;
@@ -2911,7 +3041,7 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
     });
     anims.push(posApproach);
     const attitude = hero.firstElementChild?.firstElementChild;
-    if (attitude && canAnimate2(attitude)) {
+    if (attitude && canAnimate(attitude)) {
       const attApproach = attitude.animate(buildApproachAttitudeKeyframes(entry), {
         duration: approachMs,
         easing: "linear",
@@ -2922,7 +3052,7 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
     }
     const ghosts = wrapper.querySelectorAll("[data-cine-trail]");
     ghosts.forEach((ghost, i) => {
-      if (!canAnimate2(ghost)) return;
+      if (!canAnimate(ghost)) return;
       const delay = (i + 1) * TRAIL_GAP_MS;
       const peak = 0.32 * (1 - i / (ghosts.length + 1));
       const posGhost = ghost.animate(buildApproachPositionKeyframes(entry), {
@@ -2947,7 +3077,7 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
     waitForAnimation(posApproach, approachMs).then(() => {
       if (!animationsRef.current.has(entry.id) || finishedRef.current.has(entry.id)) return;
       const fxWaits = runImpact(entry);
-      if (attitude && canAnimate2(attitude)) {
+      if (attitude && canAnimate(attitude)) {
         const settle = attitude.animate(buildSettleAttitudeKeyframes(entry), {
           duration: settleMs,
           easing: "linear",
@@ -2968,7 +3098,7 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
     let idx = 0;
     if (entry.kind !== "sparkles") {
       const ring = children[idx++];
-      if (ring && canAnimate2(ring)) {
+      if (ring && canAnimate(ring)) {
         const anim = ring.animate(
           [
             { transform: "scale(0.3)", opacity: 0.9 },
@@ -2983,7 +3113,7 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
     if (entry.kind !== "shockwave") {
       for (const p of entry.particles) {
         const el = children[idx++];
-        if (!el || !canAnimate2(el)) continue;
+        if (!el || !canAnimate(el)) continue;
         const anim = el.animate(
           [
             { transform: "translate(0%, 0%) rotate(0deg) scale(1)", opacity: 1 },
@@ -3005,7 +3135,7 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
   const startBadgeAnimation = useCallback((el, entry) => {
     if (startedRef.current.has(entry.id)) return;
     startedRef.current.add(entry.id);
-    if (!canAnimate2(el)) {
+    if (!canAnimate(el)) {
       finishBadge(entry);
       return;
     }
@@ -3029,7 +3159,7 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
   const startBlastAnimation = useCallback((el, entry) => {
     if (startedRef.current.has(entry.id)) return;
     startedRef.current.add(entry.id);
-    if (!canAnimate2(el)) {
+    if (!canAnimate(el)) {
       finishBlast(entry);
       return;
     }
@@ -3055,7 +3185,7 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
   const startFlashAnimation = useCallback((el, entry) => {
     if (startedRef.current.has(entry.id)) return;
     startedRef.current.add(entry.id);
-    if (!canAnimate2(el)) {
+    if (!canAnimate(el)) {
       finishFlash(entry);
       return;
     }
@@ -3078,7 +3208,7 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
     const waits = [];
     entry.flakes.forEach((f, i) => {
       const el = children[i];
-      if (!el || !canAnimate2(el)) return;
+      if (!el || !canAnimate(el)) return;
       const fall = 110 / f.hPct * 100;
       const sway = f.swayPct / f.wPct * 100;
       const anim = el.animate(
@@ -3104,7 +3234,7 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
   const startBannerAnimation = useCallback((el, entry) => {
     if (startedRef.current.has(entry.id)) return;
     startedRef.current.add(entry.id);
-    if (!canAnimate2(el)) {
+    if (!canAnimate(el)) {
       finishBanner(entry);
       return;
     }
@@ -3132,7 +3262,7 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
     const anims = [];
     const waits = [];
     const pillar = container.querySelector("[data-promo-pillar]");
-    if (pillar && canAnimate2(pillar)) {
+    if (pillar && canAnimate(pillar)) {
       const anim = pillar.animate(
         [
           { transform: "scaleX(0.8) scaleY(0)", opacity: 0, offset: 0, easing: "cubic-bezier(0.22, 1, 0.36, 1)" },
@@ -3146,7 +3276,7 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
       waits.push(waitForAnimation(anim, d));
     }
     const ring = container.querySelector("[data-promo-ring]");
-    if (ring && canAnimate2(ring)) {
+    if (ring && canAnimate(ring)) {
       const ringMs = Math.max(50, Math.round(d * 0.55));
       const anim = ring.animate(
         [
@@ -3159,7 +3289,7 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
       waits.push(waitForAnimation(anim, ringMs));
     }
     const flash = container.querySelector("[data-promo-flash]");
-    if (flash && canAnimate2(flash)) {
+    if (flash && canAnimate(flash)) {
       const anim = flash.animate(
         [
           { opacity: 0, offset: 0 },
@@ -3174,7 +3304,7 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
       waits.push(waitForAnimation(anim, d));
     }
     const oldPiece = container.querySelector("[data-promo-old]");
-    if (oldPiece && canAnimate2(oldPiece)) {
+    if (oldPiece && canAnimate(oldPiece)) {
       const oldMs = Math.max(50, Math.round(d * 0.5));
       const anim = oldPiece.animate(
         [
@@ -3188,7 +3318,7 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
       waits.push(waitForAnimation(anim, oldMs));
     }
     const newPiece = container.querySelector("[data-promo-new]");
-    if (newPiece && canAnimate2(newPiece)) {
+    if (newPiece && canAnimate(newPiece)) {
       const newDelay = Math.round(d * 0.28);
       const newMs = Math.max(50, d - newDelay);
       const anim = newPiece.animate(
@@ -3218,7 +3348,7 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
     const anims = [];
     const d = entry.dir;
     const piece = container.querySelector("[data-mate-piece]");
-    if (piece && canAnimate2(piece)) {
+    if (piece && canAnimate(piece)) {
       const fall = piece.animate(
         [
           { transform: "rotateZ(0deg) translateY(0px)", offset: 0, easing: "cubic-bezier(0.3, 0, 0.7, 0.2)" },
@@ -3238,7 +3368,7 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
       waits.push(waitForAnimation(fall, total));
     }
     const dust = container.querySelector("[data-mate-dust]");
-    if (dust && canAnimate2(dust)) {
+    if (dust && canAnimate(dust)) {
       const dustMs = Math.round(total * 0.34);
       const a = dust.animate(
         [
@@ -3252,7 +3382,7 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
       waits.push(waitForAnimation(a, dustMs + total * 0.68));
     }
     const dim = container.querySelector("[data-mate-dim]");
-    if (dim && canAnimate2(dim)) {
+    if (dim && canAnimate(dim)) {
       const a = dim.animate(
         [
           { opacity: 0, offset: 0, easing: EASE_FLIGHT },
@@ -3273,7 +3403,7 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
   const startAnnotationAnimation = useCallback((container, entry) => {
     if (startedRef.current.has(entry.id)) return;
     startedRef.current.add(entry.id);
-    if (!canAnimate2(container)) return;
+    if (!canAnimate(container)) return;
     if (entry.reduced) {
       container.style.opacity = "1";
       return;
@@ -3300,7 +3430,7 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
     const waits = [];
     const rings = container.querySelectorAll("[data-implode-ring]");
     rings.forEach((ringEl, i) => {
-      if (!canAnimate2(ringEl)) return;
+      if (!canAnimate(ringEl)) return;
       const dir = i % 2 === 0 ? 1 : -1;
       const ringDelay = i * Math.round(d * 0.08);
       const anim = ringEl.animate(
@@ -3316,7 +3446,7 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
       waits.push(waitForAnimation(anim, d));
     });
     const core = container.querySelector("[data-implode-core]");
-    if (core && canAnimate2(core)) {
+    if (core && canAnimate(core)) {
       const anim = core.animate(
         [
           { transform: "scale(0)", opacity: 0, offset: 0, easing: "cubic-bezier(0.42, 0, 0.58, 1)" },
@@ -3330,7 +3460,7 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
       waits.push(waitForAnimation(anim, d));
     }
     const piece = container.querySelector("[data-implode-piece]");
-    if (piece && canAnimate2(piece)) {
+    if (piece && canAnimate(piece)) {
       const anim = piece.animate(
         [
           { transform: "scaleX(1) scaleY(1) rotateZ(0deg)", opacity: 1, offset: 0, easing: "cubic-bezier(0.42, 0, 0.58, 1)" },
@@ -3344,7 +3474,7 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
       waits.push(waitForAnimation(anim, d));
     }
     const flash = container.querySelector("[data-implode-flash]");
-    if (flash && canAnimate2(flash)) {
+    if (flash && canAnimate(flash)) {
       const anim = flash.animate(
         [
           { opacity: 0, offset: 0 },
@@ -3368,7 +3498,7 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
     spotlightElsRef.current.set(entry.id, el);
     if (startedRef.current.has(entry.id)) return;
     startedRef.current.add(entry.id);
-    if (!canAnimate2(el)) return;
+    if (!canAnimate(el)) return;
     const anim = el.animate(
       [{ opacity: 0 }, { opacity: 1 }],
       { duration: entry.durationMs, easing: "ease-out", fill: "forwards" }
@@ -3380,7 +3510,7 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
     startedRef.current.add(entry.id);
     const beam = container.querySelector("[data-laser-beam]");
     const tip = container.querySelector("[data-laser-tip]");
-    if (!beam || !canAnimate2(beam)) {
+    if (!beam || !canAnimate(beam)) {
       finishLaser(entry);
       return;
     }
@@ -3395,7 +3525,7 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
       { duration: drawMs, fill: "forwards" }
     );
     anims.push(beamDraw);
-    if (tip && canAnimate2(tip)) {
+    if (tip && canAnimate(tip)) {
       const dxPx = (entry.sx - entry.ex) / 100 * container.clientWidth;
       const dyPx = (entry.sy - entry.ey) / 100 * container.clientHeight;
       const tipAnim = tip.animate(
@@ -3424,7 +3554,7 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
       );
       const current = animationsRef.current.get(entry.id) ?? [];
       current.push(fadeBeam);
-      if (tip && canAnimate2(tip)) {
+      if (tip && canAnimate(tip)) {
         const fadeTip = tip.animate(
           [{ opacity: 0.85 }, { opacity: 0 }],
           { duration: LASER_FADE_MS, delay: entry.holdMs, easing: "ease-out", fill: "forwards" }
@@ -3475,7 +3605,7 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
       { duration: drawMs, easing: "ease-out", fill: "forwards" }
     );
     anims.push(shaftDraw);
-    if (canAnimate2(head)) {
+    if (canAnimate(head)) {
       const headFadeMs = Math.max(100, drawMs * 0.3);
       const headDelay = Math.max(0, drawMs - headFadeMs);
       const headAppear = head.animate(
@@ -3757,7 +3887,7 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
         annotationTimersRef.current.delete(id);
         const el = annotationElsRef.current.get(id);
         const ms = Math.max(0, durationMs ?? ANNOTATION_EXIT_MS);
-        if (!el || !canAnimate2(el) || ms === 0) {
+        if (!el || !canAnimate(el) || ms === 0) {
           remove();
           return Promise.resolve();
         }
@@ -3824,7 +3954,7 @@ var CinematicLayer = memo(forwardRef(function CinematicLayer2({
           setSpotlights((prev) => prev.filter((s) => s.id !== entry.id));
           resolve();
         };
-        if (el && canAnimate2(el)) {
+        if (el && canAnimate(el)) {
           const from = typeof getComputedStyle === "function" && getComputedStyle(el).opacity || "1";
           const fade = el.animate(
             [{ opacity: from }, { opacity: 0 }],
@@ -4713,7 +4843,7 @@ function createCameraController(getRoot, getAsWhite) {
     root.style.transform = target === "none" ? "" : target;
   };
   const animateTo = (root, target, durationMs, easing2) => {
-    if (!canAnimate2(root) || durationMs <= 0) {
+    if (!canAnimate(root) || durationMs <= 0) {
       applyEndState(root, target);
       return Promise.resolve();
     }
@@ -4771,7 +4901,7 @@ function createCameraController(getRoot, getAsWhite) {
     },
     shake(options) {
       const root = getRoot();
-      if (!root || !canAnimate2(root) || skip(options?.force)) return Promise.resolve();
+      if (!root || !canAnimate(root) || skip(options?.force)) return Promise.resolve();
       const intensity = options?.intensity ?? DEFAULT_SHAKE_INTENSITY_PX;
       const durationMs = options?.durationMs ?? DEFAULT_SHAKE_DURATION_MS;
       const steps = 6;
@@ -4795,7 +4925,7 @@ function createCameraController(getRoot, getAsWhite) {
     },
     drift(options) {
       const root = getRoot();
-      if (!root || !canAnimate2(root) || skip(options?.force)) return { stop: () => {
+      if (!root || !canAnimate(root) || skip(options?.force)) return { stop: () => {
       } };
       const scale = options?.scale ?? DEFAULT_DRIFT_SCALE;
       const durationMs = options?.durationMs ?? DEFAULT_DRIFT_DURATION_MS;
@@ -6220,6 +6350,12 @@ var ChessiroCanvas = forwardRef(
       },
       shakePiece(square) {
         return teachingRef.current?.shakePiece(square) ?? Promise.resolve();
+      },
+      tiltPiece(square, options) {
+        return teachingRef.current?.tiltPiece(square, options) ?? Promise.resolve();
+      },
+      resetPieceTilt(square, durationMs) {
+        return teachingRef.current?.resetPieceTilt(square, durationMs) ?? Promise.resolve();
       },
       clearTeachingEffects() {
         teachingRef.current?.clearEffects();

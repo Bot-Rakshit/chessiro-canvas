@@ -354,7 +354,9 @@ export const REF_GROUPS: { title: string; rows: { name: string; sig: string; not
       { name: 'animateMove', sig: '(from, to, options?) => Promise', notes: 'Slow demonstration move. Never calls onMove.' },
       { name: 'pulseSquare', sig: '(square, options?) => Promise', notes: 'Pulsing attention ring.' },
       { name: 'shakePiece', sig: '(square) => Promise', notes: 'Shake a piece (wrong move).' },
-      { name: 'clearTeachingEffects', sig: '() => void', notes: 'Cancel all demos and pulses.' },
+      { name: 'tiltPiece', sig: '(square, options?) => Promise', notes: 'Lean a piece by your angle, at your speed — rotates about the centre. Hold it, or hold for holdMs and stand back up.' },
+      { name: 'resetPieceTilt', sig: '(square?, durationMs?) => Promise', notes: 'Stand tilted pieces back up (omit the square for all).' },
+      { name: 'clearTeachingEffects', sig: '() => void', notes: 'Cancel all demos and pulses; held tilts snap upright.' },
     ],
   },
   {

@@ -29,7 +29,12 @@ class ResizeObserverStub {
 dom.window.ResizeObserver = ResizeObserverStub;
 
 let liveAnimations = 0;
-dom.window.HTMLElement.prototype.animate = function animate(_keyframes, options) {
+// Every animate() call is logged so tests can assert on the keyframes an effect
+// actually produced (jsdom applies none of them to the element).
+const animationLog = [];
+dom.window.HTMLElement.prototype.animate = function animate(keyframes, options) {
+  const record = { target: this, keyframes, options, cancelled: false };
+  animationLog.push(record);
   const duration = (typeof options === 'number' ? options : options?.duration ?? 0);
   const delay = typeof options === 'object' ? options?.delay ?? 0 : 0;
   const iterations = typeof options === 'object' ? options?.iterations ?? 1 : 1;
@@ -56,6 +61,7 @@ dom.window.HTMLElement.prototype.animate = function animate(_keyframes, options)
     addEventListener() {},
     removeEventListener() {},
     cancel() {
+      record.cancelled = true;
       if (!settled) {
         settled = true;
         liveAnimations -= 1;
@@ -531,6 +537,112 @@ await withTimeout(
 );
 await sleep(100);
 
+console.log('\n-- tiltPiece (piece leans about its own centre) --');
+const kingInner = () => pieceOuters('wK')[0]?.firstElementChild ?? null;
+// The tilt rides the real piece element, so grab the animation logged against it.
+const tiltRecordSince = (start) => animationLog.slice(start).find((r) => r.target === kingInner());
+const lastFrame = (rec) => String(rec.keyframes[rec.keyframes.length - 1].transform);
+const firstFrame = (rec) => String(rec.keyframes[0].transform);
+const tiltBaseline = countNodes();
+assert(!!kingInner(), 'white king element found for tilting');
+
+let logAt = animationLog.length;
+const tiltDone = ref.current.tiltPiece('e1', { angle: 60, durationMs: 80, force: true });
+const tiltRec = tiltRecordSince(logAt);
+assert(!!tiltRec, 'tiltPiece animated the real king element (no overlay clone)');
+assert(lastFrame(tiltRec).includes('rotateZ(60deg)'), 'tilt leans right by the requested angle');
+assert(
+  tiltRec.keyframes.every((k) => k.transformOrigin === '50% 50%'),
+  'tilt pivots on the centre of the piece',
+);
+assert(
+  tiltRec.options.duration === 80 && tiltRec.options.fill === 'forwards',
+  'tilt runs for the requested duration and holds the angle',
+);
+await withTimeout(tiltDone, 2000, 'tiltPiece resolved');
+assert(countNodes() === tiltBaseline, 'tiltPiece mounted no nodes');
+assert(!tiltRec.cancelled, 'held tilt is still applied after the promise resolves');
+
+logAt = animationLog.length;
+const untiltDone = ref.current.resetPieceTilt('e1', 40);
+const untiltRec = tiltRecordSince(logAt);
+assert(!!untiltRec, 'resetPieceTilt animated the king back');
+assert(firstFrame(untiltRec).includes('rotateZ(60deg)'), 'reset starts from the angle being held');
+assert(lastFrame(untiltRec).includes('rotateZ(0deg)'), 'reset ends upright');
+await withTimeout(untiltDone, 2000, 'resetPieceTilt resolved');
+assert(untiltRec.cancelled, 'reset released its fill so the piece owns its transform again');
+
+// direction:'left' mirrors the angle.
+logAt = animationLog.length;
+await withTimeout(
+  ref.current.tiltPiece('e1', { angle: 30, durationMs: 40, direction: 'left', force: true }),
+  2000,
+  "tilt direction:'left' resolved",
+);
+assert(lastFrame(tiltRecordSince(logAt)).includes('rotateZ(-30deg)'), "direction:'left' leans the other way");
+
+// A second tilt continues from wherever the piece already leans.
+logAt = animationLog.length;
+await withTimeout(
+  ref.current.tiltPiece('e1', { angle: 70, durationMs: 40, force: true }),
+  2000,
+  'stacked tilt resolved',
+);
+assert(firstFrame(tiltRecordSince(logAt)).includes('rotateZ(-30deg)'), 'a second tilt starts from the held angle');
+await withTimeout(ref.current.resetPieceTilt(), 2000, 'resetPieceTilt without a square reset every tilt');
+
+// hold:false leans over and springs back within the same duration.
+logAt = animationLog.length;
+await withTimeout(
+  ref.current.tiltPiece('e1', { angle: 20, durationMs: 40, hold: false, force: true }),
+  2000,
+  'hold:false tilt resolved',
+);
+const springRec = tiltRecordSince(logAt);
+assert(springRec.keyframes.length === 4, 'hold:false tilts over, holds briefly and returns');
+assert(lastFrame(springRec).includes('rotateZ(0deg)'), 'hold:false ends upright');
+await sleep(40);
+assert(springRec.cancelled, 'a sprung tilt stops tracking the square once upright');
+
+// holdMs waits at the angle, then stands the piece back up unaided.
+logAt = animationLog.length;
+const timedDone = ref.current.tiltPiece('e1', { angle: 50, durationMs: 40, holdMs: 60, force: true });
+const timedRec = tiltRecordSince(logAt);
+assert(timedRec.options.duration === 140, 'holdMs adds the wait plus the return trip to the duration');
+assert(timedRec.keyframes.length === 4, 'timed hold leans over, waits and returns');
+assert(
+  String(timedRec.keyframes[1].transform).includes('rotateZ(50deg)')
+    && String(timedRec.keyframes[2].transform).includes('rotateZ(50deg)'),
+  'timed hold sits at the angle for the whole wait',
+);
+assert(
+  Math.abs(timedRec.keyframes[1].offset - 40 / 140) < 1e-9
+    && Math.abs(timedRec.keyframes[2].offset - 100 / 140) < 1e-9,
+  'the wait occupies exactly holdMs of the timeline',
+);
+assert(lastFrame(timedRec).includes('rotateZ(0deg)'), 'timed hold ends upright');
+await withTimeout(timedDone, 2000, 'timed hold resolved once the piece was upright again');
+assert(timedRec.cancelled, 'a timed hold stops tracking the square once upright');
+
+// clearTeachingEffects is the blunt escape hatch: held tilts snap upright.
+logAt = animationLog.length;
+await withTimeout(
+  ref.current.tiltPiece('e1', { angle: 84, durationMs: 40, force: true }),
+  2000,
+  'tilt before clearTeachingEffects resolved',
+);
+const clearedRec = tiltRecordSince(logAt);
+ref.current.clearTeachingEffects();
+assert(clearedRec.cancelled, 'clearTeachingEffects snaps held tilts upright');
+
+// Empty squares and no-op resets must never hang.
+await withTimeout(ref.current.tiltPiece('d5', { durationMs: 40, force: true }), 1000,
+  'tilt on an empty square still resolves');
+await withTimeout(ref.current.resetPieceTilt('e1'), 1000, 'reset of an untilted square resolves');
+await withTimeout(ref.current.tiltPiece('zz', {}), 1000, 'tilt of an invalid square resolves');
+await sleep(60);
+assert(countNodes() === tiltBaseline, 'tilts left no nodes behind');
+
 console.log('\n-- annotate (text over a square) --');
 const annotTexts = () =>
   [...container.querySelectorAll('[data-cine-overlay] span')].map((s) => s.textContent);
@@ -580,6 +692,15 @@ await withTimeout(
   'reduced-motion checkmate skips the topple and resolves immediately',
 );
 assert(countNodes() === rmCount, 'reduced-motion new effects mounted nothing');
+
+// A toppled king is information, not decoration: the angle is still applied
+// under reduced motion, only the travel is skipped.
+logAt = animationLog.length;
+await withTimeout(ref.current.tiltPiece('e1', { angle: 50 }), 500, 'reduced-motion tiltPiece resolved immediately');
+const rmTilt = tiltRecordSince(logAt);
+assert(rmTilt?.options.duration === 0, 'reduced-motion tilt skips the travel');
+assert(lastFrame(rmTilt).includes('rotateZ(50deg)'), 'reduced-motion tilt still applies the angle');
+await withTimeout(ref.current.resetPieceTilt(), 500, 'reduced-motion reset resolved');
 
 // Text is information, not motion: an annotation must still appear under
 // reduced motion — only its entry animation is skipped.
