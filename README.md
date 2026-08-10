@@ -623,6 +623,47 @@ function Lesson() {
 `shakePiece(square)` gives "wrong move" feedback manually, and
 `clearTeachingEffects()` cancels every in-flight demo and pulse.
 
+**Tilting a piece over** is the plain-transform version of the resign gesture:
+`tiltPiece(square, options)` leans the piece by an angle you choose, at a speed you
+choose, and holds it there. The rotation happens about the **centre of the piece**,
+so it leans in place rather than swinging off its bottom edge. Use it for checkmate
+when you want the king down without the full
+[`checkmate` cinematic](#cinematics-choreographed-replays) (no dust, no dim, no
+banner):
+
+```tsx
+// King falls to the right and stays down
+await board.current?.tiltPiece('e8', { angle: 84, durationMs: 600 });
+
+// Slower, shallower, leaning the other way
+await board.current?.tiltPiece('e8', { angle: 45, durationMs: 1500, direction: 'left' });
+
+// Lean over, stay down for 2s, then stand back up on its own
+await board.current?.tiltPiece('e8', { angle: 84, durationMs: 600, holdMs: 2000 });
+
+// Lean over and spring back upright (a "nudge")
+await board.current?.tiltPiece('e8', { angle: 20, durationMs: 400, hold: false });
+
+await board.current?.resetPieceTilt('e8');   // stand it back up (omit the square for all)
+```
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `angle` | `84` | Degrees to lean. `90` lays the piece on its side; negative leans the opposite way. |
+| `durationMs` | `600` | The speed knob — lower is faster, `0` snaps to the angle. |
+| `direction` | `'right'` | `'left'`, `'right'`, or `'auto'` (tips away from the board centre). |
+| `hold` | `true` | Keep the angle. `false` springs back upright within `durationMs`. |
+| `holdMs` | — | Stay at the angle this long, then stand up unaided. Overrides `hold`; the gesture takes `durationMs + holdMs + durationMs`. |
+| `easing` | `cubic-bezier(0.34, 0.02, 0.62, 1)` | CSS easing of the lean. |
+| `pivot` | `'50% 50%'` | CSS `transform-origin` — the centre of the piece. Pass `'50% 92%'` to tip it over on its base instead. |
+| `force` | `false` | Tilt with motion even under `prefers-reduced-motion` (the angle is applied either way). |
+
+Tilts hold on the real piece element, so repeated calls lean further from wherever
+the piece currently is. A tilt belongs to the piece rather than to the square: if
+that piece is captured or moves on, the tilt is dropped, and whatever arrives on
+the square next stands upright. Commit the mating move first, then tilt — the
+effect never changes the position.
+
 ### Cinematics: choreographed replays
 
 Cinematics are made for **non-interactive** boards — share-game screens, highlight
@@ -832,7 +873,9 @@ const board = useRef<ChessiroCanvasRef>(null);
 | `animateMove(from, to, options?)` | `Promise<void>` | Slow demonstration move. Does not call `onMove`. |
 | `pulseSquare(square, options?)` | `Promise<void>` | Pulsing attention ring. |
 | `shakePiece(square)` | `Promise<void>` | Shake a piece ("wrong move"). |
-| `clearTeachingEffects()` | `void` | Cancel all demos and pulses. |
+| `tiltPiece(square, options?)` | `Promise<void>` | Lean a piece by `angle` degrees over `durationMs`, holding the angle. Rotates about the centre of the piece. |
+| `resetPieceTilt(square?, durationMs?)` | `Promise<void>` | Stand tilted pieces back up. Omit the square to reset all of them. |
+| `clearTeachingEffects()` | `void` | Cancel all demos and pulses; held tilts snap upright. |
 
 #### Cinematic effects
 

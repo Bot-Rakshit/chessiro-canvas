@@ -265,6 +265,53 @@ interface PulseSquareOptions {
     times?: number;
 }
 /**
+ * Lean a single piece over — the resign/checkmate gesture, but as a plain
+ * transform you control (angle, speed, direction) rather than a scripted
+ * cinematic. The piece rotates about its own centre, so it leans in place
+ * instead of swinging off its bottom edge. See `ref.tiltPiece`.
+ */
+interface PieceTiltOptions {
+    /**
+     * Angle in degrees. Positive leans toward `direction`, negative leans the
+     * other way. 90 lays the piece on its side. Default: 84 (a toppled king).
+     */
+    angle?: number;
+    /**
+     * Which way the piece leans. 'auto' tips it away from the board centre.
+     * Default: 'right'.
+     */
+    direction?: 'left' | 'right' | 'auto';
+    /**
+     * How long the tilt takes in ms — this is the speed knob, lower is faster.
+     * 0 snaps to the angle instantly. Default: 600.
+     */
+    durationMs?: number;
+    /**
+     * Keep the angle when the animation ends: the piece stays down until
+     * `resetPieceTilt` (or `clearTeachingEffects`). Set false to lean over and
+     * spring back upright within `durationMs`. Default: true.
+     */
+    hold?: boolean;
+    /**
+     * Stay at the angle for this many ms, then stand back up on its own. The
+     * whole gesture takes `durationMs + holdMs + durationMs` (lean, wait, return)
+     * and the returned promise resolves when the piece is upright again.
+     *
+     * Setting this overrides `hold`, since it already says how long the tilt is
+     * held. Default: undefined (`hold` decides).
+     */
+    holdMs?: number;
+    /** CSS easing for the tilt. Default: 'cubic-bezier(0.34, 0.02, 0.62, 1)'. */
+    easing?: string;
+    /**
+     * Pivot point as a CSS transform-origin. Default: '50% 50%' — the centre of
+     * the piece. Pass '50% 92%' to tip it over on its base instead.
+     */
+    pivot?: string;
+    /** Play even when the user prefers reduced motion (the angle is applied either way). */
+    force?: boolean;
+}
+/**
  * A small text badge rendered on a square (attacker counts, move numbers,
  * "!" / "?" annotations, candidate-move letters, ...).
  */
@@ -779,7 +826,23 @@ interface ChessiroCanvasRef {
     pulseSquare: (square: string, options?: PulseSquareOptions) => Promise<void>;
     /** Shake the piece on a square ("wrong move" feedback). */
     shakePiece: (square: string) => Promise<void>;
-    /** Cancel all in-flight teaching effects (demos and pulses). */
+    /**
+     * Lean the piece on `square` over on its base by `angle` degrees over
+     * `durationMs` — the "king falls over on checkmate" beat, with the angle,
+     * speed and direction under your control. Holds the angle by default, so
+     * repeated calls tilt further from wherever the piece currently leans.
+     * Does not change the position; call it after committing the mating move.
+     */
+    tiltPiece: (square: string, options?: PieceTiltOptions) => Promise<void>;
+    /**
+     * Animate tilted pieces back upright. Omit `square` to reset every tilted
+     * piece (e.g. when starting a new game).
+     */
+    resetPieceTilt: (square?: string, durationMs?: number) => Promise<void>;
+    /**
+     * Cancel all in-flight teaching effects (demos and pulses); held tilts snap
+     * upright. Use `resetPieceTilt` to un-tilt smoothly instead.
+     */
     clearTeachingEffects: () => void;
     /**
      * Choreographed cinematic flight of the piece on `from` to `to` (spins,
@@ -875,4 +938,4 @@ declare function premoveDests(square: Square, pieces: Pieces, color: PieceColor)
 
 declare function resolvePieceImageSrc(pieceKey: string, piecePath?: string): string;
 
-export { type AnimateMoveOptions, type AnimationEvent, type Arrow, type ArrowBrush, type ArrowBrushes, type ArrowHeadShape, type ArrowVisuals, type BoardTheme, type CameraController, type CameraDriftOptions, type CameraShakeOptions, type CameraTiltOptions, type CameraZoomOptions, type CastleSwapOptions, type CelebrateOptions, ChessiroCanvas, type ChessiroCanvasProps, type ChessiroCanvasRef, type CinematicMoveOptions, type CinematicPlayback, type CinematicStep, type CinematicStyle, DEFAULT_ARROW_BRUSHES, type Dests, type DrawArrowOptions, type ExpectedMove, type GhostPiece, INITIAL_FEN, INITIAL_GAME_FEN, type ImplodeOptions, type LaserOptions, type MoveQualityBadge, type NotationVisuals, type Orientation, type OverlayVisuals, type Piece, type PieceColor, type PieceRenderer, type PieceRole, type PieceSet, type PlayCinematicOptions, type PopBadgeOptions, type PopBannerOptions, type PremoveConfig, type PromotionBeamOptions, type PromotionContext, type PromotionPiece, type PromotionVisuals, type PulseSquareOptions, type SpotlightHandle, type SpotlightOptions, type Square, type SquareBurstOptions, type SquareLabel, type SquareVisuals, type TextOverlay, preloadPieceSet, premoveDests, readFen, resolvePieceImageSrc, writeFen };
+export { type AnimateMoveOptions, type AnimationEvent, type Arrow, type ArrowBrush, type ArrowBrushes, type ArrowHeadShape, type ArrowVisuals, type BoardTheme, type CameraController, type CameraDriftOptions, type CameraShakeOptions, type CameraTiltOptions, type CameraZoomOptions, type CastleSwapOptions, type CelebrateOptions, ChessiroCanvas, type ChessiroCanvasProps, type ChessiroCanvasRef, type CinematicMoveOptions, type CinematicPlayback, type CinematicStep, type CinematicStyle, DEFAULT_ARROW_BRUSHES, type Dests, type DrawArrowOptions, type ExpectedMove, type GhostPiece, INITIAL_FEN, INITIAL_GAME_FEN, type ImplodeOptions, type LaserOptions, type MoveQualityBadge, type NotationVisuals, type Orientation, type OverlayVisuals, type Piece, type PieceColor, type PieceRenderer, type PieceRole, type PieceSet, type PieceTiltOptions, type PlayCinematicOptions, type PopBadgeOptions, type PopBannerOptions, type PremoveConfig, type PromotionBeamOptions, type PromotionContext, type PromotionPiece, type PromotionVisuals, type PulseSquareOptions, type SpotlightHandle, type SpotlightOptions, type Square, type SquareBurstOptions, type SquareLabel, type SquareVisuals, type TextOverlay, preloadPieceSet, premoveDests, readFen, resolvePieceImageSrc, writeFen };

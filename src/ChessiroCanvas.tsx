@@ -1,7 +1,7 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef } from 'react';
 import type {
   ChessiroCanvasProps, ChessiroCanvasRef, BoardTheme,
-  AnimateMoveOptions, PulseSquareOptions, PromotionPiece, Square,
+  AnimateMoveOptions, PulseSquareOptions, PieceTiltOptions, PromotionPiece, Square,
   CameraController, CameraDriftOptions, CameraShakeOptions, CameraTiltOptions, CameraZoomOptions,
   CelebrateOptions, CinematicMoveOptions, CinematicPlayback, CinematicStep,
   PlayCinematicOptions, PopBadgeOptions, PopBannerOptions, SquareBurstOptions,
@@ -300,6 +300,12 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
       },
       shakePiece(square: string) {
         return teachingRef.current?.shakePiece(square) ?? Promise.resolve();
+      },
+      tiltPiece(square: string, options?: PieceTiltOptions) {
+        return teachingRef.current?.tiltPiece(square, options) ?? Promise.resolve();
+      },
+      resetPieceTilt(square?: string, durationMs?: number) {
+        return teachingRef.current?.resetPieceTilt(square, durationMs) ?? Promise.resolve();
       },
       clearTeachingEffects() {
         teachingRef.current?.clearEffects();

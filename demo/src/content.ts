@@ -205,6 +205,13 @@ await boardRef.current.pulseSquare('f7', { color: 'rgba(239,68,68,0.9)', times: 
 // Wrong-move feedback
 await boardRef.current.shakePiece('d1');
 
+// Checkmate without the full cinematic: lean the king over and leave it down.
+// Rotates about the centre of the piece, and never changes the position.
+await boardRef.current.tiltPiece('e8', { angle: 84, durationMs: 600 });
+await boardRef.current.tiltPiece('e8', { angle: 84, holdMs: 2000 }); // stands back up
+await boardRef.current.tiltPiece('e8', { angle: 20, hold: false });  // a nudge
+await boardRef.current.resetPieceTilt();                             // stand them all up
+
 // Persistent placement hints
 <ChessiroCanvas
   ref={boardRef}
@@ -354,7 +361,9 @@ export const REF_GROUPS: { title: string; rows: { name: string; sig: string; not
       { name: 'animateMove', sig: '(from, to, options?) => Promise', notes: 'Slow demonstration move. Never calls onMove.' },
       { name: 'pulseSquare', sig: '(square, options?) => Promise', notes: 'Pulsing attention ring.' },
       { name: 'shakePiece', sig: '(square) => Promise', notes: 'Shake a piece (wrong move).' },
-      { name: 'clearTeachingEffects', sig: '() => void', notes: 'Cancel all demos and pulses.' },
+      { name: 'tiltPiece', sig: '(square, options?) => Promise', notes: 'Lean a piece by your angle, at your speed — rotates about the centre. Hold it, or hold for holdMs and stand back up.' },
+      { name: 'resetPieceTilt', sig: '(square?, durationMs?) => Promise', notes: 'Stand tilted pieces back up (omit the square for all).' },
+      { name: 'clearTeachingEffects', sig: '() => void', notes: 'Cancel all demos and pulses; held tilts snap upright.' },
     ],
   },
   {

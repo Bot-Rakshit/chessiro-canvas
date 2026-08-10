@@ -28,6 +28,7 @@ export type {
   GhostPiece,
   AnimateMoveOptions,
   PulseSquareOptions,
+  PieceTiltOptions,
   SquareLabel,
   ExpectedMove,
   CinematicStyle,
