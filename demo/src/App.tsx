@@ -365,7 +365,7 @@ export function App() {
                 <>
                   Coaching gestures without a coach: pick a piece up slowly and set it down,
                   preview an idea as a ghost, pulse a square to direct attention, shake a piece to
-                  reject a move. All through the imperative <C>ref</C>.
+                  reject a move, tilt a king over to resign it. All through the imperative <C>ref</C>.
                 </>
               }
             >

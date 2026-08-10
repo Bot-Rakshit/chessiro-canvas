@@ -205,6 +205,13 @@ await boardRef.current.pulseSquare('f7', { color: 'rgba(239,68,68,0.9)', times: 
 // Wrong-move feedback
 await boardRef.current.shakePiece('d1');
 
+// Checkmate without the full cinematic: lean the king over and leave it down.
+// Rotates about the centre of the piece, and never changes the position.
+await boardRef.current.tiltPiece('e8', { angle: 84, durationMs: 600 });
+await boardRef.current.tiltPiece('e8', { angle: 84, holdMs: 2000 }); // stands back up
+await boardRef.current.tiltPiece('e8', { angle: 20, hold: false });  // a nudge
+await boardRef.current.resetPieceTilt();                             // stand them all up
+
 // Persistent placement hints
 <ChessiroCanvas
   ref={boardRef}

@@ -659,8 +659,10 @@ await board.current?.resetPieceTilt('e8');   // stand it back up (omit the squar
 | `force` | `false` | Tilt with motion even under `prefers-reduced-motion` (the angle is applied either way). |
 
 Tilts hold on the real piece element, so repeated calls lean further from wherever
-the piece currently is, and the tilt is dropped if that piece leaves the square.
-Commit the mating move first, then tilt — the effect never changes the position.
+the piece currently is. A tilt belongs to the piece rather than to the square: if
+that piece is captured or moves on, the tilt is dropped, and whatever arrives on
+the square next stands upright. Commit the mating move first, then tilt — the
+effect never changes the position.
 
 ### Cinematics: choreographed replays
 

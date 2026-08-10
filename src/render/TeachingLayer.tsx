@@ -57,6 +57,14 @@ interface PulseEntry {
 
 /** A piece leaning on its base. Lives on the real piece element, not an overlay. */
 interface TiltEntry {
+  /**
+   * The element the lean is applied to. Tilts are keyed by square, but a square
+   * does not keep the same piece forever — the tilted piece can be captured or
+   * moved away and a different one can arrive. Holding the element lets a stale
+   * entry be recognised and dropped, so the newcomer is never rotated on the
+   * strength of an angle it never had.
+   */
+  el: HTMLElement;
   /** Angle the running animation started from. */
   from: number;
   /** Angle the running animation is heading to. */
@@ -150,6 +158,25 @@ export const TeachingLayer = memo(forwardRef<TeachingLayerRef, TeachingLayerProp
   const finishedRef = useRef<Set<number>>(new Set());
   const getPieceElementRef = useRef(getPieceElement);
   getPieceElementRef.current = getPieceElement;
+
+  /**
+   * The tilt recorded for a square, but only if it still belongs to the piece
+   * standing there now. A tilted piece can be captured or moved on, and React
+   * mounts a fresh element for whatever arrives next; that newcomer inherited
+   * no angle, so a stale entry is cancelled and forgotten rather than replayed
+   * onto it. Without this, resetting a square whose piece had changed would
+   * whip the innocent newcomer from the old angle back to upright.
+   *
+   * Held in a ref so `runTilt` can use it without taking it as a dependency.
+   */
+  const liveTiltRef = useRef((square: string, inner: Element | null): TiltEntry | undefined => {
+    const entry = tiltsRef.current.get(square);
+    if (!entry) return undefined;
+    if (entry.el === inner) return entry;
+    entry.anim?.cancel();
+    tiltsRef.current.delete(square);
+    return undefined;
+  });
 
   const finishDemo = useCallback((entry: DemoEntry) => {
     if (finishedRef.current.has(entry.id)) return;
@@ -358,7 +385,7 @@ export const TeachingLayer = memo(forwardRef<TeachingLayerRef, TeachingLayerProp
       easing: string;
     },
   ): Promise<void> => {
-    const prev = tiltsRef.current.get(square);
+    const prev = liveTiltRef.current(square, inner);
     const from = currentTiltAngle(prev);
 
     // Already resting exactly there: leave the existing hold alone. Cancelling
@@ -412,7 +439,7 @@ export const TeachingLayer = memo(forwardRef<TeachingLayerRef, TeachingLayerProp
 
     const rest = spec.hold && !timed ? spec.to : from;
     const entry: TiltEntry = {
-      from, peak: spec.to, rest, pivot: spec.pivot, anim, settled: false,
+      el: inner, from, peak: spec.to, rest, pivot: spec.pivot, anim, settled: false,
     };
     tiltsRef.current.set(square, entry);
 
@@ -470,12 +497,13 @@ export const TeachingLayer = memo(forwardRef<TeachingLayerRef, TeachingLayerProp
 
     const jobs: Promise<void>[] = [];
     for (const sq of squares) {
-      const entry = tiltsRef.current.get(sq);
+      const inner = getPieceElementRef.current(sq)?.firstElementChild ?? null;
+      // Skips squares whose tilted piece has been captured, moved on, or
+      // replaced — liveTilt cancels and forgets those rather than dragging a
+      // stranger back through an angle it never leaned to.
+      const entry = liveTiltRef.current(sq, inner);
       if (!entry) continue;
-      const inner = getPieceElementRef.current(sq)?.firstElementChild;
       if (!inner || !canAnimate(inner)) {
-        // The piece is gone (captured, or the position moved on): nothing to
-        // animate back, just stop tracking it.
         entry.anim?.cancel();
         tiltsRef.current.delete(sq);
         continue;

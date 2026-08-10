@@ -643,6 +643,43 @@ await withTimeout(ref.current.tiltPiece('zz', {}), 1000, 'tilt of an invalid squ
 await sleep(60);
 assert(countNodes() === tiltBaseline, 'tilts left no nodes behind');
 
+// A tilt belongs to a piece, not to a square. When the tilted piece leaves and
+// another arrives, the newcomer inherited no angle: resetting must not whip it
+// back from an angle it never leaned to, and re-tilting must start upright.
+console.log('\n-- tilt bookkeeping when the tilted piece leaves the square --');
+await withTimeout(
+  ref.current.tiltPiece('e1', { angle: 84, durationMs: 20, force: true }),
+  2000,
+  'tilted the king before replacing it',
+);
+// King gone from e1, a rook standing there instead.
+const KING_REPLACED = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQRBN1';
+root.render(React.createElement(ChessiroCanvas, { ref, interactive: false, position: KING_REPLACED }));
+await sleep(120);
+const newcomer = () => pieceOuters('wR').map((o) => o.firstElementChild);
+
+logAt = animationLog.length;
+await withTimeout(ref.current.resetPieceTilt('e1', 30), 1000, 'reset of a replaced piece resolves');
+assert(
+  !animationLog.slice(logAt).some((r) => newcomer().includes(r.target)),
+  'resetting a replaced square leaves the new piece alone',
+);
+
+logAt = animationLog.length;
+await withTimeout(
+  ref.current.tiltPiece('e1', { angle: 84, durationMs: 20, force: true }),
+  2000,
+  'tilting the replacement piece resolves',
+);
+const newcomerRec = animationLog.slice(logAt).find((r) => newcomer().includes(r.target));
+assert(!!newcomerRec, 'the replacement piece can still be tilted');
+assert(firstFrame(newcomerRec).includes('rotateZ(0deg)'), 'the replacement piece tilts from upright');
+assert(lastFrame(newcomerRec).includes('rotateZ(84deg)'), 'the replacement piece reaches the angle');
+ref.current.clearTeachingEffects();
+
+root.render(React.createElement(ChessiroCanvas, { ref, interactive: false }));
+await sleep(120);
+
 console.log('\n-- annotate (text over a square) --');
 const annotTexts = () =>
   [...container.querySelectorAll('[data-cine-overlay] span')].map((s) => s.textContent);

@@ -492,6 +492,10 @@ export function TeachingStudio({ theme }: { theme: BoardTheme }) {
   const [busy, setBusy] = useState(false);
   const [showGhosts, setShowGhosts] = useState(false);
   const [boardWidthPct, setBoardWidthPct] = useState(100);
+  const [tiltAngle, setTiltAngle] = useState(84);
+  const [tiltDurationMs, setTiltDurationMs] = useState(600);
+  const [tiltDirection, setTiltDirection] = useState<'left' | 'right' | 'auto'>('right');
+  const [tiltHold, setTiltHold] = useState<'hold' | 'timed' | 'spring'>('hold');
   const [status, setStatus] = useState('Idle — try the demonstrations, or move a piece yourself.');
 
   const posRef = useRef(pos);
@@ -593,6 +597,40 @@ export function TeachingStudio({ theme }: { theme: BoardTheme }) {
     boardRef.current?.shakePiece(`${file}${rank}`);
   }, []);
 
+  // Whoever is to move is the one getting mated, so their king is the one that
+  // goes over — the same square shakePiece picks, toppled instead of nudged.
+  const kingSquare = useCallback((): string | null => {
+    const kingIdx = posRef.current.board.kingOf(posRef.current.turn);
+    if (kingIdx === undefined) return null;
+    return `${'abcdefgh'[kingIdx % 8]}${Math.floor(kingIdx / 8) + 1}`;
+  }, []);
+
+  const tiltKing = useCallback(async () => {
+    const square = kingSquare();
+    if (!square) return;
+    const shape = tiltHold === 'timed'
+      ? { holdMs: 1200 }
+      : { hold: tiltHold === 'hold' };
+    setStatus(
+      tiltHold === 'hold'
+        ? `Tilt: the king on ${square} is down by ${tiltAngle}° and stays there.`
+        : tiltHold === 'timed'
+          ? `Tilt: down by ${tiltAngle}°, waiting 1.2s, then standing back up.`
+          : `Tilt: a ${tiltAngle}° nudge on ${square}, springing straight back.`,
+    );
+    await boardRef.current?.tiltPiece(square, {
+      angle: tiltAngle,
+      durationMs: tiltDurationMs,
+      direction: tiltDirection,
+      ...shape,
+    });
+  }, [kingSquare, tiltAngle, tiltDurationMs, tiltDirection, tiltHold]);
+
+  const standPiecesUp = useCallback(async () => {
+    setStatus('resetPieceTilt(): every tilted piece animates back upright.');
+    await boardRef.current?.resetPieceTilt();
+  }, []);
+
   const resetLesson = useCallback(() => {
     boardRef.current?.clearTeachingEffects();
     setPos(createInitialPosition());
@@ -645,6 +683,21 @@ export function TeachingStudio({ theme }: { theme: BoardTheme }) {
             <Toggle label="Ghost placement hints" checked={showGhosts} onChange={setShowGhosts} />
             <p className="note">
               Ghost pieces show where a piece belongs — “your knight goes to f3” — without changing the position.
+            </p>
+          </Panel>
+
+          <Panel title="Tilting a piece over">
+            <Slider label="angle" value={tiltAngle} min={-90} max={90} step={1} onChange={setTiltAngle} format={(v) => `${v}°`} />
+            <Slider label="durationMs" value={tiltDurationMs} min={0} max={2000} step={50} onChange={setTiltDurationMs} format={(v) => `${v}ms`} />
+            <Choice label="direction" options={['left', 'right', 'auto'] as const} value={tiltDirection} onChange={setTiltDirection} />
+            <Choice label="hold" options={['hold', 'timed', 'spring'] as const} value={tiltHold} onChange={setTiltHold} />
+            <button onClick={tiltKing} className="btn btn-block">Tilt the king over</button>
+            <button onClick={standPiecesUp} className="btn btn-block">Stand every piece back up</button>
+            <p className="note">
+              <C>tiltPiece()</C> leans a piece by your angle, at your speed, rotating about the centre of the
+              piece so it topples in place. It is the resign gesture as a plain transform — the position is
+              never touched. <C>hold</C> keeps it down until <C>resetPieceTilt()</C>, <C>timed</C> stands it
+              back up on its own, and <C>spring</C> is a nudge that returns immediately.
             </p>
           </Panel>
 

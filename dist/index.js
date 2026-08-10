@@ -2034,6 +2034,14 @@ var TeachingLayer = memo(forwardRef(function TeachingLayer2({
   const finishedRef = useRef(/* @__PURE__ */ new Set());
   const getPieceElementRef = useRef(getPieceElement);
   getPieceElementRef.current = getPieceElement;
+  const liveTiltRef = useRef((square, inner) => {
+    const entry = tiltsRef.current.get(square);
+    if (!entry) return void 0;
+    if (entry.el === inner) return entry;
+    entry.anim?.cancel();
+    tiltsRef.current.delete(square);
+    return void 0;
+  });
   const finishDemo = useCallback((entry) => {
     if (finishedRef.current.has(entry.id)) return;
     finishedRef.current.add(entry.id);
@@ -2194,7 +2202,7 @@ var TeachingLayer = memo(forwardRef(function TeachingLayer2({
     });
   }, []);
   const runTilt = useCallback((square, inner, spec) => {
-    const prev = tiltsRef.current.get(square);
+    const prev = liveTiltRef.current(square, inner);
     const from = currentTiltAngle(prev);
     if (spec.hold && spec.to === from && prev?.settled !== false) {
       if (spec.to === 0) tiltsRef.current.delete(square);
@@ -2234,6 +2242,7 @@ var TeachingLayer = memo(forwardRef(function TeachingLayer2({
     });
     const rest = spec.hold && !timed ? spec.to : from;
     const entry = {
+      el: inner,
       from,
       peak: spec.to,
       rest,
@@ -2281,9 +2290,9 @@ var TeachingLayer = memo(forwardRef(function TeachingLayer2({
     const duration = prefersReducedMotion() ? 0 : Math.max(0, durationMs ?? DEFAULT_TILT_RESET_MS);
     const jobs = [];
     for (const sq2 of squares) {
-      const entry = tiltsRef.current.get(sq2);
+      const inner = getPieceElementRef.current(sq2)?.firstElementChild ?? null;
+      const entry = liveTiltRef.current(sq2, inner);
       if (!entry) continue;
-      const inner = getPieceElementRef.current(sq2)?.firstElementChild;
       if (!inner || !canAnimate2(inner)) {
         entry.anim?.cancel();
         tiltsRef.current.delete(sq2);
