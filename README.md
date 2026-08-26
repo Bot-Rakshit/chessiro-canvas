@@ -465,18 +465,19 @@ compute those destinations outside the board.
 
 ### Promotion
 
-By default, reaching the last rank opens the promotion chooser and `onMove` is
-called with the chosen piece. Style it with `promotionVisuals`:
+By default, reaching the last rank opens a chessground-style promotion chooser —
+a vertical strip of pieces anchored on the promotion file, with the queen sitting
+on the destination square (mirrored for the black orientation). Click a piece to
+promote, click elsewhere or press `Esc` to cancel. Style it with `promotionVisuals`:
 
 ```tsx
 <ChessiroCanvas
   position={fen}
   promotionVisuals={{
-    panelColor: 'rgba(20, 24, 36, 0.98)',
-    titleColor: '#f2f6ff',
-    optionBackground: 'rgba(255, 255, 255, 0.08)',
-    optionTextColor: '#f2f6ff',
-    cancelTextColor: '#cbd5e1',
+    backdropColor: 'rgba(15, 18, 25, 0.35)',
+    panelColor: 'rgba(255, 255, 255, 0.88)',
+    panelBorderColor: 'rgba(15, 23, 42, 0.1)',
+    optionHoverBackground: 'rgba(15, 23, 42, 0.07)',
   }}
 />
 ```

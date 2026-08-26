@@ -547,6 +547,9 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
                       pieceSet={pieceSet}
                       flipPieces={flipPieces}
                       visuals={promotionVisuals}
+                      orientation={orientation}
+                      boardWidth={boardWidth}
+                      boardHeight={boardHeight}
                       onSelect={interaction.handlePromotionSelect}
                       onDismiss={interaction.handlePromotionDismiss}
                     />

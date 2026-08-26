@@ -185,6 +185,7 @@ interface PromotionVisuals {
     panelRadius?: string;
     titleColor?: string;
     optionBackground?: string;
+    optionHoverBackground?: string;
     optionBorderColor?: string;
     optionTextColor?: string;
     optionRadius?: string;
