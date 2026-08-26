@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useState } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import type { Orientation, PromotionContext, PromotionPiece, PieceSet, PromotionVisuals } from '../types';
 import { CachedPieceImg } from '../hooks/usePieceCache';
 import { resolvePieceImageSrc } from '../defaultPieces';
@@ -36,6 +36,29 @@ export const PromotionDialog = memo(function PromotionDialog({
 }: PromotionDialogProps) {
   const [entered, setEntered] = useState(false);
   const [hovered, setHovered] = useState<number | null>(null);
+
+  // ── Ghost-click shield ──
+  // The dialog mounts DURING the move gesture (tap-to-move fires on
+  // touchstart, drag-drop on touchend). Android Chrome then dispatches the
+  // synthesized compatibility `click` with a re-hit-test at the touch point,
+  // which lands on the freshly mounted dialog — instantly "choosing" the
+  // option anchored on the promotion square (or dismissing via the
+  // backdrop). iOS suppresses that click when the DOM changes under the
+  // finger, which is why the bug only shows on Android.
+  //
+  // A click is only honored after a REAL interaction with the dialog
+  // (pointerdown/touchstart observed after mount). The ghost click has no
+  // such precursor: its pointer sequence targeted the board, before we
+  // existed. Keyboard activation stays possible via explicit key handling
+  // (and `detail === 0` clicks, which no synthesized tap click ever has).
+  const realInteractionRef = useRef(false);
+  const markRealInteraction = useCallback(() => {
+    realInteractionRef.current = true;
+  }, []);
+  const isGhostClick = useCallback(
+    (e: { detail: number }) => !realInteractionRef.current && e.detail !== 0,
+    [],
+  );
 
   useEffect(() => {
     const id = requestAnimationFrame(() => setEntered(true));
@@ -90,10 +113,16 @@ export const PromotionDialog = memo(function PromotionDialog({
         opacity: entered ? 1 : 0,
         transition: 'opacity 160ms ease-out',
         zIndex: 20,
+        touchAction: 'manipulation',
       }}
+      onPointerDownCapture={markRealInteraction}
+      onTouchStartCapture={markRealInteraction}
       onMouseDown={(e) => e.stopPropagation()}
       onTouchStart={(e) => e.stopPropagation()}
-      onClick={onDismiss}
+      onClick={(e) => {
+        if (isGhostClick(e)) return;
+        onDismiss();
+      }}
     >
       <div
         onClick={(e) => e.stopPropagation()}
@@ -127,7 +156,19 @@ export const PromotionDialog = memo(function PromotionDialog({
               onMouseLeave={() => setHovered(null)}
               onFocus={() => setHovered(i)}
               onBlur={() => setHovered(null)}
-              onClick={() => onSelect(piece)}
+              onClick={(e) => {
+                if (isGhostClick(e)) return;
+                onSelect(piece);
+              }}
+              onKeyDown={(e) => {
+                // Explicit keyboard path: some browsers report detail > 0
+                // for keyboard-activated clicks, which the ghost shield
+                // would otherwise swallow.
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  onSelect(piece);
+                }
+              }}
               style={{
                 appearance: 'none',
                 width: cellSize,
@@ -144,6 +185,7 @@ export const PromotionDialog = memo(function PromotionDialog({
                   ? (visuals.optionHoverBackground || 'rgba(15, 23, 42, 0.07)')
                   : (visuals.optionBackground || 'transparent'),
                 cursor: 'pointer',
+                touchAction: 'manipulation',
                 opacity: entered ? 1 : 0,
                 transform: entered ? 'translateY(0)' : `translateY(${extendsDown ? '-10px' : '10px'})`,
                 transition: 'opacity 200ms ease-out, transform 200ms cubic-bezier(0.2, 0.8, 0.3, 1), background-color 120ms ease, border-color 120ms ease',
