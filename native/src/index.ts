@@ -1,0 +1,56 @@
+export { ChessiroBoard, ChessiroCanvas } from './ChessiroBoard';
+export { PieceArt } from './PieceArt';
+export type {
+  ChessiroBoardProps,
+  ChessiroBoardProps as ChessiroCanvasProps,
+  ChessiroBoardRef,
+  ChessiroBoardRef as ChessiroCanvasRef,
+  ExpectedMove,
+  NativeAnimateMoveOptions,
+  NativePremoveConfig,
+  NativeSquareVisuals,
+  PieceRenderFn,
+  PulseSquareOptions,
+} from './types';
+
+// The shared, framework-free core — same helpers as `chessiro-canvas/core`.
+export {
+  INITIAL_FEN,
+  INITIAL_GAME_FEN,
+  readFen,
+  writeFen,
+  premoveDests,
+  computeAnimPlan,
+  squareToPoint,
+  pointToSquare,
+  renderBoardSvg,
+  resolveMoveAnimation,
+  EASINGS,
+  MOVE_ANIMATION_PRESETS,
+  DEFAULT_BOARD_THEME,
+  DEFAULT_ARROW_BRUSHES,
+  DEFAULT_PIECE_SVGS,
+} from './core';
+export type {
+  Arrow,
+  ArrowBrush,
+  ArrowBrushes,
+  BoardTheme,
+  Dests,
+  EasingFunction,
+  EasingName,
+  CaptureAnimation,
+  LandingAnimation,
+  AppearAnimation,
+  FlipAnimation,
+  MoveAnimationOptions,
+  MoveAnimationPreset,
+  Orientation,
+  Piece,
+  PieceCode,
+  PieceColor,
+  PieceRole,
+  Pieces,
+  PromotionPiece,
+  Square,
+} from './core';

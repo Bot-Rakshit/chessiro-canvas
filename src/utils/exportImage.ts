@@ -1,15 +1,7 @@
 import type { PieceCode } from '../core/boardSvg';
+import type { RasterOptions } from '../types';
 
-export interface RasterOptions {
-  /** Output width/height in CSS px. Default: the SVG's own size. */
-  size?: number;
-  /** Device-pixel multiplier for crisp output on retina screens. Default: 2. */
-  pixelRatio?: number;
-  /** Image MIME type. Default: 'image/png'. */
-  type?: 'image/png' | 'image/jpeg' | 'image/webp';
-  /** Encoder quality for jpeg/webp (0..1). */
-  quality?: number;
-}
+export type { RasterOptions };
 
 const PIECE_CODES: PieceCode[] = ['wp', 'wn', 'wb', 'wr', 'wq', 'wk', 'bp', 'bn', 'bb', 'br', 'bq', 'bk'];
 const pieceSetCache = new Map<string, Promise<Partial<Record<PieceCode, string>>>>();

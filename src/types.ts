@@ -1,7 +1,6 @@
 import type { CSSProperties, ReactNode } from 'react';
 import type { MoveAnimationOptions, MoveAnimationPreset } from './core/motion';
 import type { BoardSvgOptions } from './core/boardSvg';
-import type { RasterOptions } from './utils/exportImage';
 
 // ── Square & Coordinate Types ──────────────────────────────────────
 
@@ -909,6 +908,18 @@ export interface ChessiroCanvasProps {
   // Styling
   className?: string;
   style?: CSSProperties;
+}
+
+/** Rasterisation settings for `ref.toImage` / `svgToImageBlob`. */
+export interface RasterOptions {
+  /** Output width/height in CSS px. Default: the SVG's own size. */
+  size?: number;
+  /** Device-pixel multiplier for crisp output on retina screens. Default: 2. */
+  pixelRatio?: number;
+  /** Image MIME type. Default: 'image/png'. */
+  type?: 'image/png' | 'image/jpeg' | 'image/webp';
+  /** Encoder quality for jpeg/webp (0..1). */
+  quality?: number;
 }
 
 // ── Imperative API ─────────────────────────────────────────────────

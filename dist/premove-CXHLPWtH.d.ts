@@ -225,19 +225,6 @@ interface BoardSvgOptions {
  */
 declare function renderBoardSvg(options?: BoardSvgOptions): string;
 
-interface RasterOptions {
-    /** Output width/height in CSS px. Default: the SVG's own size. */
-    size?: number;
-    /** Device-pixel multiplier for crisp output on retina screens. Default: 2. */
-    pixelRatio?: number;
-    /** Image MIME type. Default: 'image/png'. */
-    type?: 'image/png' | 'image/jpeg' | 'image/webp';
-    /** Encoder quality for jpeg/webp (0..1). */
-    quality?: number;
-}
-/** Rasterise an SVG string to an image Blob (PNG by default) in the browser. */
-declare function svgToImageBlob(svg: string, options?: RasterOptions): Promise<Blob>;
-
 type File = 'a' | 'b' | 'c' | 'd' | 'e' | 'f' | 'g' | 'h';
 type Rank = '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8';
 type Square = `${File}${Rank}`;
@@ -1056,6 +1043,17 @@ interface ChessiroCanvasProps {
     className?: string;
     style?: CSSProperties;
 }
+/** Rasterisation settings for `ref.toImage` / `svgToImageBlob`. */
+interface RasterOptions {
+    /** Output width/height in CSS px. Default: the SVG's own size. */
+    size?: number;
+    /** Device-pixel multiplier for crisp output on retina screens. Default: 2. */
+    pixelRatio?: number;
+    /** Image MIME type. Default: 'image/png'. */
+    type?: 'image/png' | 'image/jpeg' | 'image/webp';
+    /** Encoder quality for jpeg/webp (0..1). */
+    quality?: number;
+}
 interface ChessiroCanvasRef {
     getSquareRect: (square: string) => DOMRect | null;
     getBoardRect: () => DOMRect | null;
@@ -1196,4 +1194,4 @@ declare function writeFen(pieces: Pieces): string;
  */
 declare function premoveDests(square: Square, pieces: Pieces, color: PieceColor): Square[];
 
-export { type PlayCinematicOptions as $, type AnimateMoveOptions as A, type BoardSvgOptions as B, type ChessiroCanvasProps as C, DEFAULT_ARROW_BRUSHES as D, EASINGS as E, type ExpectedMove as F, type FlipAnimation as G, type GhostPiece as H, INITIAL_FEN as I, INITIAL_GAME_FEN as J, type ImplodeOptions as K, type LandingAnimation as L, type LaserOptions as M, MOVE_ANIMATION_PRESETS as N, type MoveAnimationOptions as O, type MoveAnimationPreset as P, type MoveQualityBadge as Q, type NotationVisuals as R, type Orientation as S, type OverlayVisuals as T, type Piece as U, type PieceCode as V, type PieceColor as W, type PieceRenderer as X, type PieceRole as Y, type PieceSet as Z, type PieceTiltOptions as _, type ChessiroCanvasRef as a, type PopBadgeOptions as a0, type PopBannerOptions as a1, type PremoveConfig as a2, type PromotionBeamOptions as a3, type PromotionContext as a4, type PromotionPiece as a5, type PromotionVisuals as a6, type PulseSquareOptions as a7, type RasterOptions as a8, type ResolvedMoveAnimation as a9, planMoveTrack as aA, planSnapBackTrack as aB, resolveEasing as aC, sampleTrack as aD, staggerRank as aE, type SpotlightHandle as aa, type SpotlightOptions as ab, type Square as ac, type SquareBurstOptions as ad, type SquareLabel as ae, type SquareVisuals as af, type TextOverlay as ag, cubicBezier as ah, premoveDests as ai, readFen as aj, renderBoardSvg as ak, resolveMoveAnimation as al, svgToImageBlob as am, writeFen as an, type Pieces as ao, type BoardPoint as ap, FILES as aq, type MotionKeyframe as ar, type MotionTrack as as, RANKS as at, type ResolveMoveAnimationContext as au, moveDurationMs as av, planAppearTrack as aw, planCaptureTrack as ax, planFlipFadeTrack as ay, planLandingTrack as az, type AnimationEvent as b, type AppearAnimation as c, type Arrow as d, type ArrowBrush as e, type ArrowBrushes as f, type ArrowHeadShape as g, type ArrowVisuals as h, type BoardTheme as i, type CameraController as j, type CameraDriftOptions as k, type CameraShakeOptions as l, type CameraTiltOptions as m, type CameraZoomOptions as n, type CaptureAnimation as o, type CastleSwapOptions as p, type CelebrateOptions as q, type CinematicMoveOptions as r, type CinematicPlayback as s, type CinematicStep as t, type CinematicStyle as u, DEFAULT_BOARD_THEME as v, type Dests as w, type DrawArrowOptions as x, type EasingFunction as y, type EasingName as z };
+export { type PieceTiltOptions as $, type AnimateMoveOptions as A, type BoardSvgOptions as B, type ChessiroCanvasProps as C, DEFAULT_ARROW_BRUSHES as D, EASINGS as E, type ExpectedMove as F, type FlipAnimation as G, type GhostPiece as H, INITIAL_FEN as I, INITIAL_GAME_FEN as J, type ImplodeOptions as K, type LandingAnimation as L, type LaserOptions as M, MOVE_ANIMATION_PRESETS as N, type MoveAnimationOptions as O, type MoveAnimationPreset as P, type MoveQualityBadge as Q, type RasterOptions as R, type NotationVisuals as S, type Orientation as T, type OverlayVisuals as U, type Piece as V, type PieceCode as W, type PieceColor as X, type PieceRenderer as Y, type PieceRole as Z, type PieceSet as _, type ChessiroCanvasRef as a, type PlayCinematicOptions as a0, type PopBadgeOptions as a1, type PopBannerOptions as a2, type PremoveConfig as a3, type PromotionBeamOptions as a4, type PromotionContext as a5, type PromotionPiece as a6, type PromotionVisuals as a7, type PulseSquareOptions as a8, type ResolvedMoveAnimation as a9, planSnapBackTrack as aA, resolveEasing as aB, sampleTrack as aC, staggerRank as aD, type SpotlightHandle as aa, type SpotlightOptions as ab, type Square as ac, type SquareBurstOptions as ad, type SquareLabel as ae, type SquareVisuals as af, type TextOverlay as ag, cubicBezier as ah, premoveDests as ai, readFen as aj, renderBoardSvg as ak, resolveMoveAnimation as al, writeFen as am, type Pieces as an, type BoardPoint as ao, FILES as ap, type MotionKeyframe as aq, type MotionTrack as ar, RANKS as as, type ResolveMoveAnimationContext as at, moveDurationMs as au, planAppearTrack as av, planCaptureTrack as aw, planFlipFadeTrack as ax, planLandingTrack as ay, planMoveTrack as az, type AnimationEvent as b, type AppearAnimation as c, type Arrow as d, type ArrowBrush as e, type ArrowBrushes as f, type ArrowHeadShape as g, type ArrowVisuals as h, type BoardTheme as i, type CameraController as j, type CameraDriftOptions as k, type CameraShakeOptions as l, type CameraTiltOptions as m, type CameraZoomOptions as n, type CaptureAnimation as o, type CastleSwapOptions as p, type CelebrateOptions as q, type CinematicMoveOptions as r, type CinematicPlayback as s, type CinematicStep as t, type CinematicStyle as u, DEFAULT_BOARD_THEME as v, type Dests as w, type DrawArrowOptions as x, type EasingFunction as y, type EasingName as z };
