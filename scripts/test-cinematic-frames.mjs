@@ -57,7 +57,7 @@ try {
   if (!up) throw new Error(`dev server did not start on ${URL}`);
 
   const { chromium } = await import('playwright');
-  const browser = await chromium.launch();
+  const browser = await chromium.launch(process.env.PW_CHROMIUM ? { executablePath: process.env.PW_CHROMIUM } : {});
   const page = await browser.newPage({ viewport: { width: 1200, height: 900 } });
   await page.goto(URL, { waitUntil: 'networkidle' });
   await page.waitForTimeout(1200);

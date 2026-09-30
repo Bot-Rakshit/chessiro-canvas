@@ -376,19 +376,17 @@ export const PiecesLayer = memo(forwardRef<PiecesLayerRef, PiecesLayerProps>(fun
     const origin = (sq: string): BoardPoint => inFlight.get(sq) ?? squareColRow(sq, prevAsWhite);
 
     // Cascade order for multi-piece changes: bottom rows first, left to right.
-    const moves = plan.moves.length > 1 && m.stagger > 0
-      ? [...plan.moves].sort((a, b) => {
-        const [ax, ay] = squareColRow(a.to, asWhite);
-        const [bx, by] = squareColRow(b.to, asWhite);
-        return staggerRank(ax, ay) - staggerRank(bx, by);
-      })
-      : plan.moves;
-    const byRank = (a: { square: string }, b: { square: string }) => {
-      const [ax, ay] = squareColRow(a.square, asWhite);
-      const [bx, by] = squareColRow(b.square, asWhite);
-      return staggerRank(ax, ay) - staggerRank(bx, by);
+    const rank = (sq: string) => {
+      const [x, y] = squareColRow(sq, asWhite);
+      return staggerRank(x, y);
     };
-    const appears = plan.appears.length > 1 && m.stagger > 0 ? [...plan.appears].sort(byRank) : plan.appears;
+    const cascadeOrder = m.stagger > 0;
+    const moves = cascadeOrder && plan.moves.length > 1
+      ? [...plan.moves].sort((a, b) => rank(a.to) - rank(b.to))
+      : plan.moves;
+    const appears = cascadeOrder && plan.appears.length > 1
+      ? [...plan.appears].sort((a, b) => rank(a.square) - rank(b.square))
+      : plan.appears;
     const count = plan.moves.length + plan.appears.length;
     // Keep a full-board cascade under ~0.45s however many pieces take part.
     const step = count > 2 ? Math.min(m.stagger, 450 / count) : 0;
