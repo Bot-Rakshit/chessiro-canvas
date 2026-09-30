@@ -4,6 +4,7 @@ export const SECTIONS = [
   { id: 'overview', label: 'Overview' },
   { id: 'start', label: 'Getting started' },
   { id: 'playground', label: 'Playground' },
+  { id: 'motion', label: 'Motion' },
   { id: 'arrows', label: 'Arrows & premoves' },
   { id: 'teaching', label: 'Teaching' },
   { id: 'drills', label: 'Drills' },

@@ -25,11 +25,14 @@ control: pair it with [`chess.js`](https://github.com/jhlywa/chess.js) or
 package purely for the board.
 
 - 🚀 **Fast** — ~78% faster mount and ~81% faster updates than `react-chessboard` in [our benchmark](#performance)
-- 📦 **Small** — ~32 KB gzipped, zero runtime dependencies
+- 📦 **Lean** — ~42 KB gzipped with every feature (minified, tree-shakeable), zero runtime dependencies
 - 🧩 **Controlled** — position is a FEN prop; you own game state
 - 🎨 **Themable** — board colors, piece sets, arrows, notation, promotion dialog, overlays
 - 🎓 **Teaching-ready** — guided drills, ghost pieces, square labels, move demos
+- 🎞️ **Move animation presets** — `snappy`, `smooth`, `playful`, `arcade`, `elegant`: knight hops, landing squash, capture knockouts, turntable flips, new-game cascades — all on the compositor thread
 - 🎬 **Cinematics** — choreographed piece flights, camera zoom/tilt/shake, confetti, spotlights
+- 🔗 **Share-ready** — `ref.toImage()` / `ref.toSVG()` snapshots, and a React-free `renderBoardSvg` for server-side OG images
+- 📲 **React Native port** — [`chessiro-canvas-native`](./native/README.md), UI-thread drag and animation with Reanimated
 - ⌨️ **Keyboard navigation** hooks for analysis boards
 - 📱 **Touch-friendly** — chessground-style finger lift and scroll blocking
 - 🟦 **TypeScript-first** — every prop, option, and imperative method typed
@@ -55,6 +58,11 @@ package purely for the board.
   - [Premoves](#premoves)
   - [Promotion](#promotion)
   - [Drag, touch, and animation tuning](#drag-touch-and-animation-tuning)
+  - [Move animations](#move-animations)
+  - [Recipes: playing, learning, and sharing apps](#recipes-playing-learning-and-sharing-apps)
+  - [Sharing: export the board as an image](#sharing-export-the-board-as-an-image)
+  - [Framework-free core (`chessiro-canvas/core`)](#framework-free-core-chessiro-canvascore)
+  - [React Native](#react-native)
   - [Keyboard navigation](#keyboard-navigation)
   - [Overlays and badges](#overlays-and-badges)
   - [Teaching mode: drills, ghosts, and demos](#teaching-mode-drills-ghosts-and-demos)
@@ -509,6 +517,194 @@ On touch devices the piece is scaled up and offset above the finger so it isn't
 hidden. Set `blockTouchScroll` when the board fills the viewport, otherwise
 dragging can scroll the page instead.
 
+A drop the board can't use — an illegal square, off the board, or `onMove`
+returning `false` — glides the piece home from where you let go instead of
+teleporting it (`moveAnimation.snapBack`, on by default). An accepted drop is
+never replayed from its origin, but the rest of the move still animates: after
+dragging the king to castle, the rook slides over.
+
+### Move animations
+
+Every position change is diffed into moves, captures and arrivals, then played
+with the Web Animations API. Only `transform` and `opacity` are animated, so the
+motion runs on the browser's compositor thread: an engine search or a heavy React
+commit on the main thread can't make a moving piece stutter.
+
+Pick a preset:
+
+```tsx
+<ChessiroCanvas position={fen} moveAnimation="playful" />
+```
+
+| Preset | Feel | What it does |
+| --- | --- | --- |
+| `classic` *(default)* | The original board | Cubic in-out slide, captured pieces fade. |
+| `snappy` | Blitz / bullet | Fast ease-out, long moves take slightly longer, board flip turns. |
+| `smooth` | Analysis, study | Sine easing, gentle lift, captures shrink away, pieces settle on landing. |
+| `playful` | Kids, puzzles, casual | Anticipation and overshoot, knights hop, pieces squash on landing, captured pieces get knocked off the board, new games pop in rank by rank. |
+| `arcade` | Game-show energy | Springy flights with big arcs, bouncy landings, captures go *poof*, pieces drop in. |
+| `elegant` | Broadcasts, replays | Slow, distance-aware glides, captured pieces sink, pieces rise into place. |
+| `minimal` | Accessibility | A short flat slide. What every preset becomes under `prefers-reduced-motion`. |
+| `none` | — | No motion. |
+
+Or start from a preset and tune any knob:
+
+```tsx
+<ChessiroCanvas
+  position={fen}
+  animationDurationMs={220}           // base duration; presets scale it
+  moveAnimation={{
+    preset: 'smooth',
+    easing: 'backOut',                // or (t) => number — any curve
+    knightArc: 0.5,                   // knights jump half a square high
+    arc: 0,                           // everything else slides
+    liftScale: 1.1,                   // grow while airborne
+    capture: 'knockout',              // 'fade' | 'shrink' | 'poof' | 'knockout' | 'sink' | 'none'
+    landing: 'squash',                // 'none' | 'squash' | 'bounce' | 'settle'
+    appear: 'pop',                    // 'none' | 'fade' | 'pop' | 'drop' | 'rise'
+    flip: 'rotate',                   // 'none' | 'rotate' | 'fade' when `orientation` changes
+    stagger: 20,                      // ms between pieces when many move at once
+    distanceScaling: 0.7,             // 0 = fixed time, 1 = long moves take longer
+    snapBack: true,                   // rejected drops glide home
+  }}
+/>
+```
+
+Named easings: `linear`, `ease`, `easeIn`, `easeOut`, `easeInOut`, `snappy`,
+`smooth`, `backOut`, `anticipate`, `spring`, `bounce`, `elastic`. `cubicBezier(x1, y1, x2, y2)`
+builds a CSS-style curve. Because easing is baked into sampled keyframes, springy
+and bouncy curves play on the compositor just like a plain slide.
+
+A few details worth knowing:
+
+- **Arcs follow time, not distance.** A hop is a parabola over the flight's
+  duration, so with front-loaded curves (`spring`, `backOut`) the piece covers the
+  ground early and still has air time — it reads as a jump followed by a landing.
+- **Interrupted moves continue from where they are.** Step through a game quickly
+  and each flight retargets from its on-screen pose instead of jumping back.
+- **The flip is a turntable.** Square colours are symmetric under a half-turn, so
+  `flip: 'rotate'` spins only the pieces around the board centre (each one
+  counter-rotates to stay upright) and it reads as the whole board turning.
+- **Reduced motion is respected.** Under `prefers-reduced-motion` every preset
+  becomes `minimal`. Pass `respectReducedMotion: false` to opt out.
+- `showAnimations={false}` still switches everything off, and
+  `animationDurationMs` still sets the base speed.
+
+### Recipes: playing, learning, and sharing apps
+
+**Playing app** — fast, forgiving, and quiet:
+
+```tsx
+<ChessiroCanvas
+  position={fen}
+  lastMove={lastMove}
+  check={checkSquare}
+  dests={dests}
+  turnColor={turn}
+  movableColor={myColor}
+  premovable={{ enabled: true, events: { set: queuePremove, unset: clearPremove } }}
+  moveAnimation="snappy"
+  autoPromoteTo={autoQueen ? 'q' : undefined}
+  onMove={play}
+  blockTouchScroll
+/>
+// When the game ends:
+await board.current?.checkmate(kingSquare);
+```
+
+**Learning app** — slow enough to follow, with feedback on every attempt:
+
+```tsx
+<ChessiroCanvas
+  ref={board}
+  position={lesson.fen}
+  moveAnimation={{ preset: 'smooth', knightArc: 0.4 }}   // show how the knight jumps
+  expectedMove={lesson.solution}                        // wrong moves shake and bounce back
+  onWrongMove={() => board.current?.pulseSquare(lesson.solution.from)}
+  ghostPieces={lesson.hint ? [{ square: lesson.solution.to, piece: 'wN' }] : []}
+  onMove={advanceLesson}
+/>
+// Celebrate a solved puzzle:
+board.current?.popBadge(lesson.solution.to, { text: '✓' });
+```
+
+**Sharing app** — replays with personality, and an image to post:
+
+```tsx
+<ChessiroCanvas ref={board} position={fen} lastMove={lastMove} interactive={false} moveAnimation="elegant" />
+
+// A brilliant move gets the full treatment…
+await board.current?.cinematicMove('d1', 'h5', { style: 'brilliant', badge: '!!' });
+
+// …and the final position becomes a shareable PNG.
+const blob = await board.current!.toImage({ size: 1080 });
+const file = new File([blob], 'position.png', { type: 'image/png' });
+if (navigator.canShare?.({ files: [file] })) await navigator.share({ files: [file], title: 'My game' });
+```
+
+### Sharing: export the board as an image
+
+The ref can snapshot exactly what the board shows — position, orientation, theme,
+last move, check, highlights, marks and arrows:
+
+```tsx
+const svg = board.current!.toSVG();                          // string, synchronous
+const png = await board.current!.toImage({ size: 1200 });    // Blob (PNG by default)
+const jpg = await board.current!.toImage({ type: 'image/jpeg', quality: 0.9, arrows: [] });
+```
+
+Any `BoardSvgOptions` field overrides the live value (`size`, `arrows`,
+`orientation`, `showCoordinates`, …). `toImage` also takes `pixelRatio` (default
+`2`), `type` and `quality`. A hosted `pieceSet` is fetched and inlined so the
+image is self-contained; custom React `pieces` renderers can't be serialised, so
+the built-in artwork is used for those.
+
+On the server — Open Graph cards, PDF reports, email thumbnails — use the same
+renderer without React or a DOM:
+
+```ts
+// app/api/og/route.ts
+import { renderBoardSvg } from 'chessiro-canvas/core';
+
+export function GET(req: Request) {
+  const fen = new URL(req.url).searchParams.get('fen') ?? undefined;
+  const svg = renderBoardSvg({ position: fen, size: 1200, showMargin: false });
+  return new Response(svg, { headers: { 'Content-Type': 'image/svg+xml' } });
+}
+```
+
+Pipe the SVG through `sharp` or `@resvg/resvg-js` when a platform needs PNG.
+
+### Framework-free core (`chessiro-canvas/core`)
+
+`chessiro-canvas/core` is the half of the library that doesn't need React or a
+DOM. It's what the React Native port is built on, and it works in Node, workers
+and edge runtimes:
+
+```ts
+import {
+  readFen, writeFen, premoveDests,
+  computeAnimPlan,              // diff two positions into moves / captures / appearances
+  renderBoardSvg,               // static SVG of a position
+  resolveMoveAnimation,         // preset + overrides -> concrete motion settings
+  planMoveTrack,                // sampled keyframes for one flight
+  EASINGS, cubicBezier,
+  squareToPoint, pointToSquare,
+} from 'chessiro-canvas/core';
+```
+
+The motion helpers return keyframes in *square* units (`x` = column, `y` = row,
+fractional in flight), so any renderer — Canvas, WebGL, a video exporter — can
+replay the same choreography the board uses.
+
+### React Native
+
+[`chessiro-canvas-native`](./native/README.md) brings the same controlled API to
+iOS and Android. Drag and every animation run on the UI thread with
+`react-native-reanimated` and `react-native-gesture-handler`; pieces and arrows
+render with `react-native-svg`. The motion presets are shared with the web board,
+so `moveAnimation="playful"` looks the same on both.
+
 ### Keyboard navigation
 
 The board listens for navigation keys on the document and calls your hooks. It does
@@ -833,7 +1029,8 @@ All props are optional. The component forwards a `ref` of type
 | --- | --- | --- | --- |
 | `allowDragging` | `boolean` | `true` | Toggle drag-to-move (click-to-move still works). |
 | `showAnimations` | `boolean` | `true` | Toggle piece movement animation. |
-| `animationDurationMs` | `number` | `200` | Animation length in ms. |
+| `animationDurationMs` | `number` | `200` | Base animation length in ms. Presets scale it. |
+| `moveAnimation` | `MoveAnimationPreset \| MoveAnimationOptions` | `'classic'` | How pieces move, capture, land, appear and flip. See [Move animations](#move-animations). |
 | `blockTouchScroll` | `boolean` | `false` | Prevent page scrolling while touching the board. |
 | `selectedPieceScale` | `number` | — | Scale of the selected piece (e.g. `1.1`). Unset means no scaling. |
 | `dragScale` | `number` | `1` | Piece scale while mouse-dragging. |
@@ -902,6 +1099,13 @@ const board = useRef<ChessiroCanvasRef>(null);
 > None of these commit a position. They are pure visuals — update `position`
 > yourself when the returned promise resolves.
 
+#### Export
+
+| Method | Returns | Description |
+| --- | --- | --- |
+| `toSVG(options?)` | `string` | Standalone SVG of the board as currently shown. Options override live values. |
+| `toImage(options?)` | `Promise<Blob>` | PNG (or JPEG/WebP) of the board, self-contained, for sharing and downloads. |
+
 ### Exported helpers and constants
 
 | Export | Signature | Description |
@@ -914,6 +1118,12 @@ const board = useRef<ChessiroCanvasRef>(null);
 | `preloadPieceSet` | `(path: string) => void` | Warm the image cache for a hosted piece set. |
 | `resolvePieceImageSrc` | `(pieceKey: string, piecePath?: string) => string` | Resolve `'wN'` to an image src; useful for external piece trays. |
 | `DEFAULT_ARROW_BRUSHES` | `ArrowBrushes` | The default green/red/blue/yellow arrow colors. |
+| `renderBoardSvg` | `(options?: BoardSvgOptions) => string` | Static SVG of a position. Also in `chessiro-canvas/core`. |
+| `svgToImageBlob` | `(svg, options?) => Promise<Blob>` | Rasterise an SVG in the browser. |
+| `MOVE_ANIMATION_PRESETS` | `Record<preset, …>` | The preset definitions, for building your own settings UI. |
+| `EASINGS` | `Record<EasingName, (t) => number>` | The named easing curves. |
+| `cubicBezier` | `(x1, y1, x2, y2) => (t) => number` | CSS-style easing curve. |
+| `resolveMoveAnimation` | `(options, context?) => ResolvedMoveAnimation` | Merge a preset and overrides into concrete settings. |
 
 ### Exported types
 
@@ -932,6 +1142,9 @@ import type {
   SpotlightOptions, SpotlightHandle, LaserOptions, DrawArrowOptions,
   CameraController, CameraZoomOptions, CameraTiltOptions,
   CameraShakeOptions, CameraDriftOptions,
+  MoveAnimationOptions, MoveAnimationPreset, EasingName, EasingFunction,
+  CaptureAnimation, LandingAnimation, AppearAnimation, FlipAnimation,
+  BoardSvgOptions, RasterOptions, PieceCode,
 } from 'chessiro-canvas';
 ```
 
@@ -958,11 +1171,14 @@ noticeably between runs on this machine (13.3 → 24.4 ms mount) without its cod
 changing, which inflates the percentages. The dependable signal is this library's
 own absolute movement — 0.42 → 0.33 ms per update (−22%) release over release.</sub>
 
-**On bundle size:** the cinematics layer costs about 11 KB gzipped, which now puts
-the package above `react-chessboard`. It is statically imported, so an app that
-never plays a cinematic still pays for it. If size matters more to you than the
-replay effects, that is the trade — a lazy-loaded cinematics entry point is the
-obvious fix and is not implemented yet.
+**On bundle size:** the package now ships minified (with source maps), which
+took the full entry — `index.js` plus the chunk it shares with
+`chessiro-canvas/core` — from 47.3 KB to about 41.6 KB gzipped, and that figure
+now *includes* the motion presets and the SVG exporter. The cinematics layer is
+still the biggest single piece (~12 KB gzipped) and is statically imported, so an
+app that never plays a cinematic pays for it; a lazy-loaded cinematics entry is
+the obvious next step. `scripts/benchmark.mjs` measures the entry together with
+every chunk it imports, so code-splitting can't flatter the number.
 
 ### Rendering with config props
 
@@ -993,6 +1209,23 @@ keeping idle imperative layers off position updates):
 | Selected, indicators live | Wall per update | 0.68 ms | 0.55 ms | **18.8% faster** |
 | Plain updates | Profiler per commit | 0.33 ms | 0.32 ms | ~flat |
 | Selected, indicators live | Profiler per commit | 0.34 ms | 0.34 ms | ~flat |
+
+Motion pass (compositor-driven pieces, one memoized node per piece, O(n) move
+diffing):
+
+| Phase | Metric | Before | After | Delta |
+| --- | --- | ---: | ---: | ---: |
+| Plain updates | Wall per update | 3.41 ms | 2.08 ms | **39% faster** |
+| Selected, indicators live | Wall per update | 2.94 ms | 2.05 ms | **30% faster** |
+| Plain updates | Profiler per commit | 2.31 ms | 1.41 ms | **39% faster** |
+| Selected, indicators live | Profiler per commit | 1.91 ms | 1.37 ms | **28% faster** |
+
+<sub>`npm run benchmark:visuals`, 12 rounds × 200 updates, previous release and this
+build run alternately twice on the same (slower, shared) Linux container; medians
+averaged across the two runs. Absolute times are not comparable with the table
+above — compare the ratios. In a real browser the bigger win doesn't show up here
+at all: piece motion no longer runs a JavaScript loop on the main thread every
+frame.</sub>
 
 <sub>Medians over 12 rounds × 200 updates, both builds measured back to back on
 the same machine. Medians rather than means because the mean is noise-sensitive

@@ -27,6 +27,7 @@ import {
   GuidedDrill,
   TeachingStudio,
 } from './studios';
+import { MotionStudio } from './motion';
 import { C, Choice, CodeBlock, Panel, Plate, Toggle, Workbench, cn } from './ui';
 
 const REPO = 'https://github.com/Bot-Rakshit/chessiro-canvas';
@@ -341,10 +342,27 @@ export function App() {
               />
             </Section>
 
+            {/* ── Motion ── */}
+            <Section
+              id="motion"
+              index={4}
+              title="Motion"
+              lede={
+                <>
+                  Seven animation presets and every knob behind them — knight hops, landing
+                  squash, capture knockouts, turntable flips, new-game cascades. Motion runs
+                  on the compositor via the Web Animations API, so a busy main thread can't
+                  make it stutter.
+                </>
+              }
+            >
+              <MotionStudio theme={theme} />
+            </Section>
+
             {/* ── Arrows & premoves ── */}
             <Section
               id="arrows"
-              index={4}
+              index={5}
               title="Arrows & premoves"
               lede={
                 <>
@@ -359,7 +377,7 @@ export function App() {
             {/* ── Teaching ── */}
             <Section
               id="teaching"
-              index={5}
+              index={6}
               title="Teaching"
               lede={
                 <>
@@ -375,7 +393,7 @@ export function App() {
             {/* ── Drills ── */}
             <Section
               id="drills"
-              index={6}
+              index={7}
               title="Drills"
               lede={
                 <>
@@ -395,7 +413,7 @@ export function App() {
             {/* ── Cinematics ── */}
             <Section
               id="cinematics"
-              index={7}
+              index={8}
               title="Cinematics"
               lede={
                 <>
@@ -411,7 +429,7 @@ export function App() {
             {/* ── Styling ── */}
             <Section
               id="styling"
-              index={8}
+              index={9}
               title="Styling"
               lede="Every layer the board draws is themable from props. Nothing needs a fork or a stylesheet override."
             >
@@ -435,7 +453,7 @@ export function App() {
             {/* ── API ── */}
             <Section
               id="api"
-              index={9}
+              index={10}
               title="API reference"
               lede={
                 <>
@@ -518,7 +536,7 @@ export function App() {
             {/* ── Engines ── */}
             <Section
               id="engines"
-              index={10}
+              index={11}
               title="Engines"
               lede="Bring your own rules. Both popular options drop in cleanly."
             >
