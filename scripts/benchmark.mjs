@@ -330,8 +330,21 @@ function gzipSize(bytes) {
   return zlib.gzipSync(bytes).length;
 }
 
+// Follow relative static imports so a code-split entry is measured with the
+// chunks it always loads, not just its own file.
+function collectModuleGraph(entryPath, seen = new Set()) {
+  if (seen.has(entryPath)) return seen;
+  seen.add(entryPath);
+  const source = fs.readFileSync(entryPath, 'utf8');
+  const importRe = /(?:import|export)\s*(?:[^'"]*?from\s*)?["'](\.{1,2}\/[^"']+)["']/g;
+  for (const match of source.matchAll(importRe)) {
+    collectModuleGraph(path.resolve(path.dirname(entryPath), match[1]), seen);
+  }
+  return seen;
+}
+
 function readFileSize(filePath) {
-  const file = fs.readFileSync(filePath);
+  const file = Buffer.concat([...collectModuleGraph(filePath)].map((f) => fs.readFileSync(f)));
   return {
     bytes: file.length,
     gzipBytes: gzipSize(file),

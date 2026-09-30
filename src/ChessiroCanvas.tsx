@@ -15,7 +15,11 @@ import { useBoardSize } from './hooks/useBoardSize';
 import { useInteraction } from './interaction/useInteraction';
 import { useKeyboard } from './interaction/useKeyboard';
 import { Squares } from './render/Squares';
-import { PiecesLayer, type PiecesLayerRef } from './render/Pieces';
+import { PiecesLayer, type PiecesLayerRef, type DropHint } from './render/Pieces';
+import { resolveMoveAnimation } from './core/motion';
+import { renderBoardSvg, type BoardSvgOptions, type PieceCode } from './core/boardSvg';
+import { loadPieceSetSvgs, svgToImageBlob, type RasterOptions } from './utils/exportImage';
+import { prefersReducedMotion } from './cinematics/motion';
 import { GhostPiecesLayer } from './render/GhostPieces';
 import { SquareLabelsLayer } from './render/SquareLabels';
 import { TeachingLayer, type TeachingLayerRef } from './render/TeachingLayer';
@@ -100,6 +104,7 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
       allowDrawingArrows = true,
       animationDurationMs = 200,
       showAnimations = true,
+      moveAnimation,
       blockTouchScroll = false,
       selectedPieceScale,
       dragScale = 1,
@@ -129,6 +134,25 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
     const cameraControllerRef = useRef<CameraController | null>(null);
     const playbackRef = useRef<CinematicPlayback | null>(null);
     const { bounds, getFreshBounds } = useBoardSize(boardRef);
+    const dropHintRef = useRef<DropHint | null>(null);
+
+    // Presets are strings and option objects are usually inline literals, so
+    // key the memo on the fields rather than the object identity.
+    const motionOpts = typeof moveAnimation === 'string' ? { preset: moveAnimation } : moveAnimation;
+    const motion = useMemo(
+      () => resolveMoveAnimation(motionOpts, {
+        baseDurationMs: animationDurationMs,
+        enabled: showAnimations && (motionOpts?.durationMs !== undefined || animationDurationMs >= 50),
+        reducedMotion: prefersReducedMotion(),
+      }),
+      [
+        animationDurationMs, showAnimations,
+        motionOpts?.preset, motionOpts?.durationMs, motionOpts?.distanceScaling, motionOpts?.easing,
+        motionOpts?.arc, motionOpts?.knightArc, motionOpts?.liftScale, motionOpts?.capture,
+        motionOpts?.landing, motionOpts?.appear, motionOpts?.flip, motionOpts?.stagger,
+        motionOpts?.snapBack, motionOpts?.respectReducedMotion,
+      ],
+    );
 
     const orientationRef = useRef(orientation);
     orientationRef.current = orientation;
@@ -211,6 +235,16 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
       [expectedMove, onMove, onWrongMove, wrongMoveFeedback],
     );
 
+    // The drag ghost floats `liftSquares` above the pointer; snap back from
+    // where the piece was drawn, not from under the finger.
+    const liftRef = useRef({ touch: touchDragLiftSquares, mouse: dragLiftSquares });
+    liftRef.current = { touch: touchDragLiftSquares, mouse: dragLiftSquares };
+    const handleDropRejected = useCallback((square: string, clientX: number, clientY: number, isTouch: boolean) => {
+      const rect = getFreshBounds();
+      const lift = (isTouch ? liftRef.current.touch : liftRef.current.mouse) * ((rect?.width ?? 0) / 8);
+      piecesLayerRef.current?.snapBack(square, clientX, clientY - lift);
+    }, [getFreshBounds]);
+
     const interaction = useInteraction({
       position,
       pieces: piecesMap,
@@ -241,6 +275,8 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
       onClearOverlays,
       blockTouchScroll,
       getFreshBounds: getFreshDomRect,
+      dropHintRef,
+      onDropRejected: handleDropRejected,
     });
 
     const occupiedSquares = useMemo(() => {
@@ -269,6 +305,40 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
       onFlipBoard,
       onShowThreat,
       onDeselect: handleDeselect,
+    });
+
+    // Everything a snapshot needs, published after each commit so the
+    // imperative export never reads a render that didn't land.
+    const snapshotRef = useRef<() => BoardSvgOptions>(() => ({}));
+    useLayoutEffect(() => {
+      snapshotRef.current = () => {
+        const rect = getFreshBounds();
+        const squarePx = rect && rect.width > 0 ? rect.width / 8 : 64;
+        const pieceUrls: Partial<Record<PieceCode, string>> | undefined = pieceSet?.path
+          ? Object.fromEntries(
+            (['wp', 'wn', 'wb', 'wr', 'wq', 'wk', 'bp', 'bn', 'bb', 'br', 'bq', 'bk'] as PieceCode[])
+              .map((c) => [c, `${pieceSet.path}/${c}.svg`]),
+          )
+          : undefined;
+        return {
+          position,
+          orientation,
+          theme,
+          showMargin,
+          marginSquares: marginThickness / squarePx,
+          marginRadius: typeof marginRadius === 'number' ? marginRadius : Number.parseFloat(marginRadius) || 0,
+          showCoordinates: showNotation,
+          lastMove: lastMove ?? null,
+          check: check ?? null,
+          highlightedSquares,
+          markedSquares: Object.keys(interaction.activeMarkedSquares),
+          arrows: interaction.renderedArrows,
+          arrowBrushes,
+          flipPieces,
+          pieceUrls,
+          size: Math.round(rect && rect.width > 0 ? rect.width + 2 * (showMargin ? marginThickness : 0) : 512),
+        };
+      };
     });
 
     useImperativeHandle(ref, () => ({
@@ -372,6 +442,19 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
         playbackRef.current = playback;
         return playback;
       },
+      toSVG(options?: BoardSvgOptions) {
+        return renderBoardSvg({ ...snapshotRef.current(), ...options });
+      },
+      async toImage(options?: BoardSvgOptions & RasterOptions) {
+        const base = snapshotRef.current();
+        let pieceSvgs = options?.pieceSvgs;
+        if (!pieceSvgs && base.pieceUrls) {
+          const path = pieceSet?.path;
+          if (path) pieceSvgs = await loadPieceSetSvgs(path);
+        }
+        const svg = renderBoardSvg({ ...base, ...options, pieceSvgs, pieceUrls: undefined });
+        return svgToImageBlob(svg, options);
+      },
       camera: {
         zoomTo: (square: Square, options?: CameraZoomOptions) => getCameraController().zoomTo(square, options),
         zoomOut: (options?: CameraZoomOptions) => getCameraController().zoomOut(options),
@@ -380,7 +463,7 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
         drift: (options?: CameraDriftOptions) => getCameraController().drift(options),
         reset: () => cameraControllerRef.current?.reset(),
       },
-    }), [orientation, getFreshBounds, getFreshDomRect, getCameraController]);
+    }), [orientation, getFreshBounds, getFreshDomRect, getCameraController, pieceSet?.path]);
 
     const hasValidSize = bounds && bounds.width > 0;
     const boardWidth = bounds?.width ?? 0;
@@ -474,14 +557,13 @@ export const ChessiroCanvas = forwardRef<ChessiroCanvasRef, ChessiroCanvasProps>
 
               <PiecesLayer
                 ref={piecesLayerRef}
-                position={position}
                 pieces={piecesMap}
                 orientation={orientation}
                 pieceSet={pieceSet}
                 customPieces={customPieces}
                 flipPieces={flipPieces}
-                animationDurationMs={showAnimations ? animationDurationMs : 0}
-                showAnimations={showAnimations}
+                motion={motion}
+                dropHintRef={dropHintRef}
                 draggingSquare={interaction.drag?.origSquare}
                 selectedSquare={interaction.selectedSquare}
                 suppressedSquaresRef={suppressedSquaresRef}

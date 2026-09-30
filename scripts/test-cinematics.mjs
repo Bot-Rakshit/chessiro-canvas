@@ -153,6 +153,7 @@ flushSync(() => root.render(React.createElement(ChessiroCanvas, {
   interactive: false,
   showAnimations: false,
 })));
+const logBeforeMove = animationLog.length;
 flushSync(() => root.render(React.createElement(ChessiroCanvas, {
   ref,
   position: AFTER_E4,
@@ -160,10 +161,20 @@ flushSync(() => root.render(React.createElement(ChessiroCanvas, {
   showAnimations: true,
   animationDurationMs: 300,
 })));
-assert(
-  pieceOuters('wP').some((el) => el.style.willChange === 'transform' && el.style.zIndex === '8'),
-  'position move dirtied only its animated piece',
-);
+{
+  const moveAnims = animationLog.slice(logBeforeMove);
+  const e4Pawn = pieceOuters('wP').find((el) => el.style.transform === 'translate(400%, 400%)');
+  assert(
+    moveAnims.length === 1 && moveAnims[0].target === e4Pawn,
+    'position move animated only the moved piece',
+  );
+  const kf = moveAnims[0]?.keyframes ?? [];
+  assert(
+    kf[0]?.transform === 'translate(400%, 600%)' && kf[kf.length - 1]?.transform === 'translate(400%, 400%)'
+      && kf.every((k) => k.zIndex === '8'),
+    'move keyframes glide e2 -> e4 raised above other pieces',
+  );
+}
 
 flushSync(() => root.render(React.createElement(ChessiroCanvas, {
   ref,

@@ -1,4 +1,7 @@
 import type { CSSProperties, ReactNode } from 'react';
+import type { MoveAnimationOptions, MoveAnimationPreset } from './core/motion';
+import type { BoardSvgOptions } from './core/boardSvg';
+import type { RasterOptions } from './utils/exportImage';
 
 // ── Square & Coordinate Types ──────────────────────────────────────
 
@@ -283,29 +286,6 @@ export interface MoveQualityBadge {
   square: Square;
   icon: string; // URL to badge icon
   label?: string;
-}
-
-// ── Animation ──────────────────────────────────────────────────────
-
-export interface AnimationVector {
-  fromPos: Pos;
-  toPos: Pos;
-  // current offset from final position (decreases to 0)
-  currentX: number;
-  currentY: number;
-}
-
-export type AnimationVectors = Map<Square, AnimationVector>;
-
-export interface AnimationPlan {
-  anims: AnimationVectors;
-  fadings: Map<Square, Piece>;
-}
-
-export interface AnimationCurrent {
-  start: number;
-  frequency: number; // 1 / durationMs
-  plan: AnimationPlan;
 }
 
 // ── Extensibility: Custom Animation Events ─────────────────────────
@@ -882,8 +862,18 @@ export interface ChessiroCanvasProps {
   // Behavior
   allowDragging?: boolean;
   allowDrawingArrows?: boolean;
+  /** Base move animation time in ms. Default: 200. Presets scale this; `moveAnimation.durationMs` overrides it. */
   animationDurationMs?: number;
+  /** Master switch for piece motion. Default: true. */
   showAnimations?: boolean;
+  /**
+   * How pieces move: a preset name ('classic' | 'snappy' | 'smooth' |
+   * 'playful' | 'arcade' | 'elegant' | 'minimal' | 'none') or an options object
+   * to tune easing, arcs, knight hops, lift, capture/landing/appear effects,
+   * flip glides, cascades and drop snap-back. Motion runs on the compositor
+   * via the Web Animations API. Default: 'classic'.
+   */
+  moveAnimation?: MoveAnimationOptions | MoveAnimationPreset;
   blockTouchScroll?: boolean; // prevent scrolling when touching the board (default: false)
   selectedPieceScale?: number; // scale factor for the selected piece (e.g. 1.1 for 10% larger)
   /** Scale factor applied to the piece while dragging with a mouse. Default: 1. */
@@ -1032,4 +1022,18 @@ export interface ChessiroCanvasRef {
   playCinematic: (steps: CinematicStep[], options?: PlayCinematicOptions) => CinematicPlayback;
   /** Cinematic camera: zoom, tilt, shake and drift the whole board. */
   camera: CameraController;
+  /**
+   * Snapshot the board as a standalone SVG string: position, orientation,
+   * theme, last move, check, highlights, marks and arrows as currently shown.
+   * Any option overrides the live value (e.g. `{ size: 1200, arrows: [] }`).
+   * Custom React piece renderers can't be serialised — the built-in or
+   * `pieceSet` artwork is used instead.
+   */
+  toSVG: (options?: BoardSvgOptions) => string;
+  /**
+   * Render the board to an image Blob (PNG by default) — ready for
+   * `navigator.share`, a download link or an upload. `pieceSet` artwork is
+   * fetched and inlined so the image is self-contained.
+   */
+  toImage: (options?: BoardSvgOptions & RasterOptions) => Promise<Blob>;
 }

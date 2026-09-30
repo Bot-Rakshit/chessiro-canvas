@@ -6,17 +6,42 @@ import {
   useEffect,
   useImperativeHandle,
   useRef,
-  useMemo,
   useState,
 } from 'react';
-import type { Piece, Pieces, Square, Orientation, PieceSet, PieceRenderer, AnimationPlan } from '../types';
-import { INITIAL_FEN } from '../utils/fen';
+import type { Piece, Pieces, Square, Orientation, PieceSet, PieceRenderer } from '../types';
 import { computeAnimPlan } from '../animation/anim';
+import {
+  EASINGS,
+  planAppearTrack,
+  planCaptureTrack,
+  planFlipFadeTrack,
+  planLandingTrack,
+  planMoveTrack,
+  planSnapBackTrack,
+  moveDurationMs,
+  sampleTrack,
+  staggerRank,
+  type BoardPoint,
+  type MotionTrack,
+  type ResolvedMoveAnimation,
+} from '../core/motion';
 import { preloadPieceSet } from '../hooks/usePieceCache';
 import { PieceGlyph } from './PieceGlyph';
 
 export interface PiecesLayerRef {
   getPieceElement: (square: string) => HTMLDivElement | null;
+  /**
+   * Glide the piece on `square` home from a viewport point (a rejected drop).
+   * `clientX/Y` is where the dragged piece's centre was released.
+   */
+  snapBack: (square: string, clientX: number, clientY: number) => void;
+}
+
+/** A drag-and-drop the board already showed; its move must not replay. */
+export interface DropHint {
+  from: string;
+  to: string;
+  at: number;
 }
 
 interface PiecesLayerProps {
@@ -27,25 +52,37 @@ interface PiecesLayerProps {
    * chasing the element with rAF afterwards can never achieve.
    */
   suppressedSquaresRef?: React.RefObject<Set<string>>;
-  position: string;
+  /** Written by the interaction layer when a drop is accepted. */
+  dropHintRef?: React.RefObject<DropHint | null>;
   pieces: Pieces;
   orientation: Orientation;
   pieceSet?: PieceSet;
   customPieces?: PieceRenderer;
   flipPieces?: boolean;
-  animationDurationMs: number;
-  showAnimations: boolean;
+  motion: ResolvedMoveAnimation;
   draggingSquare?: string | null;
   selectedSquare?: string | null;
   selectedPieceScale?: number;
 }
 
-function easing(t: number): number {
-  return t < 0.5 ? 4 * t * t * t : (t - 1) * (2 * t - 2) * (2 * t - 2) + 1;
+interface RunningTrack {
+  anim: Animation;
+  track: MotionTrack;
+  startedAt: number;
 }
 
+interface FadingPiece {
+  id: number;
+  square: Square;
+  piece: Piece;
+  track: MotionTrack;
+}
+
+const DROP_HINT_TTL_MS = 5000;
+const FLIGHT_Z = '8';
+
 // Board-relative column/row for a square (0..7 each), respecting orientation.
-function squareColRow(sq: Square, asWhite: boolean): [number, number] {
+function squareColRow(sq: string, asWhite: boolean): [number, number] {
   const f = sq.charCodeAt(0) - 97;
   const r = sq.charCodeAt(1) - 49;
   return [asWhite ? f : 7 - f, asWhite ? 7 - r : r];
@@ -60,259 +97,390 @@ function baseTransform(col: number, row: number): string {
   return `translate(${col * 100}%, ${row * 100}%)`;
 }
 
+function round(n: number): number {
+  return Math.round(n * 1000) / 1000;
+}
+
+/**
+ * Turn a sampled track into Web Animations keyframes. Transform and opacity
+ * only — both run on the compositor, so a busy main thread (an engine
+ * search, a React commit) can't make a moving piece stutter.
+ */
+function toKeyframes(track: MotionTrack, raise: boolean): Keyframe[] {
+  const fades = track.frames.some((f) => f.opacity !== 1);
+  return track.frames.map((f) => {
+    let transform = `translate(${round(f.x * 100)}%, ${round(f.y * 100)}%)`;
+    if (f.rotate !== 0) transform += ` rotate(${round(f.rotate)}deg)`;
+    if (f.scaleX !== 1 || f.scaleY !== 1) transform += ` scale(${round(f.scaleX)}, ${round(f.scaleY)})`;
+    const kf: Keyframe = { offset: f.offset, transform };
+    if (fades) kf.opacity = round(f.opacity);
+    if (raise) kf.zIndex = FLIGHT_Z;
+    return kf;
+  });
+}
+
+function playTrack(el: Element | null | undefined, track: MotionTrack | null, raise = true): Animation | null {
+  if (!el || !track || track.durationMs <= 0) return null;
+  if (typeof (el as HTMLElement).animate !== 'function') return null;
+  try {
+    return (el as HTMLElement).animate(toKeyframes(track, raise), {
+      duration: track.durationMs,
+      delay: track.delayMs,
+      easing: 'linear',
+      // Hold the first pose through the delay: a staggered piece waits at its
+      // origin, an appearing one stays invisible until its turn.
+      fill: 'backwards',
+    });
+  } catch {
+    return null;
+  }
+}
+
+/** Run `cb` once when an animation finishes or is cancelled. */
+function onSettle(anim: Animation, cb: () => void): void {
+  let done = false;
+  const settle = () => {
+    if (done) return;
+    done = true;
+    cb();
+  };
+  const finished = (anim as Partial<Animation>).finished;
+  if (finished && typeof finished.then === 'function') finished.then(settle, settle);
+  anim.onfinish = settle;
+  anim.oncancel = settle;
+}
+
+interface PieceNodeProps {
+  square: Square;
+  pieceKey: string;
+  col: number;
+  row: number;
+  dragging: boolean;
+  selectedScale: number | undefined;
+  flipPieces: boolean;
+  pieceSet?: PieceSet;
+  customPieces?: PieceRenderer;
+  setRef: (el: HTMLDivElement | null) => void;
+}
+
+// One memoized node per piece: a selection, drag or single move re-renders
+// only the pieces whose props changed instead of all 32.
+const PieceNode = memo(function PieceNode({
+  pieceKey,
+  col,
+  row,
+  dragging,
+  selectedScale,
+  flipPieces,
+  pieceSet,
+  customPieces,
+  setRef,
+}: PieceNodeProps) {
+  const innerTransform = [
+    flipPieces ? 'rotate(180deg)' : '',
+    selectedScale ? `scale(${selectedScale})` : '',
+  ].filter(Boolean).join(' ') || undefined;
+  return (
+    <div
+      ref={setRef}
+      style={{
+        position: 'absolute',
+        width: '12.5%',
+        height: '12.5%',
+        transform: baseTransform(col, row),
+        opacity: dragging ? 0.5 : 1,
+        zIndex: dragging ? 1 : 2,
+        pointerEvents: 'none',
+      }}
+    >
+      <div
+        style={{
+          transition: 'transform 0.15s ease-out',
+          transform: innerTransform,
+          transformOrigin: 'center center',
+          width: '100%',
+          height: '100%',
+        }}
+      >
+        <PieceGlyph pieceKey={pieceKey} pieceSet={pieceSet} customPieces={customPieces} />
+      </div>
+    </div>
+  );
+});
+
 export const PiecesLayer = memo(forwardRef<PiecesLayerRef, PiecesLayerProps>(function PiecesLayer({
-  position,
   pieces,
   orientation,
   pieceSet,
   customPieces,
   flipPieces = false,
-  animationDurationMs,
-  showAnimations,
+  motion,
   draggingSquare,
   suppressedSquaresRef,
+  dropHintRef,
   selectedSquare,
   selectedPieceScale,
 }, ref) {
   const asWhite = orientation === 'white';
   const piecePath = pieceSet?.path;
-  const currentPos = position || INITIAL_FEN;
 
-  const skipNextAnimRef = useRef(false);
-  const prevDraggingRef = useRef<string | null | undefined>(draggingSquare);
-  const prevPositionRef = useRef(currentPos);
+  const containerRef = useRef<HTMLDivElement>(null);
   const prevPiecesRef = useRef(pieces);
-  const rafIdRef = useRef<number | null>(null);
+  const prevAsWhiteRef = useRef(asWhite);
   const pieceElsRef = useRef<Map<string, HTMLDivElement>>(new Map());
-  const fadingElsRef = useRef<Map<string, HTMLDivElement>>(new Map());
+  const fadingElsRef = useRef<Map<number, HTMLDivElement>>(new Map());
   const refCallbacksRef = useRef<Map<string, (el: HTMLDivElement | null) => void>>(new Map());
-  const fadingRefCallbacksRef = useRef<Map<string, (el: HTMLDivElement | null) => void>>(new Map());
-  const dirtySquaresRef = useRef<Set<Square>>(new Set());
+  const runningRef = useRef<Map<string, RunningTrack>>(new Map());
+  const boardSpinRef = useRef<Animation | null>(null);
+  const startedFadingsRef = useRef<Set<number>>(new Set());
+  const fadingIdRef = useRef(0);
+  const motionRef = useRef(motion);
+  motionRef.current = motion;
+  const asWhiteRef = useRef(asWhite);
+  asWhiteRef.current = asWhite;
 
-  const animRef = useRef<{
-    plan: AnimationPlan;
-    startTime: number;
-    frequency: number;
-  } | null>(null);
+  // Captured pieces, kept on the board just long enough to play their exit.
+  const [fadings, setFadings] = useState<FadingPiece[]>([]);
 
-  // Captured pieces from the in-flight animation, rendered so they fade out
-  // under the arriving piece instead of vanishing instantly.
-  const [fadings, setFadings] = useState<Array<{ square: Square; piece: Piece }>>([]);
+  const track = useCallback((square: string, anim: Animation | null, t: MotionTrack | null) => {
+    if (!anim || !t) return;
+    const entry: RunningTrack = { anim, track: t, startedAt: performance.now() };
+    runningRef.current.set(square, entry);
+    const done = () => {
+      if (runningRef.current.get(square) === entry) runningRef.current.delete(square);
+    };
+    onSettle(anim, done);
+  }, []);
+
+  const cancelAll = useCallback(() => {
+    boardSpinRef.current?.cancel();
+    boardSpinRef.current = null;
+    const running = runningRef.current;
+    runningRef.current = new Map();
+    for (const { anim } of running.values()) anim.cancel();
+  }, []);
 
   useImperativeHandle(ref, () => ({
     getPieceElement(square: string) {
       return pieceElsRef.current.get(square) ?? null;
     },
-  }), []);
+    snapBack(square: string, clientX: number, clientY: number) {
+      const m = motionRef.current;
+      if (!m.enabled || !m.snapBack) return;
+      const el = pieceElsRef.current.get(square);
+      const box = containerRef.current?.getBoundingClientRect();
+      if (!el || !box || box.width <= 0) return;
+      const from: BoardPoint = [
+        ((clientX - box.left) / box.width) * 8 - 0.5,
+        ((clientY - box.top) / box.height) * 8 - 0.5,
+      ];
+      const home = squareColRow(square, asWhiteRef.current);
+      // A release within a hair of home needs no animation.
+      if (Math.hypot(from[0] - home[0], from[1] - home[1]) < 0.05) return;
+      runningRef.current.get(square)?.anim.cancel();
+      const t = planSnapBackTrack(from, home);
+      track(square, playTrack(el, t), t);
+    },
+  }), [track]);
 
   useEffect(() => {
     if (piecePath) preloadPieceSet(piecePath);
   }, [piecePath]);
 
-  const restoreSquare = useCallback((sq: Square) => {
-    const el = pieceElsRef.current.get(sq);
-    if (!el) return;
-    const [col, row] = squareColRow(sq, asWhite);
-    el.style.transform = baseTransform(col, row);
-    el.style.zIndex = draggingSquare === sq ? '1' : '2';
-    el.style.willChange = '';
-  }, [asWhite, draggingSquare]);
-
-  // Resting transforms are React-owned. On commit, only continue the current
-  // animation and restore squares dirtied by an interrupted/previous plan.
-  const syncTransforms = useCallback(() => {
-    const anim = animRef.current;
-    const dirtySquares = dirtySquaresRef.current;
-
-    if (!anim && dirtySquares.size === 0) return false;
-
-    let ease = 0;
-    if (anim) {
-      const elapsed = performance.now() - anim.startTime;
-      const rest = 1 - elapsed * anim.frequency;
-      if (rest <= 0) {
-        animRef.current = null;
-      } else {
-        ease = easing(rest);
-      }
-    }
-
-    const currentAnim = animRef.current;
-    const currentSquares = currentAnim?.plan.anims;
-
-    for (const sq of dirtySquares) {
-      if (!currentSquares?.has(sq)) restoreSquare(sq);
-    }
-
-    if (!currentAnim) {
-      dirtySquares.clear();
-      return false;
-    }
-
-    const mult = asWhite ? 1 : -1;
-    const nextDirtySquares = new Set<Square>();
-
-    for (const [sq, vec] of currentAnim.plan.anims) {
-      const el = pieceElsRef.current.get(sq);
-      if (!el) continue;
-      const [col, row] = squareColRow(sq as Square, asWhite);
-      let x = col + mult * (vec.fromPos[0] - vec.toPos[0]) * ease;
-      let y = row - mult * (vec.fromPos[1] - vec.toPos[1]) * ease;
-      x = Math.max(0, Math.min(7, x));
-      y = Math.max(0, Math.min(7, y));
-      el.style.transform = `translate(${x * 100}%, ${y * 100}%)`;
-      el.style.zIndex = '8';
-      el.style.willChange = 'transform';
-      nextDirtySquares.add(sq);
-    }
-    dirtySquaresRef.current = nextDirtySquares;
-
-    return true;
-  }, [asWhite, restoreSquare]);
-
-  // Per-frame update: only animating pieces and fading captures are touched.
-  const stepFrame = useCallback((): boolean => {
-    const anim = animRef.current;
-    if (!anim) return false;
-
-    const elapsed = performance.now() - anim.startTime;
-    const rest = 1 - elapsed * anim.frequency;
-
-    if (rest <= 0) {
-      animRef.current = null;
-      for (const sq of dirtySquaresRef.current) restoreSquare(sq);
-      dirtySquaresRef.current.clear();
-      if (anim.plan.fadings.size > 0) {
-        setFadings(prev => (prev.length === 0 ? prev : []));
-      }
-      return false;
-    }
-
-    const ease = easing(rest);
-    const mult = asWhite ? 1 : -1;
-
-    for (const [sq, vec] of anim.plan.anims) {
-      const el = pieceElsRef.current.get(sq);
-      if (!el) continue;
-      const [col, row] = squareColRow(sq, asWhite);
-      let x = col + mult * (vec.fromPos[0] - vec.toPos[0]) * ease;
-      let y = row - mult * (vec.fromPos[1] - vec.toPos[1]) * ease;
-      x = Math.max(0, Math.min(7, x));
-      y = Math.max(0, Math.min(7, y));
-      el.style.transform = `translate(${x * 100}%, ${y * 100}%)`;
-      dirtySquaresRef.current.add(sq);
-    }
-
-    for (const sq of anim.plan.fadings.keys()) {
-      const el = fadingElsRef.current.get(sq);
-      if (el) el.style.opacity = String(ease);
-    }
-
-    return true;
-  }, [asWhite, restoreSquare]);
-
-  const animLoop = useCallback(() => {
-    if (stepFrame()) {
-      rafIdRef.current = requestAnimationFrame(animLoop);
-    } else {
-      rafIdRef.current = null;
-    }
-  }, [stepFrame]);
-
+  // Plan and launch motion for whatever changed in this commit. Runs before
+  // paint, so pieces never flash at their destination first.
   useLayoutEffect(() => {
-    if (prevDraggingRef.current && !draggingSquare) {
-      skipNextAnimRef.current = true;
+    const prevPieces = prevPiecesRef.current;
+    const prevAsWhite = prevAsWhiteRef.current;
+    prevPiecesRef.current = pieces;
+    prevAsWhiteRef.current = asWhite;
+    const positionChanged = prevPieces !== pieces;
+    const flipped = prevAsWhite !== asWhite;
+    if (!positionChanged && !flipped) return;
+
+    const now = performance.now();
+    const hint = dropHintRef?.current ?? null;
+    if (positionChanged && dropHintRef) dropHintRef.current = null;
+    const freshHint = hint && now - hint.at < DROP_HINT_TTL_MS ? hint : null;
+
+    // Where each in-flight piece is right now, so an interrupted move
+    // continues from its visible position instead of jumping back.
+    const inFlight = new Map<string, BoardPoint>();
+    for (const [sq, run] of runningRef.current) {
+      const pose = sampleTrack(run.track, now - run.startedAt);
+      inFlight.set(sq, [pose.x, pose.y]);
     }
-    prevDraggingRef.current = draggingSquare;
+    cancelAll();
 
-    const prevPos = prevPositionRef.current;
-    const positionChanged = currentPos !== prevPos;
-    let nextPlan: AnimationPlan | null = null;
+    const m = motion;
+    const suppressed = suppressedSquaresRef?.current;
+    const isSuppressed = (sq: string) => !!suppressed && suppressed.has(sq);
 
-    if (positionChanged) {
-      if (skipNextAnimRef.current) {
-        skipNextAnimRef.current = false;
-      } else if (showAnimations && animationDurationMs >= 50) {
-        const plan = computeAnimPlan(prevPiecesRef.current, pieces);
-        if (plan.anims.size > 0) {
-          nextPlan = plan;
+    if (!m.enabled) {
+      setFadings((prev) => (prev.length === 0 ? prev : []));
+      return;
+    }
+
+    if (!positionChanged) {
+      // Orientation flip over an unchanged position.
+      if (m.flip === 'none') return;
+      if (m.flip === 'fade') {
+        for (const sq of pieces.keys()) {
+          if (isSuppressed(sq)) continue;
+          const t = planFlipFadeTrack(squareColRow(sq, asWhite), Math.max(220, m.durationMs));
+          track(sq, playTrack(pieceElsRef.current.get(sq), t), t);
+        }
+        return;
+      }
+      // 'rotate': the new layout is the old one turned 180°, and square colors
+      // are symmetric under that turn — so spinning just the piece layer back
+      // from 180° reads as the whole board turning. Each piece counter-rotates
+      // on the same sampled curve to stay upright.
+      const container = containerRef.current;
+      if (!container || typeof container.animate !== 'function') return;
+      const duration = Math.max(420, m.durationMs * 2);
+      const steps = 16;
+      const offsets: number[] = [];
+      const angles: number[] = [];
+      for (let i = 0; i <= steps; i++) {
+        const u = i / steps;
+        offsets.push(u);
+        angles.push(180 * (1 - EASINGS.smooth(u)));
+      }
+      try {
+        const spin = container.animate(
+          offsets.map((offset, i) => ({ offset, transform: `rotate(${round(angles[i])}deg)` })),
+          { duration, easing: 'linear' },
+        );
+        boardSpinRef.current = spin;
+        onSettle(spin, () => {
+          if (boardSpinRef.current === spin) boardSpinRef.current = null;
+        });
+      } catch {
+        return;
+      }
+      for (const sq of pieces.keys()) {
+        if (isSuppressed(sq)) continue;
+        const [x, y] = squareColRow(sq, asWhite);
+        const t: MotionTrack = {
+          delayMs: 0,
+          durationMs: duration,
+          frames: offsets.map((offset, i) => ({ offset, x, y, scaleX: 1, scaleY: 1, rotate: -angles[i], opacity: 1 })),
+        };
+        track(sq, playTrack(pieceElsRef.current.get(sq), t, false), t);
+      }
+      return;
+    }
+
+    const plan = computeAnimPlan(prevPieces, pieces);
+    const origin = (sq: string): BoardPoint => inFlight.get(sq) ?? squareColRow(sq, prevAsWhite);
+
+    // Cascade order for multi-piece changes: bottom rows first, left to right.
+    const moves = plan.moves.length > 1 && m.stagger > 0
+      ? [...plan.moves].sort((a, b) => {
+        const [ax, ay] = squareColRow(a.to, asWhite);
+        const [bx, by] = squareColRow(b.to, asWhite);
+        return staggerRank(ax, ay) - staggerRank(bx, by);
+      })
+      : plan.moves;
+    const byRank = (a: { square: string }, b: { square: string }) => {
+      const [ax, ay] = squareColRow(a.square, asWhite);
+      const [bx, by] = squareColRow(b.square, asWhite);
+      return staggerRank(ax, ay) - staggerRank(bx, by);
+    };
+    const appears = plan.appears.length > 1 && m.stagger > 0 ? [...plan.appears].sort(byRank) : plan.appears;
+    const count = plan.moves.length + plan.appears.length;
+    // Keep a full-board cascade under ~0.45s however many pieces take part.
+    const step = count > 2 ? Math.min(m.stagger, 450 / count) : 0;
+
+    const arrivals = new Map<string, { from: BoardPoint; to: BoardPoint; arriveMs: number }>();
+    let order = 0;
+    for (const mv of moves) {
+      const to = squareColRow(mv.to, asWhite);
+      if (freshHint && freshHint.from === mv.from && freshHint.to === mv.to) {
+        // The user already carried this piece here; just land it.
+        arrivals.set(mv.to, { from: to, to, arriveMs: 0 });
+        if (!isSuppressed(mv.to)) {
+          const t = planLandingTrack(to, m);
+          track(mv.to, playTrack(pieceElsRef.current.get(mv.to), t), t);
+        }
+        continue;
+      }
+      const from = origin(mv.from);
+      const t = planMoveTrack(from, to, m, { delayMs: step * order++ });
+      const travelMs = moveDurationMs(Math.hypot(to[0] - from[0], to[1] - from[1]), m);
+      arrivals.set(mv.to, { from, to, arriveMs: t.delayMs + travelMs });
+      if (isSuppressed(mv.to)) continue;
+      track(mv.to, playTrack(pieceElsRef.current.get(mv.to), t), t);
+    }
+
+    for (const ap of appears) {
+      if (isSuppressed(ap.square)) continue;
+      const at = squareColRow(ap.square, asWhite);
+      const t = planAppearTrack(at, m, step * order++);
+      if (t) track(ap.square, playTrack(pieceElsRef.current.get(ap.square), t), t);
+    }
+
+    const nextFadings: FadingPiece[] = [];
+    for (const cap of plan.captures) {
+      // The dragged piece's origin is already empty on screen.
+      if (freshHint && cap.square === freshHint.from) continue;
+      const at = squareColRow(cap.square, prevAsWhite);
+      // The capturer is whoever lands here — or, for en passant, the nearest arrival.
+      let hit = arrivals.get(cap.square);
+      if (!hit) {
+        let best = Infinity;
+        for (const a of arrivals.values()) {
+          const d = Math.hypot(a.to[0] - at[0], a.to[1] - at[1]);
+          if (d < best && d < 1.5) {
+            best = d;
+            hit = a;
+          }
         }
       }
-      prevPositionRef.current = currentPos;
-      prevPiecesRef.current = pieces;
-    }
-
-    if (nextPlan) {
-      animRef.current = {
-        plan: nextPlan,
-        startTime: performance.now(),
-        frequency: 1 / animationDurationMs,
-      };
-      const nextFadings: Array<{ square: Square; piece: Piece }> = [];
-      for (const [square, piece] of nextPlan.fadings) {
-        nextFadings.push({ square, piece });
-      }
-      setFadings(prev => (prev.length === 0 && nextFadings.length === 0 ? prev : nextFadings));
-    } else if (positionChanged || !showAnimations || animationDurationMs < 50) {
-      animRef.current = null;
-      setFadings(prev => (prev.length === 0 ? prev : []));
-    }
-
-    if (rafIdRef.current !== null) {
-      cancelAnimationFrame(rafIdRef.current);
-      rafIdRef.current = null;
-    }
-
-      // Enforce suppression before paint, in the same commit that mounted the
-    // piece. Applied after syncTransforms so it wins over resting transforms.
-    const suppressed = suppressedSquaresRef?.current;
-    if (suppressed && suppressed.size > 0) {
-      for (const sq of suppressed) {
-        const el = pieceElsRef.current.get(sq as Square);
-        if (el) el.style.opacity = '0';
-      }
-    }
-
-    const stillAnimating = syncTransforms();
-    if (stillAnimating) {
-      rafIdRef.current = requestAnimationFrame(animLoop);
-    }
-  }, [
-    currentPos,
-    pieces,
-    draggingSquare,
-    showAnimations,
-    animationDurationMs,
-    syncTransforms,
-    animLoop,
-  ]);
-
-  useEffect(() => {
-    return () => {
-      if (rafIdRef.current !== null) {
-        cancelAnimationFrame(rafIdRef.current);
-      }
-    };
-  }, []);
-
-  const pieceStates = useMemo(() => {
-    const states: Array<{
-      square: Square;
-      piece: Piece;
-      dragging: boolean;
-      selected: boolean;
-    }> = [];
-
-    for (const [square, piece] of pieces) {
-      states.push({
-        square,
-        piece,
-        dragging: draggingSquare === square,
-        selected: selectedSquare === square,
+      const t = planCaptureTrack(at, m, {
+        arriveMs: hit ? hit.arriveMs : m.durationMs,
+        push: hit ? [hit.to[0] - hit.from[0], hit.to[1] - hit.from[1]] : undefined,
       });
+      if (t) nextFadings.push({ id: ++fadingIdRef.current, square: cap.square, piece: cap.piece, track: t });
     }
-    return states;
-  }, [pieces, draggingSquare, selectedSquare]);
+    setFadings((prev) => (prev.length === 0 && nextFadings.length === 0 ? prev : nextFadings));
+  }, [pieces, asWhite, motion, cancelAll, track, dropHintRef, suppressedSquaresRef]);
+
+  // Launch exits for newly mounted captured pieces; drop each when it ends.
+  useLayoutEffect(() => {
+    const started = startedFadingsRef.current;
+    const live = new Set<number>();
+    for (const f of fadings) {
+      live.add(f.id);
+      if (started.has(f.id)) continue;
+      started.add(f.id);
+      const anim = playTrack(fadingElsRef.current.get(f.id), f.track, false);
+      const remove = () => setFadings((prev) => {
+        const next = prev.filter((p) => p.id !== f.id);
+        return next.length === prev.length ? prev : next;
+      });
+      if (anim) {
+        onSettle(anim, remove);
+      } else {
+        remove();
+      }
+    }
+    for (const id of started) if (!live.has(id)) started.delete(id);
+  }, [fadings]);
+
+  // Enforce suppression before paint, in the same commit that mounted the
+  // piece. Runs on every commit because the set is mutated by reference.
+  useLayoutEffect(() => {
+    const suppressed = suppressedSquaresRef?.current;
+    if (!suppressed || suppressed.size === 0) return;
+    for (const sq of suppressed) {
+      const el = pieceElsRef.current.get(sq);
+      if (el) el.style.opacity = '0';
+    }
+  });
+
+  useEffect(() => cancelAll, [cancelAll]);
 
   // Stable per-square ref callbacks: a fresh closure per render would make
   // React detach/re-attach every piece ref on every render.
@@ -331,48 +499,52 @@ export const PiecesLayer = memo(forwardRef<PiecesLayerRef, PiecesLayerProps>(fun
     return cb;
   }, []);
 
-  const setFadingRef = useCallback((square: string) => {
-    let cb = fadingRefCallbacksRef.current.get(square);
-    if (!cb) {
-      cb = (el: HTMLDivElement | null) => {
-        if (el) {
-          fadingElsRef.current.set(square, el);
-        } else {
-          fadingElsRef.current.delete(square);
-        }
-      };
-      fadingRefCallbacksRef.current.set(square, cb);
-    }
-    return cb;
-  }, []);
+  const pieceRotation = flipPieces ? 'rotate(180deg)' : undefined;
 
-  const pieceRotation = flipPieces ? 'rotate(180deg)' : '';
+  const nodes: React.ReactNode[] = [];
+  for (const [square, piece] of pieces) {
+    const [col, row] = squareColRow(square, asWhite);
+    const code = `${piece.color}${piece.role.toUpperCase()}`;
+    nodes.push(
+      <PieceNode
+        key={`${square}-${code}`}
+        square={square}
+        pieceKey={code}
+        col={col}
+        row={row}
+        dragging={draggingSquare === square}
+        selectedScale={selectedSquare === square ? selectedPieceScale : undefined}
+        flipPieces={flipPieces}
+        pieceSet={pieceSet}
+        customPieces={customPieces}
+        setRef={setRef(square)}
+      />,
+    );
+  }
 
   return (
-    <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', overflow: 'hidden' }}>
+    <div ref={containerRef} style={{ position: 'absolute', inset: 0, pointerEvents: 'none', overflow: 'hidden' }}>
       {fadings.map((f) => {
         const [col, row] = squareColRow(f.square, asWhite);
         return (
           <div
-            key={`fade-${f.square}-${f.piece.color}${f.piece.role}`}
-            ref={setFadingRef(f.square)}
+            key={`fade-${f.id}`}
+            ref={(el) => {
+              if (el) fadingElsRef.current.set(f.id, el);
+              else fadingElsRef.current.delete(f.id);
+            }}
             style={{
               position: 'absolute',
               width: '12.5%',
               height: '12.5%',
               transform: baseTransform(col, row),
-              opacity: 1,
+              // Visible only while its exit animation runs.
+              opacity: 0,
               zIndex: 1,
               pointerEvents: 'none',
             }}
           >
-            <div
-              style={{
-                transform: pieceRotation || undefined,
-                width: '100%',
-                height: '100%',
-              }}
-            >
+            <div style={{ transform: pieceRotation, width: '100%', height: '100%' }}>
               <PieceGlyph
                 pieceKey={`${f.piece.color}${f.piece.role.toUpperCase()}`}
                 pieceSet={pieceSet}
@@ -382,43 +554,7 @@ export const PiecesLayer = memo(forwardRef<PiecesLayerRef, PiecesLayerProps>(fun
           </div>
         );
       })}
-      {pieceStates.map((ps) => {
-        const [col, row] = squareColRow(ps.square, asWhite);
-        return (
-          <div
-            key={`${ps.square}-${ps.piece.color}${ps.piece.role}`}
-            ref={setRef(ps.square)}
-            style={{
-              position: 'absolute',
-              width: '12.5%',
-              height: '12.5%',
-              transform: baseTransform(col, row),
-              opacity: ps.dragging ? 0.5 : 1,
-              zIndex: ps.dragging ? 1 : 2,
-              pointerEvents: 'none',
-            }}
-          >
-            <div
-              style={{
-                transition: 'transform 0.15s ease-out',
-                transform: [
-                  pieceRotation,
-                  ps.selected && selectedPieceScale ? `scale(${selectedPieceScale})` : '',
-                ].filter(Boolean).join(' ') || undefined,
-                transformOrigin: 'center center',
-                width: '100%',
-                height: '100%',
-              }}
-            >
-              <PieceGlyph
-                pieceKey={`${ps.piece.color}${ps.piece.role.toUpperCase()}`}
-                pieceSet={pieceSet}
-                customPieces={customPieces}
-              />
-            </div>
-          </div>
-        );
-      })}
+      {nodes}
     </div>
   );
 }));

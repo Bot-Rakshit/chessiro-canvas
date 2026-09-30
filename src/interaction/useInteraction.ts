@@ -8,6 +8,7 @@ import { screenPos2square } from '../utils/coords';
 import { premoveDests } from '../utils/premove';
 import { getSquareFromEvent, getClientPos, isRightButton } from './pointer';
 import type { DragState } from './pointer';
+import type { DropHint } from '../render/Pieces';
 
 const DRAG_THRESHOLD_MOUSE = 4;
 const DRAG_THRESHOLD_TOUCH = 10;
@@ -83,6 +84,10 @@ interface UseInteractionOptions {
   onSquareClick?: (square: string) => void;
   onClearOverlays?: () => void;
   blockTouchScroll?: boolean;
+  /** Set while an accepted drag-drop's move is on its way into `position`. */
+  dropHintRef?: React.MutableRefObject<DropHint | null>;
+  /** A drag ended without a move; the piece should glide home from the release point. */
+  onDropRejected?: (square: string, clientX: number, clientY: number, isTouch: boolean) => void;
 }
 
 export interface InteractionState {
@@ -107,6 +112,7 @@ export function useInteraction(opts: UseInteractionOptions): InteractionState {
     position, pieces, orientation, interactive, allowDragging, allowDrawingArrows,
     boardRef, boardBounds, getFreshBounds, onMove, dests, autoPromoteTo,
     turnColor, movableColor, premovable,
+    dropHintRef, onDropRejected,
     arrows, onArrowsChange,
     arrowBrushes: customBrushes, snapArrowsToValidMoves = true,
     markedSquares: externalMarkedSquares, onMarkedSquaresChange,
@@ -798,29 +804,41 @@ export function useInteraction(opts: UseInteractionOptions): InteractionState {
         const pos = getClientPos(e);
         const target = pos ? screenPos2square(pos[0], pos[1], asWhite, freshBounds) : undefined;
 
+        const snapBack = () => {
+          const [x, y] = capturedDrag.currentPos;
+          onDropRejected?.(capturedDrag.origSquare, x, y, capturedDrag.isTouch);
+        };
         if (target && target !== capturedDrag.origSquare) {
           const piece = piecesRef.current.get(capturedDrag.origSquare);
           if (piece) {
             // Try normal move first
             if (canMoveColor(piece.color)) {
+              // Published before onMove so the commit it triggers already
+              // knows this piece arrived by hand and must not replay the move.
+              const hint: DropHint = { from: capturedDrag.origSquare, to: target, at: performance.now() };
+              if (dropHintRef) dropHintRef.current = hint;
               const result = attemptMove(capturedDrag.origSquare, target);
               if (result === 'pending' || result) return;
+              if (dropHintRef && dropHintRef.current === hint) dropHintRef.current = null;
             }
             // Try premove
             if (canPremoveColor(piece.color)) {
               const pmDests = premoveDests(capturedDrag.origSquare as Square, piecesRef.current, piece.color);
               if (pmDests.includes(target as Square)) {
                 attemptPremove(capturedDrag.origSquare, target);
+                snapBack();
                 return;
               }
             }
           }
+          snapBack();
         } else if (capturedDrag.origSquare === target || !target) {
           if (dragKeyChangedRef.current) {
             setSelectedSquare(null);
             setLegalSquares(EMPTY_SQUARES);
             setPremoveSquares(EMPTY_SQUARES);
           }
+          snapBack();
         }
       });
     };
@@ -832,7 +850,8 @@ export function useInteraction(opts: UseInteractionOptions): InteractionState {
     docUpHandlerRef.current = handleUp;
   }, [getCurrentBounds, asWhite, interactive, attemptMove, attemptPremove,
     toggleArrow, toggleMark, getSnappedSquare, snapArrowsToValidMoves,
-    canMoveColor, canPremoveColor, blockTouchScroll, getDestsForSquare, dests, handleSquareInteraction]);
+    canMoveColor, canPremoveColor, blockTouchScroll, getDestsForSquare, dests, handleSquareInteraction,
+    dropHintRef, onDropRejected]);
 
   // Detach any active gesture listeners on unmount.
   useEffect(() => {
